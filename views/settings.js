@@ -3,8 +3,10 @@ import { h, icon, toast, toastErr, confirmDialog, modal, copyText, fmtAgo, fmtDa
 import { MODULE_TYPES } from "../lib/modules.js";
 import { WIDGETS } from "./dashboard.js";
 import { CONFIG } from "../config.js";
+import { designPanel } from "../lib/design.js";
+import { connectDialog, connectionsList } from "../lib/connect.js";
 
-const TABS = [["general", "Allgemein"], ["dashboard", "Dashboard"], ["notifications", "Benachrichtigungen"], ["integrations", "Integrationen"], ["keys", "API-Schlüssel"], ["modules", "Projektmodule"]];
+const TABS = [["general", "Allgemein"], ["design", "Design"], ["connections", "Verbindungen"], ["dashboard", "Dashboard"], ["notifications", "Benachrichtigungen"], ["integrations", "Integrationen"], ["keys", "API-Schlüssel"], ["modules", "Projektmodule"], ["legal", "Rechtliches"]];
 const SCOPES = [["projects", "Projekte anlegen/aktualisieren"], ["files", "Dateien hochladen"], ["ai", "KI-Nutzung melden"], ["activity", "Aktivitäten melden"]];
 
 export default async function settingsView({ query }) {
@@ -15,16 +17,14 @@ export default async function settingsView({ query }) {
     tab = k; bar.querySelectorAll("button").forEach((b, i) => b.classList.toggle("on", TABS[i][0] === k));
     history.replaceState(null, "", `#/settings${k === "general" ? "" : "?tab=" + k}`);
     body.replaceChildren(h("div.skel", { style: { height: "200px" } }));
-    ({ general, dashboard, notifications, integrations, keys, modules })[k]().then((n) => body.replaceChildren(n)).catch((e) => body.replaceChildren(naNote(e.message, "alert")));
+    ({ general, design, connections, legal, dashboard, notifications, integrations, keys, modules })[k]().then((n) => body.replaceChildren(n)).catch((e) => body.replaceChildren(naNote(e.message, "alert")));
   }
   const row = (title, sub, ctl) => h("div.list-item", h("div.li-main", h("div.li-title", title), sub ? h("div.li-sub", { style: { whiteSpace: "normal" } }, sub) : null), ctl);
   const sw = (checked, on) => h("label.switch", h("input", { type: "checkbox", checked, onchange: (e) => on(e.target.checked) }), h("span"));
 
   async function general() {
-    const theme = local.get("theme", "dark");
-    const setTheme = (t) => { local.set("theme", t); document.documentElement.dataset.theme = t === "system" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : t; show("general"); };
     return h("div.card.card-pad", h("div.list",
-      row("Darstellung", "Dunkel ist Standard. „System“ folgt der Einstellung deines Geräts.", h("div.seg", [["dark", "Dunkel"], ["light", "Hell"], ["system", "System"]].map(([k, t]) => h("button", { class: theme === k ? "on" : "", onclick: () => setTheme(k) }, t)))),
+      row("Darstellung", "Theme, Akzentfarbe, Dichte und Schriftgröße", h("button.btn.sm", { onclick: () => show("design") }, "Design")),
       row("Sprache", "Die Oberfläche ist auf Deutsch. Weitere Sprachen lassen sich über die Texte in den Ansichten ergänzen.", h("span.tag", "Deutsch")),
       row("Seitenleiste eingeklappt starten", null, sw(local.get("collapsed", false), (v) => { local.set("collapsed", v); document.querySelector(".app")?.classList.toggle("collapsed", v); })),
       row("Als App installieren", "Chrome/Edge: Installieren-Symbol in der Adressleiste. Safari (iPhone/iPad): Teilen → „Zum Home-Bildschirm“. macOS Safari: Ablage → „Zum Dock hinzufügen“.", icon("download", "faint"))));
@@ -68,6 +68,39 @@ export default async function settingsView({ query }) {
         })))));
   }
 
+  async function design() {
+    return h("div.card.card-pad", designPanel(), h("p.faint", { style: { fontSize: "12.5px", marginBottom: 0 } }, "Wird pro Gerät gespeichert."));
+  }
+
+  async function connections() {
+    const st = await rpc("cc_workspace_stats").catch(() => null);
+    const list = await connectionsList(() => show("connections"));
+    return h("div.stack",
+      h("div.card", h("div.card-head", h("h3", "Meine Verbindungen"), h("button.btn.sm.primary", { onclick: () => connectDialog(() => show("connections")) }, icon("plus"), "Verbinden")), h("div.card-body", list),
+        h("div.card-body", naNote("Verbundene Websites, Repos und Datenbanken erscheinen zusätzlich als Projekte im Control Center. Schlüssel liegen verschlüsselt im Vault."))),
+      st ? h("div.card", h("div.card-head", h("h3", "Nutzerbereiche (anonym)")), h("div.card-body", h("div.list",
+        row("Nutzer mit eigenen Daten", null, h("strong", String(st.users_with_data))),
+        row("Projekte in Nutzerbereichen", null, h("strong", String(st.projects))),
+        row("Verbindungen", Object.entries(st.connections || {}).map(([k, n]) => `${k}: ${n}`).join(" · ") || "keine", null),
+        row("KI-Fragen heute", null, h("strong", String(st.ai_today)))))) : null);
+  }
+
+  async function legal() {
+    const L = (await getSetting("legal", {})) || {};
+    const F = [["name", "Name / Firma", "input"], ["address", "Anschrift (Straße, PLZ Ort, Land)", "textarea"], ["email", "E-Mail", "input"], ["phone", "Telefon (optional)", "input"], ["responsible", "Verantwortlich für den Inhalt", "input"]];
+    const els = Object.fromEntries(F.map(([k, , t]) => [k, h(t === "textarea" ? "textarea.input" : "input.input", { rows: 3, value: L[k] || "", maxlength: 400 })]));
+    for (const [k] of F) if (L[k]) els[k].value = L[k];
+    return h("div.card.card-pad", h("div.stack",
+      naNote("Diese Angaben füllen die Vorlagen für Impressum und Datenschutzerklärung. Sie sind öffentlich sichtbar. Die Texte sind Vorlagen – bitte vor Veröffentlichung prüfen (keine Rechtsberatung)."),
+      ...F.map(([k, label]) => h("label.field", h("span", label), els[k])),
+      h("div.row.wrap", { style: { gap: "8px" } },
+        h("button.btn.primary", { onclick: async () => {
+          const v = Object.fromEntries(F.map(([k]) => [k, els[k].value.trim().slice(0, 400)])); v.updated = new Date().toISOString();
+          if (v.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email)) return toast("E-Mail ungültig", "err");
+          try { await setSetting("legal", v); toast("Gespeichert"); } catch (e) { toastErr(e); } } }, icon("check"), "Speichern"),
+        h("a.btn", { href: "#/impressum", target: "_blank" }, "Impressum ansehen"), h("a.btn", { href: "#/datenschutz", target: "_blank" }, "Datenschutz ansehen"), h("a.btn", { href: "#/nutzung", target: "_blank" }, "Nutzungsbedingungen"))));
+  }
+
   async function integrations() {
     const [integ, keys, servers] = await Promise.all([q(sb.from("cc_integrations").select("*")), rpc("cc_list_api_keys"), q(sb.from("cc_servers").select("id,status"))]);
     const anth = integ.find((i) => i.kind === "anthropic" && !i.project_id);
@@ -89,7 +122,10 @@ export default async function settingsView({ query }) {
           : net?.last_sync ? `${net.config?.sites ?? "?"} Website(s) · zuletzt ${fmtAgo(net.last_sync)}${net.last_error ? ` · ${net.last_error}` : ""}` : "Token gesetzt – noch nicht synchronisiert.",
         h("div.row", st(net?.status === "error" ? "b-bad" : st0?.netlify ? "b-ok" : "b-idle", net?.status === "error" ? "Fehler" : st0?.netlify ? "Verbunden" : "Nicht verbunden"),
           st0?.netlify ? h("button.btn.sm", { onclick: async (e) => { e.currentTarget.disabled = true; try { const r = await api("sync/netlify"); toast(`${r.sites} Website(s) abgerufen${r.changed ? `, ${r.changed} geändert` : ""}`); show("integrations"); } catch (er) { toastErr(er); e.currentTarget.disabled = false; } } }, icon("refresh"), "Jetzt") : null)),
-      row("Eventfrog (Tickets)", "Auf der Event-Seite „Eventfrog-Import“ → Export-Datei wählen. Wird nur im Browser gelesen, übertragen werden nur Summen. Automatisch über den Claude-Skill „nexus-sync“.", st("b-ok", "Bereit")),
+      row("Eventfrog (Tickets)", st0?.eventfrog_api ? "Organizer-API verbunden – Tickets werden stündlich automatisch abgerufen." : "Supabase-Secret EVENTFROG_API_KEY setzen – oder auf der Event-Seite „Eventfrog-Import“ mit Export-Datei.",
+        h("div.row", st(st0?.eventfrog_api ? "b-ok" : "b-idle", st0?.eventfrog_api ? "Verbunden" : "Datei-Import"),
+          st0?.eventfrog_api ? h("button.btn.sm", { onclick: async (e) => { e.currentTarget.disabled = true; try { const r = await api("sync/eventfrog"); toast(`${r.events?.length ?? 0} Event(s) abgerufen`); show("integrations"); } catch (er) { toastErr(er); e.currentTarget.disabled = false; } } }, icon("refresh"), "Jetzt") : null)),
+      row("Stündlicher Auto-Abruf", "Netlify, Eventfrog und alle Verbindungen werden jede Stunde (Minute 17) serverseitig aktualisiert.", st("b-ok", "Aktiv")),
       row("Roblox", "Öffentliche Spieldaten über die offizielle Roblox-API – pro Spiel ein Modul vom Typ „Roblox-Spiel“ anlegen.", st("b-ok", "Bereit")),
       row("Claude-Skill & eigene Apps", `${keys.filter((k) => !k.revoked_at && !k.server_id).length} aktive API-Schlüssel`, h("button.btn.sm", { onclick: () => show("keys") }, "Schlüssel"))));
   }

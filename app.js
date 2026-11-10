@@ -10,11 +10,12 @@ const ROUTES = [
   [/^\/servers$/, "servers"], [/^\/servers\/([\w-]+)$/, "server"], [/^\/ai$/, "ai"],
   [/^\/events$/, "events"], [/^\/events\/([\w-]+)$/, "event"], [/^\/jopml$/, "jopml"],
   [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"], [/^\/shares$/, "shares"],
+  [/^\/(impressum|datenschutz|nutzung)$/, "legal"], [/^\/connections$/, "connections"],
 ];
 const NAV_GROUPS = [
   ["Übersicht", [["#/", "dashboard", "Dashboard"]]],
   ["Planung", [["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"], ["#/shares", "users", "Teilen & Gäste"]]],
-  ["Betrieb", [["#/jopml", "layers", "JOPML"], ["#/servers", "server", "Server"], ["#/ai", "sparkles", "KI & Tokens"]]],
+  ["Betrieb", [["#/jopml", "layers", "JOPML"], ["#/servers", "server", "Server"], ["#/ai", "sparkles", "KI & Tokens"], ["#/connections", "link", "Verbindungen"]]],
   ["Verlauf", [["#/activity", "activity", "Aktivitäten"], ["#/system", "check", "Systemprüfung"]]],
 ];
 const NAV = NAV_GROUPS.flatMap(([, items]) => items);
@@ -40,15 +41,25 @@ async function boot() {
   const link = location.hash.match(/^#\/s\/([0-9a-f]{32})$/);
   if (link) { const { renderLink } = await import("./views/guest.js"); return renderLink(root, link[1]); }
   const { data: { session } } = await sb.auth.getSession();
-  if (!session) return renderLogin(oauthErr);
+  if (!session) {
+    // Rechtsseiten sind ohne Anmeldung erreichbar
+    const showPublic = async () => {
+      const leg = location.hash.match(/^#\/(impressum|datenschutz|nutzung)$/);
+      if (!leg) return renderLogin(oauthErr);
+      const { legalPage } = await import("./views/legal.js");
+      clear(root, h("div.guest-wrap", h("header.guest-top", h("a.brand", { href: "#/" }, h("div.brand-mark", icon("logo")), h("div.brand-text", CONFIG.appName, h("small", "Rechtliches")))), h("main.content", await legalPage(leg[1]))));
+    };
+    window.addEventListener("hashchange", showPublic);
+    return showPublic();
+  }
   let who;
   try { who = await rpc("cc_whoami"); } catch (e) { return renderLogin(errMsg(e)); }
   if (!who?.admin) {
     if (location.search) history.replaceState(null, "", location.pathname + location.hash);
     if (!who?.email) { await sb.auth.signOut(); return renderLogin("Dieses Konto hat keine bestätigte E-Mail-Adresse."); }
     sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") location.reload(); });
-    const { renderGuest } = await import("./views/guest.js");
-    return renderGuest(root, who);
+    const { renderWorkspace } = await import("./views/workspace.js");
+    return renderWorkspace(root, who);
   }
   if (location.search) history.replaceState(null, "", location.pathname + location.hash);
   user = session.user;
@@ -70,11 +81,12 @@ function renderLogin(error) {
     h("div.brand-mark", icon("logo")),
     h("h1", CONFIG.appName), h("p", "Dein zentrales Control Center für Projekte, Server und KI."),
     btn,
-    h("div.login-sub", "Admin und Gäste melden sich mit Google an. Gäste sehen nur, was mit ihrer E-Mail geteilt wurde."),
+    h("div.login-sub", "Jeder kann sich mit Google anmelden und bekommt einen eigenen, privaten Bereich: API-Schlüssel einfügen – Websites, Repos, Events und KI werden automatisch verknüpft."),
     h("form.login-link", { onsubmit: (e) => { e.preventDefault(); const m = linkIn.value.match(/([0-9a-f]{32})/); if (!m) return toast("Kein gültiger Gäste-Link", "err"); location.hash = `#/s/${m[1]}`; location.reload(); } },
       linkIn, h("button.btn", { type: "submit" }, "Öffnen")),
     error ? h("div.login-err", error) : null,
-    h("div.login-foot", icon("lock"), "Verwaltung nur für das Admin-Konto · Gäste nur Lesezugriff"))));
+    h("div.login-foot", icon("lock"), "Jeder sieht nur seine eigenen Daten · Schlüssel verschlüsselt gespeichert"),
+    h("div.footer-links", h("a", { href: "#/impressum" }, "Impressum"), h("a", { href: "#/datenschutz" }, "Datenschutz"), h("a", { href: "#/nutzung" }, "Nutzungsbedingungen")))));
 }
 function svgGoogle() {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
