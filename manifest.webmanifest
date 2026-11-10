@@ -1,0 +1,23 @@
+{
+  "name": "JOPML Nexus – Control Center",
+  "short_name": "Nexus",
+  "description": "Zentrales Control Center für Projekte, Server, KI-Nutzung, Events und JOPML.",
+  "lang": "de",
+  "start_url": "./#/",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#0a0b0e",
+  "theme_color": "#0a0b0e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "shortcuts": [
+    { "name": "Projekte", "url": "./#/projects" },
+    { "name": "Server", "url": "./#/servers" },
+    { "name": "KI & Tokens", "url": "./#/ai" }
+  ]
+}

@@ -1,0 +1,272 @@
+// JOPML Nexus – App-Shell: Anmeldung, Navigation, Router, Suche, Benachrichtigungen, Schnellaktionen.
+import { sb, rpc, projects, local } from "./lib/api.js";
+import { h, icon, clear, toast, toastErr, fmtAgo, modal, debounce, errMsg } from "./lib/ui.js";
+import { newProject, newModule, connectServer, newEvent, uploadDialog, openAssistant, syncHelp } from "./lib/actions.js";
+import { CONFIG } from "./config.js";
+
+const root = document.getElementById("root");
+const ROUTES = [
+  [/^\/?$/, "dashboard"], [/^\/projects$/, "projects"], [/^\/projects\/([\w-]+)$/, "project"],
+  [/^\/servers$/, "servers"], [/^\/servers\/([\w-]+)$/, "server"], [/^\/ai$/, "ai"],
+  [/^\/events$/, "events"], [/^\/events\/([\w-]+)$/, "event"], [/^\/jopml$/, "jopml"],
+  [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"],
+];
+const NAV = [
+  ["#/", "dashboard", "Dashboard"], ["#/projects", "folder", "Projekte"], ["#/servers", "server", "Server"], ["#/ai", "sparkles", "KI & Tokens"],
+  ["#/events", "calendar", "Events"], ["#/jopml", "layers", "JOPML"], ["#/files", "file", "Dateien"], ["#/activity", "activity", "Aktivitäten"],
+];
+
+let user = null, shell = null, unread = 0, lastNotifId = null;
+
+// ---------------- Start & Anmeldung ----------------
+async function boot() {
+  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+  const params = new URLSearchParams(location.search);
+  const oauthErr = params.get("error_description");
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return renderLogin(oauthErr);
+  let who;
+  try { who = await rpc("cc_whoami"); } catch (e) { return renderLogin(errMsg(e)); }
+  if (!who?.admin) {
+    await sb.auth.signOut();
+    return renderLogin(`Das Konto ${who?.email ?? ""} hat keinen Zugriff auf dieses Control Center.`);
+  }
+  if (location.search) history.replaceState(null, "", location.pathname + location.hash);
+  user = session.user;
+  renderShell();
+  sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") location.reload(); });
+}
+
+function renderLogin(error) {
+  const go = async () => {
+    btn.disabled = true;
+    const { error: e } = await sb.auth.signInWithOAuth({ provider: "google",
+      options: { redirectTo: location.origin + location.pathname, queryParams: { prompt: "select_account" } } });
+    if (e) { btn.disabled = false; toast(e.message, "err"); }
+  };
+  const btn = h("button.gbtn", { onclick: go },
+    svgGoogle(), "Mit Google anmelden");
+  clear(root, h("div.login", h("div.card.login-card",
+    h("div.brand-mark", icon("logo")),
+    h("h1", CONFIG.appName), h("p", "Dein zentrales Control Center für Projekte, Server und KI."),
+    btn,
+    error ? h("div.login-err", error) : null,
+    h("div.login-foot", icon("lock"), "Zugang nur für das hinterlegte Admin-Konto"))));
+}
+function svgGoogle() {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("viewBox", "0 0 48 48"); s.setAttribute("aria-hidden", "true");
+  s.innerHTML = '<path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/>';
+  return s;
+}
+
+// ---------------- Shell ----------------
+function renderShell() {
+  const nav = h("nav.nav", { "aria-label": "Hauptnavigation" });
+  const pinned = h("nav.nav", { "aria-label": "Angeheftete Projekte" });
+  const bellBadge = h("span.badge-dot.hidden");
+  const statusPill = h("span.status-pill", { title: "Systemstatus" }, h("span.badge.b-idle.plain", { style: { padding: 0, height: "8px", width: "8px" } }), h("span.label", "Prüfe …"));
+  const app = h("div.app", { class: local.get("collapsed", false) ? "collapsed" : "" });
+  const meta = user.user_metadata || {};
+  const avatar = meta.avatar_url ? h("img.avatar", { src: meta.avatar_url, alt: "", referrerpolicy: "no-referrer" }) : h("div.avatar", (meta.full_name || user.email || "?")[0].toUpperCase());
+
+  const sidebar = h("aside.sidebar",
+    h("a.brand", { href: "#/" }, h("div.brand-mark", icon("logo")), h("div.brand-text", CONFIG.appName, h("small", "Control Center"))),
+    nav, h("div.nav-label", "Angeheftet"), pinned,
+    h("div.sidebar-foot.nav",
+      h("a", { href: "#/settings", dataset: { route: "settings" } }, icon("settings"), h("span.label", "Einstellungen")),
+      h("a.collapse-toggle", { href: "#", onclick: (e) => { e.preventDefault(); app.classList.toggle("collapsed"); local.set("collapsed", app.classList.contains("collapsed")); } },
+        icon("sidebar"), h("span.label", "Einklappen"))));
+
+  const topbar = h("header.topbar",
+    h("button.icon-btn.menu-toggle", { "aria-label": "Menü", onclick: () => app.classList.toggle("nav-open") }, icon("menu")),
+    h("div.search", { role: "button", tabindex: 0, onclick: openSearch, onkeydown: (e) => e.key === "Enter" && openSearch() }, icon("search"), h("span", "Suchen …"), h("span.kbd", navigator.platform.includes("Mac") ? "⌘K" : "Strg K")),
+    h("div.spacer"), statusPill,
+    h("button.icon-btn", { "aria-label": "Schnellaktionen", title: "Schnellaktionen", onclick: openQuick }, icon("zap")),
+    h("button.icon-btn", { "aria-label": "KI-Assistent", title: "KI-Assistent", onclick: () => openAssistant() }, icon("bot")),
+    h("button.icon-btn", { "aria-label": "Benachrichtigungen", title: "Benachrichtigungen", onclick: openNotifications }, icon("bell"), bellBadge),
+    h("button.icon-btn", { "aria-label": "Profil", onclick: openProfile, style: { padding: 0 } }, avatar));
+
+  const content = h("main.content", { id: "content", tabindex: -1 });
+  app.append(sidebar, h("div.main", topbar, content));
+  app.addEventListener("click", (e) => { if (e.target === app || e.target.closest(".nav a")) app.classList.remove("nav-open"); });
+  clear(root, app);
+  shell = { app, nav, pinned, content, bellBadge, statusPill };
+
+  nav.append(...NAV.map(([href, ic, label]) => h("a", { href, dataset: { route: href.slice(2) || "dashboard" } }, icon(ic), h("span.label", label))));
+  refreshPinned();
+  window.addEventListener("cc:nav-refresh", refreshPinned);
+  window.addEventListener("hashchange", route);
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openSearch(); }
+  });
+  route();
+  poll();
+  setInterval(() => document.visibilityState === "visible" && poll(), CONFIG.pollSeconds * 1000);
+  document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && poll());
+}
+
+async function refreshPinned() {
+  try {
+    const list = (await projects(true)).filter((p) => p.pinned);
+    const colors = { active: "var(--ok)", development: "var(--primary)", paused: "var(--warn)", error: "var(--bad)" };
+    shell.pinned.replaceChildren(...(list.length ? list.map((p) => h("a", { href: `#/projects/${p.id}`, dataset: { route: `projects/${p.id}` }, title: p.name },
+      h("span.dot", { style: { background: colors[p.status] || "var(--idle)" } }), h("span.label.ellipsis", p.name)))
+      : [h("div.faint.label", { style: { fontSize: "12px", padding: "4px 10px" } }, "Projekte über ihre Einstellungen anheften")]));
+    markActive();
+  } catch { /* nicht kritisch */ }
+}
+
+function markActive() {
+  const cur = location.hash.replace(/^#\/?/, "").split("?")[0];
+  shell.app.querySelectorAll(".nav a[data-route]").forEach((a) => {
+    const r = a.dataset.route;
+    a.classList.toggle("active", r === "dashboard" ? cur === "" : cur === r || (cur.startsWith(r + "/") && !shell.pinned.querySelector(`[data-route="${cur}"]`)));
+  });
+}
+
+// ---------------- Router (Views werden erst bei Bedarf geladen) ----------------
+let routeSeq = 0;
+async function route() {
+  const seq = ++routeSeq;
+  const [path, query] = location.hash.replace(/^#/, "").split("?");
+  let view = null, args = [];
+  for (const [re, name] of ROUTES) { const m = path.match(re); if (m) { view = name; args = m.slice(1); break; } }
+  markActive();
+  document.querySelectorAll(".overlay, .drawer").forEach((x) => x.remove());
+  const c = shell.content;
+  if (!view) { clear(c, h("div.empty", icon("alert"), h("div.t", "Seite nicht gefunden"), h("a.btn", { href: "#/" }, "Zum Dashboard"))); return; }
+  c.replaceChildren(h("div", { style: { padding: "60px 0", display: "grid", placeItems: "center" } }, h("div.spinner")));
+  try {
+    const mod = await import(`./views/${view}.js`);
+    if (seq !== routeSeq) return;
+    const node = await mod.default({ args, query: new URLSearchParams(query || ""), user });
+    if (seq !== routeSeq) return;
+    c.replaceChildren(node);
+    const t = c.querySelector("h1")?.textContent;
+    document.title = t ? `${t} · ${CONFIG.appName}` : CONFIG.appName;
+    c.focus({ preventScroll: true }); window.scrollTo(0, 0);
+  } catch (e) {
+    if (seq !== routeSeq) return;
+    console.error(e);
+    clear(c, h("div.empty", icon("alert"), h("div.t", "Konnte nicht geladen werden"), h("div.s", errMsg(e)), h("button.btn", { onclick: route }, icon("refresh"), "Erneut versuchen")));
+  }
+}
+
+// ---------------- Systemstatus & Benachrichtigungen ----------------
+async function poll() {
+  try {
+    const [{ count }, { data: latest }, { data: servers }] = await Promise.all([
+      sb.from("cc_notifications").select("id", { count: "exact", head: true }).eq("read", false),
+      sb.from("cc_notifications").select("id,title,body,level").order("id", { ascending: false }).limit(1),
+      sb.from("cc_servers").select("status,last_heartbeat"),
+    ]);
+    unread = count || 0;
+    shell.bellBadge.textContent = unread > 9 ? "9+" : unread;
+    shell.bellBadge.classList.toggle("hidden", !unread);
+    const n = latest?.[0];
+    if (n && lastNotifId !== null && n.id > lastNotifId) {
+      toast(n.title, n.level === "error" ? "err" : "info");
+      if (local.get("browserNotif", false) && "Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible")
+        new Notification(n.title, { body: n.body || "", icon: "icons/icon-192.png" });
+    }
+    if (n) lastNotifId = n.id; else lastNotifId ??= 0;
+    const stale = (s) => s.last_heartbeat && Date.now() - new Date(s.last_heartbeat) > 3 * 60_000;
+    const total = (servers || []).length;
+    const bad = (servers || []).filter((s) => s.status === "offline" || s.status === "error" || ((s.status === "online" || s.status === "warning") && stale(s))).length;
+    const warn = (servers || []).filter((s) => s.status === "warning").length;
+    const [cls, txt] = !total ? ["b-ok", "Supabase verbunden"] : bad ? ["b-bad", `${bad} Server gestört`] : warn ? ["b-warn", `${warn} Server mit Warnung`] : ["b-ok", "Alle Systeme laufen"];
+    shell.statusPill.firstChild.className = `badge plain ${cls}`;
+    shell.statusPill.firstChild.style.background = `var(--${cls === "b-ok" ? "ok" : cls === "b-bad" ? "bad" : "warn"})`;
+    shell.statusPill.lastChild.textContent = txt;
+  } catch {
+    shell.statusPill.lastChild.textContent = "Keine Verbindung";
+    shell.statusPill.firstChild.style.background = "var(--bad)";
+  }
+}
+
+async function openNotifications() {
+  document.querySelector(".drawer.notifs")?.remove();
+  const body = h("div.drawer-body", h("div.skel", { style: { height: "80px", marginTop: "12px" } }));
+  const dr = h("aside.drawer.notifs", { role: "dialog", "aria-label": "Benachrichtigungen" },
+    h("div.modal-head", h("h3", "Benachrichtigungen"), h("div.row",
+      h("button.btn.sm.ghost", { onclick: async () => { await sb.from("cc_notifications").update({ read: true }).eq("read", false); poll(); load(); } }, "Alle gelesen"),
+      h("button.icon-btn", { onclick: () => dr.remove(), "aria-label": "Schließen" }, icon("x")))), body);
+  document.body.append(dr);
+  async function load() {
+    const { data, error } = await sb.from("cc_notifications").select("*").order("created_at", { ascending: false }).limit(60);
+    if (error) return body.replaceChildren(h("div.empty", h("div.s", errMsg(error))));
+    if (!data.length) return body.replaceChildren(h("div.empty", icon("bell"), h("div.t", "Keine Benachrichtigungen"), h("div.s", "Hier erscheinen z. B. Server-Ausfälle, Synchronisierungen und KI-Grenzen.")));
+    const col = { error: "var(--bad)", warning: "var(--warn)", success: "var(--ok)", info: "var(--accent)" };
+    body.replaceChildren(...data.map((n) => h("div.notif", { class: n.read ? "" : "unread", style: { cursor: n.link ? "pointer" : "default" },
+      onclick: async () => { if (!n.read) { await sb.from("cc_notifications").update({ read: true }).eq("id", n.id); poll(); } if (n.link?.startsWith("#/")) { location.hash = n.link; dr.remove(); } } },
+      h("span", { style: { width: "8px", height: "8px", borderRadius: "50%", background: col[n.level], marginTop: "7px", flex: "none" } }),
+      h("div", { style: { minWidth: 0 } }, h("div.n-title", n.title), n.body ? h("div.n-body", n.body) : null, h("div.n-time", fmtAgo(n.created_at))))));
+  }
+  load();
+}
+
+function openQuick() {
+  const items = [
+    ["folder", "Neues Projekt erstellen", () => newProject()], ["layers", "Neues Modul hinzufügen", () => newModule()],
+    ["upload", "Datei hochladen", () => uploadDialog()], ["server", "Server verbinden", () => connectServer()],
+    ["calendar", "Event erstellen", () => newEvent()], ["refresh", "Projekt synchronisieren", () => syncHelp()],
+    ["bot", "KI-Assistent öffnen", () => openAssistant()],
+  ];
+  const m = modal("Schnellaktionen", h("div.list", items.map(([ic, t, fn]) =>
+    h("button.list-item", { style: { background: "none", border: 0, borderTop: "1px solid var(--line)", textAlign: "left", cursor: "pointer", width: "100%" }, onclick: () => { m.close(); fn(); } },
+      h("div.li-icon", icon(ic)), h("div.li-main", h("div.li-title", t)), icon("chevronR", "faint")))));
+}
+
+function openProfile() {
+  const meta = user.user_metadata || {};
+  const theme = local.get("theme", "dark");
+  const setTheme = (t) => { local.set("theme", t); document.documentElement.dataset.theme = t === "system" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : t; m.close(); };
+  const m = modal("Profil", h("div.stack",
+    h("div.row", { style: { gap: "14px" } }, meta.avatar_url ? h("img.avatar", { src: meta.avatar_url, alt: "", referrerpolicy: "no-referrer", style: { width: "48px", height: "48px" } }) : null,
+      h("div", h("div", { style: { fontWeight: 600 } }, meta.full_name || "Admin"), h("div.muted", user.email), h("span.badge.b-pri", { style: { marginTop: "6px" } }, "Administrator"))),
+    h("div.field", h("label", "Darstellung"), h("div.seg", [["dark", "Dunkel"], ["light", "Hell"], ["system", "System"]].map(([k, t]) => h("button", { class: theme === k ? "on" : "", onclick: () => setTheme(k) }, t)))),
+    h("div.row", h("a.btn", { href: "#/settings", onclick: () => m.close() }, icon("settings"), "Einstellungen"),
+      h("button.btn.danger", { onclick: async () => { await sb.auth.signOut(); location.reload(); } }, icon("logout"), "Abmelden"))));
+}
+
+// ---------------- Globale Suche (⌘K) ----------------
+function openSearch() {
+  if (document.querySelector(".palette")) return;
+  const KIND = { project: ["folder", "Projekte"], module: ["layers", "Module"], server: ["server", "Server"], file: ["file", "Dateien"], event: ["calendar", "Events"], activity: ["activity", "Aktivitäten"], page: ["chevronR", "Seiten"] };
+  const pages = [...NAV.map(([href, , t]) => ({ kind: "page", title: t, route: href })), { kind: "page", title: "Einstellungen", route: "#/settings" }];
+  const inp = h("input.input", { placeholder: "Projekte, Server, Dateien, Events … durchsuchen", "aria-label": "Suche", autocomplete: "off" });
+  const res = h("div.results");
+  let items = [], sel = 0;
+  const ov = h("div.overlay", { onmousedown: (e) => e.target === ov && ov.remove() }, h("div.modal.palette", { role: "dialog", "aria-label": "Suche" }, inp, res));
+  const draw = () => {
+    res.replaceChildren();
+    if (!items.length) { res.append(h("div.empty", { style: { padding: "22px" } }, h("div.s", inp.value.trim().length < 2 ? "Mindestens 2 Zeichen eingeben" : "Keine Treffer"))); return; }
+    let lastKind = null;
+    items.forEach((it, i) => {
+      if (it.kind !== lastKind) { res.append(h("div.group", KIND[it.kind]?.[1] || it.kind)); lastKind = it.kind; }
+      res.append(h("div.res", { class: i === sel ? "on" : "", onclick: () => pick(i), onmousemove: () => { if (sel !== i) { sel = i; draw(); } } },
+        h("div.li-icon", { style: { width: "30px", height: "30px" } }, icon(KIND[it.kind]?.[0] || "box")),
+        h("div.li-main", h("div.li-title", it.title), it.subtitle ? h("div.li-sub", it.subtitle) : null)));
+    });
+    res.querySelector(".res.on")?.scrollIntoView({ block: "nearest" });
+  };
+  const pick = (i) => { const it = items[i]; if (!it) return; ov.remove(); location.hash = it.route; };
+  const search = debounce(async () => {
+    const qtxt = inp.value.trim();
+    const pg = pages.filter((p) => p.title.toLowerCase().includes(qtxt.toLowerCase()));
+    if (qtxt.length < 2) { items = qtxt ? pg : pages; sel = 0; draw(); return; }
+    try { items = [...pg, ...(await rpc("cc_search", { q: qtxt }))]; } catch (e) { items = pg; toastErr(e); }
+    sel = 0; draw();
+  }, 180);
+  inp.addEventListener("input", search);
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); sel = Math.min(items.length - 1, sel + 1); draw(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); sel = Math.max(0, sel - 1); draw(); }
+    else if (e.key === "Enter") { e.preventDefault(); pick(sel); }
+    else if (e.key === "Escape") ov.remove();
+  });
+  document.body.append(ov); items = pages; draw(); inp.focus();
+}
+
+boot().catch((e) => { console.error(e); renderLogin(errMsg(e)); });
