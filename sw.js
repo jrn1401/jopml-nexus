@@ -1,16 +1,18 @@
 // Service Worker: cached nur die App-Hülle (statische Dateien). Daten (Supabase) werden nie gecacht.
-const VERSION = "cc-20261110011543";
+const VERSION = "cc-20261110133812";
 const SHELL = [
   "./", "index.html", "styles.css", "theme.js", "app.js", "config.js", "manifest.webmanifest",
   "lib/api.js", "lib/ui.js", "lib/charts.js", "lib/modules.js", "lib/actions.js",
   "views/dashboard.js", "views/projects.js", "views/project.js", "views/servers.js", "views/server.js", "views/ai.js",
-  "views/events.js", "views/event.js", "views/jopml.js", "views/files.js", "views/activity.js", "views/settings.js",
+  "views/events.js", "views/event.js", "views/jopml.js", "views/jopml-admin.js", "views/files.js", "views/activity.js", "views/settings.js", "views/system.js",
   "icons/icon.svg", "icons/icon-192.png", "icons/apple-touch-icon.png",
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // Neue Version wartet, bis der Nutzer „Neu laden“ tippt (kein Neuladen mitten in der Arbeit)
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)));
 });
+self.addEventListener("message", (e) => { if (e.data === "skipWaiting") self.skipWaiting(); });
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });

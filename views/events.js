@@ -5,18 +5,21 @@ import { newEvent } from "../lib/actions.js";
 export default async function eventsView() {
   const [events, items] = await Promise.all([
     q(sb.from("cc_events").select("*").order("event_date", { ascending: true, nullsFirst: false })),
-    q(sb.from("cc_event_items").select("event_id,kind,done,amount")),
+    q(sb.from("cc_event_items").select("event_id,kind,done,amount,at,status")),
   ]);
-  const agg = items.reduce((m, i) => { const a = (m[i.event_id] ??= { tasks: 0, done: 0, cost: 0 });
-    if (i.kind === "task" || i.kind === "tech") { a.tasks++; if (i.done) a.done++; } if (i.kind === "cost") a.cost += Number(i.amount) || 0; return m; }, {});
+  const agg = items.reduce((m, i) => { const a = (m[i.event_id] ??= { tasks: 0, done: 0, cost: 0, overdue: 0, booked: false });
+    if (i.kind === "task" || i.kind === "tech") { a.tasks++; if (i.done) a.done++; else if (i.at && new Date(i.at) < Date.now()) a.overdue++; }
+    if (i.kind === "cost" || (i.kind === "location" && i.status === "gebucht")) a.cost += Number(i.amount) || 0;
+    if (i.kind === "location" && i.status === "gebucht") a.booked = true; return m; }, {});
   const now = Date.now();
   const upcoming = events.filter((e) => !e.event_date || new Date(e.event_date) >= now - 86400_000).filter((e) => e.status !== "done" && e.status !== "cancelled");
   const past = events.filter((e) => !upcoming.includes(e));
 
   const evCard = (e) => {
-    const a = agg[e.id] || { tasks: 0, done: 0, cost: 0 };
+    const a = agg[e.id] || { tasks: 0, done: 0, cost: 0, overdue: 0 };
+    const daysLeft = e.event_date ? Math.ceil((new Date(e.event_date) - now) / 86400_000) : null;
     const d = e.event_date ? new Date(e.event_date) : null;
-    return h("a.card.pcard", { href: `#/events/${e.id}` },
+    return h("a.card.pcard.ev-card", { href: `#/events/${e.id}`, dataset: { s: [e.name, e.location, e.description].join(" ").toLowerCase() } },
       h("div.top",
         h("div.cat-icon", { style: { flexDirection: "column", background: "var(--primary-soft)", color: "var(--primary)", lineHeight: 1.05, width: "46px", height: "46px" } },
           d ? [h("strong", { style: { fontSize: "17px" } }, d.getDate()), h("span", { style: { fontSize: "11px" } }, d.toLocaleDateString("de-DE", { month: "short" }))] : icon("calendar")),
@@ -24,16 +27,20 @@ export default async function eventsView() {
         badge(EVENT_STATUS, e.status)),
       e.description ? h("p", e.description) : null,
       h("div.meta",
+        daysLeft !== null && daysLeft >= 0 && e.status !== "done" && e.status !== "cancelled" ? h("span.badge.b-pri", daysLeft === 0 ? "heute" : `noch ${daysLeft} Tag${daysLeft === 1 ? "" : "e"}`) : null,
         a.tasks ? h("span", `${a.done}/${a.tasks} Aufgaben`) : null,
+        a.overdue ? h("span", { style: { color: "var(--bad)" } }, `${a.overdue} überfällig`) : null,
         e.budget !== null ? h("span", `Budget ${fmtEUR(e.budget)}`) : null,
         a.cost ? h("span", { style: { color: e.budget !== null && a.cost > e.budget ? "var(--bad)" : "" } }, `Kosten ${fmtEUR(a.cost)}`) : null,
         e.expected_guests !== null ? h("span", `${fmtNum(e.expected_guests)} Gäste`) : null,
         h("span", { style: { marginLeft: "auto" } }, d && d > now ? fmtAgo(d) : "")));
   };
+  const search = h("input.input", { type: "search", placeholder: "Events filtern …", "aria-label": "Events filtern", style: { maxWidth: "260px" },
+    oninput: () => { const t = search.value.trim().toLowerCase(); document.querySelectorAll(".ev-card").forEach((c) => { c.style.display = !t || c.dataset.s.includes(t) ? "" : "none"; }); } });
   const grid = (list) => h("div.grid", { style: { gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 320px), 1fr))" } }, list.map(evCard));
   return h("div",
     h("div.page-head", h("div", h("h1", "Events"), h("p", `${upcoming.length} anstehend · ${past.length} vergangen oder abgeschlossen`)),
-      h("div.actions", h("button.btn.primary", { onclick: () => newEvent() }, icon("plus"), "Event erstellen"))),
+      h("div.actions", events.length > 3 ? search : null, h("button.btn.primary", { onclick: () => newEvent() }, icon("plus"), "Event erstellen"))),
     events.length ? h("div.stack",
       upcoming.length ? grid(upcoming) : h("div.card", empty("calendar", "Keine anstehenden Events")),
       past.length ? [h("h3", { style: { margin: "12px 0 0", fontSize: "14px", color: "var(--text-2)" } }, "Vergangen & abgeschlossen"), grid(past)] : null)

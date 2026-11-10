@@ -1,0 +1,25 @@
+[Unit]
+Description=JOPML Control Center Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/cc-agent.env
+ExecStart=/usr/bin/python3 /opt/cc-agent/cc_agent.py
+Restart=always
+RestartSec=15
+# Härtung: eigener, unprivilegierter Benutzer, nur Lesezugriff aufs System
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=64M
+CPUQuota=5%
+
+[Install]
+WantedBy=multi-user.target

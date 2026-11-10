@@ -1,16 +1,18 @@
 // JOPML-Modul: nutzt die vorhandenen, admin-geschützten JOPML-Funktionen (jopml_admin_*) – keine Doppelimplementierung.
 import { sb, q, rpc } from "../lib/api.js";
-import { h, icon, stat, fmtNum, fmtBytes, fmtAgo, fmtDateTime, fmtCompact, naNote, empty, toast, toastErr, badge, PROJECT_STATUS } from "../lib/ui.js";
+import { h, icon, stat, fmtNum, fmtBytes, fmtAgo, fmtCompact, naNote, empty, toast, toastErr, badge, PROJECT_STATUS } from "../lib/ui.js";
 import { barChart, donut, PALETTE } from "../lib/charts.js";
 import { timeline, fileRow, lazy } from "../lib/modules.js";
 import { uploadDialog, openAssistant } from "../lib/actions.js";
+import { maintenanceBanner, controlCard, aiCheckCard, budgetCard, onlineCard, ticketsCard, reportsCard, errorGroupsCard } from "./jopml-admin.js";
 
 export default async function jopmlView() {
   const project = await q(sb.from("cc_projects").select("*").eq("slug", "jopml").maybeSingle());
   const safe = (p) => p.then((d) => d, (e) => ({ __err: e.message }));
-  const [ov, prog, ai, prov, linked] = await Promise.all([
+  const [ov, prog, ai, prov, linked, cfg] = await Promise.all([
     safe(rpc("jopml_admin_overview")), safe(rpc("jopml_admin_program_overview")), safe(rpc("jopml_admin_ai_stats", { p_days: 14 })),
     safe(rpc("jopml_admin_ai_provider_overview")), q(sb.from("cc_projects").select("id,name,status,category").or("category.eq.jopml,tags.cs.{jopml}")),
+    safe(rpc("jopml_app_config_get")),
   ]);
   const ok = !ov.__err;
   const days = [...Array(14)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - (13 - i)); return d.toLocaleDateString("sv-SE"); });
@@ -36,7 +38,17 @@ export default async function jopmlView() {
         stat("Online", fmtNum(ov.online_now), { ic: "wifi", sub: `${fmtNum(ov.online_24h)} in den letzten 24 h` }),
         stat("Fehler 24 h", fmtNum(ov.errors_24h), { ic: "alert", sub: `${fmtNum(ov.errors_total)} insgesamt` }),
         stat("KI heute", fmtNum(prog.ai_today?.answered), { ic: "sparkles", sub: `${fmtCompact(prog.ai_today?.tokens)} Tokens · ${fmtNum(prog.ai_today?.fallbacks)} Ausweich-Aufrufe` })),
+      cfg.__err ? null : maintenanceBanner(cfg),
       h("div.grid.dash",
+        cfg.__err ? card("Server-Steuerung", naNote(cfg.__err, "alert"), "w-4") : controlCard(cfg),
+        aiCheckCard(), budgetCard(),
+        onlineCard(),
+        card("Status jetzt", h("dl.kv",
+          h("dt", "Wartung"), h("dd", cfg.maintenance ? h("span.badge.b-warn", "aktiv") : h("span.badge.b-ok", "aus")),
+          h("dt", "KI-Chat"), h("dd", cfg.ai_enabled === false ? h("span.badge.b-bad", "aus") : h("span.badge.b-ok", "an")),
+          h("dt", "Letzte Aktivität"), h("dd", ov.last_seen ? fmtAgo(ov.last_seen) : "–"),
+          h("dt", "Neue Nutzer 7 T"), h("dd", fmtNum(ov.new_7d))), "w-4"),
+        ticketsCard(), reportsCard(), errorGroupsCard(),
         card("KI-Funktionen · 14 Tage", ai.__err ? naNote(ai.__err) : barChart(days.map((d) => `${d.slice(8)}.${d.slice(5, 7)}`),
           providers.map((p, i) => ({ name: p, color: PALETTE[i], values: days.map((d) => ai.filter((r) => r.day === d && r.provider === p).reduce((a, r) => a + Number(r.tokens), 0)) })),
           { height: 200, yFmt: fmtCompact, emptyText: "Keine KI-Nutzung in JOPML." }), "w-8"),

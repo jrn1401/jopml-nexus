@@ -9,18 +9,31 @@ const ROUTES = [
   [/^\/?$/, "dashboard"], [/^\/projects$/, "projects"], [/^\/projects\/([\w-]+)$/, "project"],
   [/^\/servers$/, "servers"], [/^\/servers\/([\w-]+)$/, "server"], [/^\/ai$/, "ai"],
   [/^\/events$/, "events"], [/^\/events\/([\w-]+)$/, "event"], [/^\/jopml$/, "jopml"],
-  [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"],
+  [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"],
 ];
-const NAV = [
-  ["#/", "dashboard", "Dashboard"], ["#/projects", "folder", "Projekte"], ["#/servers", "server", "Server"], ["#/ai", "sparkles", "KI & Tokens"],
-  ["#/events", "calendar", "Events"], ["#/jopml", "layers", "JOPML"], ["#/files", "file", "Dateien"], ["#/activity", "activity", "Aktivitäten"],
+const NAV_GROUPS = [
+  ["Übersicht", [["#/", "dashboard", "Dashboard"]]],
+  ["Planung", [["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"]]],
+  ["Betrieb", [["#/jopml", "layers", "JOPML"], ["#/servers", "server", "Server"], ["#/ai", "sparkles", "KI & Tokens"]]],
+  ["Verlauf", [["#/activity", "activity", "Aktivitäten"], ["#/system", "check", "Systemprüfung"]]],
 ];
+const NAV = NAV_GROUPS.flatMap(([, items]) => items);
+const MOBILE = [["#/", "dashboard", "Start"], ["#/events", "calendar", "Events"], ["#/jopml", "layers", "JOPML"], ["#/servers", "server", "Server"]];
 
 let user = null, shell = null, unread = 0, lastNotifId = null;
 
 // ---------------- Start & Anmeldung ----------------
 async function boot() {
-  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      const ask = (w) => w && navigator.serviceWorker.controller && showUpdate(w);
+      if (reg.waiting) ask(reg.waiting);
+      reg.addEventListener("updatefound", () => { const w = reg.installing; w?.addEventListener("statechange", () => w.state === "installed" && ask(w)); });
+      setInterval(() => reg.update().catch(() => {}), 30 * 60_000);
+    }).catch(() => {});
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloaded) { reloaded = true; location.reload(); } });
+  }
   const params = new URLSearchParams(location.search);
   const oauthErr = params.get("error_description");
   const { data: { session } } = await sb.auth.getSession();
@@ -60,12 +73,19 @@ function svgGoogle() {
   return s;
 }
 
+function showUpdate(worker) {
+  if (document.querySelector(".update-bar")) return;
+  document.body.append(h("div.update-bar", icon("refresh"), h("span", "Neue Version verfügbar"),
+    h("button.btn.sm.primary", { onclick: () => worker.postMessage("skipWaiting") }, "Neu laden"),
+    h("button.icon-btn", { "aria-label": "Später", onclick: (e) => e.currentTarget.parentElement.remove() }, icon("x"))));
+}
+
 // ---------------- Shell ----------------
 function renderShell() {
   const nav = h("nav.nav", { "aria-label": "Hauptnavigation" });
   const pinned = h("nav.nav", { "aria-label": "Angeheftete Projekte" });
   const bellBadge = h("span.badge-dot.hidden");
-  const statusPill = h("span.status-pill", { title: "Systemstatus" }, h("span.badge.b-idle.plain", { style: { padding: 0, height: "8px", width: "8px" } }), h("span.label", "Prüfe …"));
+  const statusPill = h("a.status-pill", { title: "Systemstatus – zur Systemprüfung", href: "#/system" }, h("span.badge.b-idle.plain", { style: { padding: 0, height: "8px", width: "8px" } }), h("span.label", "Prüfe …"));
   const app = h("div.app", { class: local.get("collapsed", false) ? "collapsed" : "" });
   const meta = user.user_metadata || {};
   const avatar = meta.avatar_url ? h("img.avatar", { src: meta.avatar_url, alt: "", referrerpolicy: "no-referrer" }) : h("div.avatar", (meta.full_name || user.email || "?")[0].toUpperCase());
@@ -88,21 +108,47 @@ function renderShell() {
     h("button.icon-btn", { "aria-label": "Profil", onclick: openProfile, style: { padding: 0 } }, avatar));
 
   const content = h("main.content", { id: "content", tabindex: -1 });
-  app.append(sidebar, h("div.main", topbar, content));
+  const offline = h("div.banner.bad.offline-bar.hidden", icon("wifi"), h("div", "Keine Internetverbindung – angezeigte Daten können veraltet sein."));
+  const bottom = h("nav.bottom-nav", { "aria-label": "Schnellnavigation" },
+    MOBILE.map(([href, ic, label]) => h("a", { href, dataset: { route: href.slice(2) || "dashboard" } }, icon(ic), h("span", label))),
+    h("a", { href: "#", onclick: (e) => { e.preventDefault(); app.classList.toggle("nav-open"); } }, icon("menu"), h("span", "Mehr")));
+  app.append(sidebar, h("div.main", topbar, offline, content), bottom);
+  const net = () => offline.classList.toggle("hidden", navigator.onLine);
+  window.addEventListener("online", () => { net(); poll(); }); window.addEventListener("offline", net); net();
   app.addEventListener("click", (e) => { if (e.target === app || e.target.closest(".nav a")) app.classList.remove("nav-open"); });
   clear(root, app);
   shell = { app, nav, pinned, content, bellBadge, statusPill };
 
-  nav.append(...NAV.map(([href, ic, label]) => h("a", { href, dataset: { route: href.slice(2) || "dashboard" } }, icon(ic), h("span.label", label))));
+  for (const [group, items] of NAV_GROUPS) {
+    nav.append(h("div.nav-label", group), ...items.map(([href, ic, label]) => h("a", { href, dataset: { route: href.slice(2) || "dashboard" } }, icon(ic), h("span.label", label), h("span.nav-badge.hidden"))));
+  }
   refreshPinned();
   window.addEventListener("cc:nav-refresh", refreshPinned);
   window.addEventListener("hashchange", route);
+  let gPending = 0;
   document.addEventListener("keydown", (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openSearch(); }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openSearch(); return; }
+    if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable || document.querySelector(".overlay")) return;
+    const k = e.key.toLowerCase();
+    if (Date.now() - gPending < 1200) {
+      const to = { d: "#/", p: "#/projects", s: "#/servers", e: "#/events", j: "#/jopml", k: "#/ai", f: "#/files", a: "#/activity" }[k];
+      gPending = 0; if (to) { e.preventDefault(); location.hash = to; } return;
+    }
+    if (k === "g") gPending = Date.now();
+    else if (k === "/") { e.preventDefault(); openSearch(); }
+    else if (k === "a") { e.preventDefault(); openAssistant(); }
+    else if (k === "n") { e.preventDefault(); openQuick(); }
+    else if (e.key === "?") location.hash = "#/system";
   });
   route();
   poll();
-  setInterval(() => document.visibilityState === "visible" && poll(), CONFIG.pollSeconds * 1000);
+  setInterval(() => {
+    if (document.visibilityState !== "visible") return;
+    poll();
+    // Live-Seiten still aktualisieren, solange nichts geöffnet ist
+    const cur = location.hash.replace(/^#\/?/, "");
+    if (["", "servers", "jopml"].includes(cur) && !document.querySelector(".overlay, .drawer") && !document.activeElement?.closest?.("input,textarea,select")) route(true);
+  }, CONFIG.pollSeconds * 1000);
   document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && poll());
 }
 
@@ -119,7 +165,7 @@ async function refreshPinned() {
 
 function markActive() {
   const cur = location.hash.replace(/^#\/?/, "").split("?")[0];
-  shell.app.querySelectorAll(".nav a[data-route]").forEach((a) => {
+  shell.app.querySelectorAll(".nav a[data-route], .bottom-nav a[data-route]").forEach((a) => {
     const r = a.dataset.route;
     a.classList.toggle("active", r === "dashboard" ? cur === "" : cur === r || (cur.startsWith(r + "/") && !shell.pinned.querySelector(`[data-route="${cur}"]`)));
   });
@@ -127,16 +173,18 @@ function markActive() {
 
 // ---------------- Router (Views werden erst bei Bedarf geladen) ----------------
 let routeSeq = 0;
-async function route() {
+async function route(silent = false) {
+  if (silent instanceof Event) silent = false;
   const seq = ++routeSeq;
   const [path, query] = location.hash.replace(/^#/, "").split("?");
   let view = null, args = [];
   for (const [re, name] of ROUTES) { const m = path.match(re); if (m) { view = name; args = m.slice(1); break; } }
   markActive();
-  document.querySelectorAll(".overlay, .drawer").forEach((x) => x.remove());
+  if (!silent) document.querySelectorAll(".overlay, .drawer").forEach((x) => x.remove());
   const c = shell.content;
   if (!view) { clear(c, h("div.empty", icon("alert"), h("div.t", "Seite nicht gefunden"), h("a.btn", { href: "#/" }, "Zum Dashboard"))); return; }
-  c.replaceChildren(h("div", { style: { padding: "60px 0", display: "grid", placeItems: "center" } }, h("div.spinner")));
+  const y = window.scrollY;
+  if (!silent) c.replaceChildren(h("div", { style: { padding: "60px 0", display: "grid", placeItems: "center" } }, h("div.spinner")));
   try {
     const mod = await import(`./views/${view}.js`);
     if (seq !== routeSeq) return;
@@ -145,9 +193,9 @@ async function route() {
     c.replaceChildren(node);
     const t = c.querySelector("h1")?.textContent;
     document.title = t ? `${t} · ${CONFIG.appName}` : CONFIG.appName;
-    c.focus({ preventScroll: true }); window.scrollTo(0, 0);
+    if (silent) window.scrollTo(0, y); else { c.focus({ preventScroll: true }); window.scrollTo(0, 0); }
   } catch (e) {
-    if (seq !== routeSeq) return;
+    if (seq !== routeSeq || silent) return;
     console.error(e);
     clear(c, h("div.empty", icon("alert"), h("div.t", "Konnte nicht geladen werden"), h("div.s", errMsg(e)), h("button.btn", { onclick: route }, icon("refresh"), "Erneut versuchen")));
   }
@@ -159,7 +207,7 @@ async function poll() {
     const [{ count }, { data: latest }, { data: servers }] = await Promise.all([
       sb.from("cc_notifications").select("id", { count: "exact", head: true }).eq("read", false),
       sb.from("cc_notifications").select("id,title,body,level").order("id", { ascending: false }).limit(1),
-      sb.from("cc_servers").select("status,last_heartbeat"),
+      sb.from("cc_servers").select("status,last_heartbeat,kind"),
     ]);
     unread = count || 0;
     shell.bellBadge.textContent = unread > 9 ? "9+" : unread;
@@ -175,6 +223,8 @@ async function poll() {
     const total = (servers || []).length;
     const bad = (servers || []).filter((s) => s.status === "offline" || s.status === "error" || ((s.status === "online" || s.status === "warning") && stale(s))).length;
     const warn = (servers || []).filter((s) => s.status === "warning").length;
+    const nb = shell.nav.querySelector('[data-route="servers"] .nav-badge');
+    if (nb) { nb.textContent = bad + warn; nb.classList.toggle("hidden", !(bad + warn)); }
     const [cls, txt] = !total ? ["b-ok", "Supabase verbunden"] : bad ? ["b-bad", `${bad} Server gestört`] : warn ? ["b-warn", `${warn} Server mit Warnung`] : ["b-ok", "Alle Systeme laufen"];
     shell.statusPill.firstChild.className = `badge plain ${cls}`;
     shell.statusPill.firstChild.style.background = `var(--${cls === "b-ok" ? "ok" : cls === "b-bad" ? "bad" : "warn"})`;
@@ -233,8 +283,10 @@ function openProfile() {
 // ---------------- Globale Suche (⌘K) ----------------
 function openSearch() {
   if (document.querySelector(".palette")) return;
-  const KIND = { project: ["folder", "Projekte"], module: ["layers", "Module"], server: ["server", "Server"], file: ["file", "Dateien"], event: ["calendar", "Events"], activity: ["activity", "Aktivitäten"], page: ["chevronR", "Seiten"] };
+  const KIND = { project: ["folder", "Projekte"], module: ["layers", "Module"], server: ["server", "Server"], file: ["file", "Dateien"], event: ["calendar", "Events"], event_item: ["check", "Event-Einträge"], activity: ["activity", "Aktivitäten"], page: ["chevronR", "Seiten"] };
   const pages = [...NAV.map(([href, , t]) => ({ kind: "page", title: t, route: href })), { kind: "page", title: "Einstellungen", route: "#/settings" }];
+  const acts = [["Neues Event", () => newEvent()], ["Neues Projekt", () => newProject()], ["KI-Assistent", () => openAssistant()], ["Server verbinden", () => connectServer()], ["Datei hochladen", () => uploadDialog()]]
+    .map(([t, run]) => ({ kind: "page", title: `Aktion: ${t}`, run }));
   const inp = h("input.input", { placeholder: "Projekte, Server, Dateien, Events … durchsuchen", "aria-label": "Suche", autocomplete: "off" });
   const res = h("div.results");
   let items = [], sel = 0;
@@ -251,10 +303,10 @@ function openSearch() {
     });
     res.querySelector(".res.on")?.scrollIntoView({ block: "nearest" });
   };
-  const pick = (i) => { const it = items[i]; if (!it) return; ov.remove(); location.hash = it.route; };
+  const pick = (i) => { const it = items[i]; if (!it) return; ov.remove(); if (it.run) it.run(); else location.hash = it.route; };
   const search = debounce(async () => {
     const qtxt = inp.value.trim();
-    const pg = pages.filter((p) => p.title.toLowerCase().includes(qtxt.toLowerCase()));
+    const pg = [...pages, ...acts].filter((p) => p.title.toLowerCase().includes(qtxt.toLowerCase()));
     if (qtxt.length < 2) { items = qtxt ? pg : pages; sel = 0; draw(); return; }
     try { items = [...pg, ...(await rpc("cc_search", { q: qtxt }))]; } catch (e) { items = pg; toastErr(e); }
     sel = 0; draw();

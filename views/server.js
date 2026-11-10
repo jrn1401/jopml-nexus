@@ -2,7 +2,7 @@ import { sb, q, rpc } from "../lib/api.js";
 import { h, icon, badge, SERVER_STATUS, meter, fmtPct, fmtAgo, fmtDuration, fmtBytes, fmtDateTime, empty, naNote, confirmDialog, toast, toastErr, formModal } from "../lib/ui.js";
 import { lineChart } from "../lib/charts.js";
 import { showAgentInstall } from "../lib/actions.js";
-import { lazy } from "../lib/modules.js";
+import { METRICS, sampleNow } from "./servers.js";
 
 const RANGES = [["1h", "1 Std."], ["24h", "24 Std."], ["7d", "7 Tage"], ["30d", "30 Tage"]];
 
@@ -12,6 +12,7 @@ export default async function serverView({ args: [id] }) {
   if (!s) return empty("server", "Server nicht gefunden", null, h("a.btn", { href: "#/servers" }, "Zur Übersicht"));
   const projects = await q(sb.from("cc_projects").select("id,name").order("name"));
   const live = s.status === "online" || s.status === "warning";
+  const cloud = s.kind === "cloud";
   let range = "24h";
   const charts = h("div.grid.g-2");
   const seg = h("div.seg", RANGES.map(([k, t]) => h("button", { class: k === range ? "on" : "", onclick: (e) => { range = k; seg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === e.target)); draw(); } }, t)));
@@ -26,6 +27,15 @@ export default async function serverView({ args: [id] }) {
       const net = (k) => rows.map((r, i) => { if (!i) return null; const dt = (new Date(r.t) - new Date(rows[i - 1].t)) / 1000; const d = r[k] - rows[i - 1][k];
         return dt > 0 && d >= 0 ? { x: new Date(r.t), y: d / dt } : null; }).filter(Boolean);
       const box = (t, el) => h("section.card", h("div.card-head", h("h3", t)), h("div.card-body", el));
+      if (cloud) {
+        const raw = (k) => rows.map((r) => ({ x: new Date(r.t), y: r[k] }));
+        charts.replaceChildren(
+          box("Verbindungsauslastung", lineChart([{ name: "Verbindungen", values: pts("cpu") }], { yMax: 100, yFmt: (v) => `${Math.round(v)} %`, xFmt })),
+          box("JOPML-Nutzer online", lineChart([{ name: "Online", values: raw("net_out"), color: "var(--chart-3)" }], { yFmt: (v) => String(Math.round(v)), xFmt })),
+          box("Datenbankgröße (von 500 MB)", lineChart([{ name: "Belegt", values: pts("disk"), color: "var(--chart-4)" }], { yFmt: (v) => `${v.toFixed(1).replace(".", ",")} %`, xFmt })),
+          box("Cache-Fehlquote", lineChart([{ name: "Fehlquote", values: pts("mem"), color: "var(--chart-2)" }], { yFmt: (v) => `${v.toFixed(2).replace(".", ",")} %`, xFmt })));
+        return;
+      }
       charts.replaceChildren(
         box("CPU", lineChart([{ name: "CPU", values: pts("cpu") }], { yMax: 100, yFmt: (v) => `${Math.round(v)} %`, xFmt })),
         box("Arbeitsspeicher", lineChart([{ name: "RAM", values: pts("mem"), color: "var(--chart-2)" }], { yMax: 100, yFmt: (v) => `${Math.round(v)} %`, xFmt })),
@@ -36,7 +46,8 @@ export default async function serverView({ args: [id] }) {
   }
   draw();
 
-  const metric = (label, v, extra, ic) => h("div.card.stat", h("div.k", icon(ic), label), h("div.v", live ? fmtPct(v) : "–"), meter(live ? v : 0), extra ? h("div.d", extra) : null);
+  const metric = (label, v, extra, ic, th) => h("div.card.stat", h("div.k", icon(ic), label), h("div.v", live ? fmtPct(v) : "–"), meter(live ? v : 0, th), extra ? h("div.d", extra) : null);
+  const M = METRICS[cloud ? "cloud" : "agent"];
   const services = Array.isArray(s.services) ? s.services : [];
   return h("div",
     h("div.crumb", h("a", { href: "#/servers" }, "Server"), icon("chevronR", ""), h("span", s.name)),
@@ -44,17 +55,22 @@ export default async function serverView({ args: [id] }) {
       h("span.faint", { style: { fontSize: "12.5px" } }, s.last_heartbeat ? `Letzter Heartbeat ${fmtAgo(s.last_heartbeat)}` : "Noch kein Heartbeat empfangen"))),
       h("div.actions",
         h("button.btn", { onclick: edit }, icon("edit"), "Bearbeiten"),
-        h("button.btn", { onclick: newKey }, icon("key"), "Neuer Agent-Schlüssel"),
-        h("button.btn.danger", { onclick: del }, icon("trash"), "Entfernen"))),
+        cloud ? h("button.btn", { onclick: (e) => sampleNow(e.currentTarget) }, icon("refresh"), "Jetzt messen") : h("button.btn", { onclick: newKey }, icon("key"), "Neuer Agent-Schlüssel"),
+        cloud ? null : h("button.btn.danger", { onclick: del }, icon("trash"), "Entfernen"))),
+    cloud ? h("div", { style: { marginBottom: "16px" } }, naNote("Cloud-Server: Die Datenbank misst sich selbst alle 5 Minuten (pg_cron) – auch wenn die Website geschlossen ist. CPU/RAM der Supabase-Maschine sind über die API nicht abrufbar; gezeigt werden Verbindungsauslastung, Cache-Fehlquote, Datenbankgröße und JOPML-Nutzer.")) : null,
     s.status === "disconnected" ? h("div", { style: { marginBottom: "16px" } }, naNote("Dieser Server hat noch keine Daten gesendet. Installiere den Agenten mit dem Schlüssel, der beim Anlegen angezeigt wurde – oder erzeuge einen neuen.")) : null,
     h("div.grid.g-4", { style: { marginBottom: "16px" } },
-      metric("CPU", s.cpu_usage, s.cpu_cores ? `${s.cpu_cores} Kerne` : null, "cpu"),
-      metric("RAM", s.memory_usage, s.memory_total ? `von ${fmtBytes(s.memory_total)}` : null, "layers"),
-      metric("Speicher", s.disk_usage, s.disk_total ? `von ${fmtBytes(s.disk_total)}` : null, "disk"),
+      ...M.map(([k, label, extra, th], i) => metric(label, s[k], extra(s) || null, ["cpu", "layers", "disk"][i], th)),
       h("div.card.stat", h("div.k", icon("clock"), "Uptime"), h("div.v", { style: { fontSize: "20px" } }, live ? fmtDuration(s.uptime_seconds) : "–"), h("div.d", s.os || "Betriebssystem unbekannt"))),
     h("div.row.between.wrap", { style: { marginBottom: "12px" } }, h("h3", { style: { margin: 0, fontSize: "15px" } }, "Verlauf"), seg),
     charts,
     h("div.grid.g-2", { style: { marginTop: "16px" } },
+      cloud ? h("section.card", h("div.card-head", h("h3", "Datenbank")), h("div.card-body", h("dl.kv",
+        h("dt", "Verbindungen"), h("dd", `${s.metadata?.connections ?? "–"} / ${s.metadata?.max_connections ?? "–"}`),
+        h("dt", "Cache-Trefferquote"), h("dd", s.metadata?.cache_hit != null ? `${String(s.metadata.cache_hit).replace(".", ",")} %` : "–"),
+        h("dt", "Größe"), h("dd", s.metadata?.db_bytes ? fmtBytes(s.metadata.db_bytes) : "–"),
+        h("dt", "Region"), h("dd", s.metadata?.region || "–"),
+        h("dt", "JOPML online / 24 h"), h("dd", `${s.metadata?.jopml_online ?? "–"} / ${s.metadata?.jopml_online_24h ?? "–"}`)))) :
       h("section.card", h("div.card-head", h("h3", "Dienste"), h("span.sub", "vom Agenten gemeldet")), h("div.card-body",
         services.length ? h("div.list", services.map((x) => h("div.list-item", h("div.li-main", h("div.li-title.mono", x.name)),
           h("span.badge", { class: /^(running|active|up)$/i.test(x.status) ? "b-ok" : /fail|dead|stop|exited/i.test(x.status) ? "b-bad" : "b-idle" }, x.status || "?"))))
