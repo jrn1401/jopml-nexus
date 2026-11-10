@@ -71,6 +71,8 @@ export default async function settingsView({ query }) {
   async function integrations() {
     const [integ, keys, servers] = await Promise.all([q(sb.from("cc_integrations").select("*")), rpc("cc_list_api_keys"), q(sb.from("cc_servers").select("id,status"))]);
     const anth = integ.find((i) => i.kind === "anthropic" && !i.project_id);
+    const net = integ.find((i) => i.kind === "netlify" && !i.project_id);
+    const st0 = await api("sync/status").catch(() => null);
     const st = (cls, t) => h("span.badge", { class: cls }, t);
     const t0 = performance.now(); let latency = null;
     try { await sb.from("cc_settings").select("key").limit(1); latency = Math.round(performance.now() - t0); } catch { /* */ }
@@ -83,6 +85,11 @@ export default async function settingsView({ query }) {
         st(anth?.status === "connected" ? "b-ok" : anth?.status === "error" ? "b-bad" : "b-idle", anth?.status === "connected" ? "Verbunden" : anth?.status === "error" ? "Fehler" : "Nicht verbunden")),
       row("Google Gemini (KI-Assistent & Datei-Analyse)", "Nutzt den bereits für JOPML gesetzten Schlüssel GEMINI_API_KEY in der Edge Function.", h("button.btn.sm", { onclick: async (e) => {
         e.target.disabled = true; try { await api("ai/ask", { question: "Antworte nur mit: OK" }); toast("Gemini antwortet"); } catch (er) { toastErr(er); } finally { e.target.disabled = false; } } }, "Testen")),
+      row("Netlify (Websites)", !st0?.netlify ? "Supabase-Secret NETLIFY_TOKEN setzen (Netlify › User settings › Applications › Personal access tokens). Danach erscheinen alle Websites als Projekte."
+          : net?.last_sync ? `${net.config?.sites ?? "?"} Website(s) · zuletzt ${fmtAgo(net.last_sync)}${net.last_error ? ` · ${net.last_error}` : ""}` : "Token gesetzt – noch nicht synchronisiert.",
+        h("div.row", st(net?.status === "error" ? "b-bad" : st0?.netlify ? "b-ok" : "b-idle", net?.status === "error" ? "Fehler" : st0?.netlify ? "Verbunden" : "Nicht verbunden"),
+          st0?.netlify ? h("button.btn.sm", { onclick: async (e) => { e.currentTarget.disabled = true; try { const r = await api("sync/netlify"); toast(`${r.sites} Website(s) abgerufen${r.changed ? `, ${r.changed} geändert` : ""}`); show("integrations"); } catch (er) { toastErr(er); e.currentTarget.disabled = false; } } }, icon("refresh"), "Jetzt") : null)),
+      row("Eventfrog (Tickets)", "Auf der Event-Seite „Eventfrog-Import“ → Export-Datei wählen. Wird nur im Browser gelesen, übertragen werden nur Summen. Automatisch über den Claude-Skill „nexus-sync“.", st("b-ok", "Bereit")),
       row("Roblox", "Öffentliche Spieldaten über die offizielle Roblox-API – pro Spiel ein Modul vom Typ „Roblox-Spiel“ anlegen.", st("b-ok", "Bereit")),
       row("Claude-Skill & eigene Apps", `${keys.filter((k) => !k.revoked_at && !k.server_id).length} aktive API-Schlüssel`, h("button.btn.sm", { onclick: () => show("keys") }, "Schlüssel"))));
   }

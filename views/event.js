@@ -3,6 +3,8 @@ import { h, icon, badge, EVENT_STATUS, fmtDateTime, fmtEUR, fmtNum, fmtAgo, empt
 import { donut } from "../lib/charts.js";
 import { timeline, fileRow, lazy } from "../lib/modules.js";
 import { uploadDialog, download } from "../lib/actions.js";
+import { openShareDialog } from "../lib/share.js";
+import { importDialog } from "../lib/eventfrog.js";
 
 const SECTIONS = {
   task: ["Aufgaben", "check", "Neue Aufgabe"], tech: ["Technik", "zap", "Technik hinzufügen"], cost: ["Kosten", "wallet", "Kostenposten"],
@@ -73,7 +75,8 @@ export default async function eventView({ args: [id] }) {
       h("div.page-head", h("div", h("h1", ev.name), h("div.row.wrap", { style: { gap: "8px", marginTop: "8px" } }, badge(EVENT_STATUS, ev.status),
         h("span.faint", { style: { fontSize: "13px" } }, [ev.event_date ? `${fmtDateTime(ev.event_date)} (${fmtAgo(ev.event_date)})` : "ohne Datum", ev.location].filter(Boolean).join(" · ")),
         proj ? h("a.tag", { href: `#/projects/${proj.id}` }, icon("folder", ""), " ", proj.name) : null)),
-        h("div.actions", h("button.btn", { onclick: edit }, icon("edit"), "Bearbeiten"),
+        h("div.actions", h("button.btn.primary", { onclick: () => openShareDialog("event", id, ev.name) }, icon("users"), "Teilen"), h("button.btn", { onclick: edit }, icon("edit"), "Bearbeiten"),
+          h("button.btn", { onclick: () => importDialog(ev, () => dispatchEvent(new Event("hashchange"))), title: "Ticketverkäufe aus Eventfrog-Export übernehmen" }, icon("ticket"), "Eventfrog-Import"),
           h("button.btn.ghost", { onclick: exportCsv, title: "Alle Einträge als CSV (Excel)" }, icon("download"), "CSV"),
           ev.event_date ? h("button.btn.ghost", { onclick: exportIcs, title: "Event + Termine in den Kalender" }, icon("calendar"), "Kalender") : null,
           h("button.btn.ghost", { onclick: duplicate, title: "Als Vorlage kopieren" }, icon("copy"), "Duplizieren"),
@@ -86,6 +89,7 @@ export default async function eventView({ args: [id] }) {
         h("div.card.stat", h("div.k", icon("chart"), "Ergebnis"), h("div.v", { style: { color: income - spent < 0 ? "var(--bad)" : income ? "var(--ok)" : "" } }, fmtEUR(income - spent)),
           h("div.d", [`${fmtEUR(income)} Einnahmen`, income && ev.expected_guests ? `Break-even bei ca. ${fmtNum(Math.ceil(spent / (income / ev.expected_guests)))} Gästen (alle Einnahmen pro Gast)` : price ? `Break-even bei ${fmtNum(Math.ceil(spent / price))} Tickets à ${fmtEUR(price)}` : "Ticketpreis unter „Bearbeiten“ setzen"].join(" · ")))),
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(ev.description)) : null,
+      ticketCard(),
       h("div.grid.g-2", section("task"), section("location"), section("schedule"), section("tech"), section("cost"), section("income"),
         h("section.card", h("div.card-head", h("h3", "Kostenplanung")), h("div.card-body",
           costs.length ? donut(costs.map((c) => ({ name: c.title, value: Number(c.amount) || 0 })), { fmt: fmtEUR, center: fmtEUR(spent).replace(/,\d\d/, "") }) : h("div.faint", "Kosten und Technik mit Betrag erscheinen hier."))),
@@ -123,6 +127,22 @@ export default async function eventView({ args: [id] }) {
     if (!(await confirmDialog("Event löschen?", `„${ev.name}“ mit allen Aufgaben, Kosten und Gästen wird dauerhaft gelöscht.`, { ok: "Endgültig löschen" }))) return;
     try { await q(sb.from("cc_events").delete().eq("id", id)); await sb.from("cc_activities").insert({ kind: "event_deleted", description: `Event gelöscht: ${ev.name}`, status: "warning" }); toast("Event gelöscht"); location.hash = "#/events"; }
     catch (e) { toastErr(e); }
+  }
+  // Echte Ticketverkäufe (vom Skill „nexus-sync“ gemeldet, z. B. Eventfrog-Export)
+  function ticketCard() {
+    const t = ev.metadata?.tickets;
+    if (!t) return null;
+    const cap = t.capacity || ev.expected_guests;
+    return h("section.card", { style: { marginBottom: "16px" } },
+      h("div.card-head", h("h3.row", icon("ticket"), "Ticketverkauf"), h("span.sub", `${t.source || "Import"} · Stand ${fmtDateTime(t.as_of || t.updated_at)}`)),
+      h("div.card-body", h("div.grid.g-4", { style: { gap: "12px" } },
+        h("div", h("div.k.faint", { style: { fontSize: "12px" } }, "Verkauft"), h("div", { style: { fontSize: "24px", fontWeight: 650 } }, fmtNum(t.sold), cap ? h("small.faint", ` / ${fmtNum(cap)}`) : null), cap ? meter((t.sold / cap) * 100, [101, 101]) : null),
+        h("div", h("div.k.faint", { style: { fontSize: "12px" } }, "Ticket-Umsatz"), h("div", { style: { fontSize: "24px", fontWeight: 650 } }, fmtEUR(t.revenue))),
+        h("div", h("div.k.faint", { style: { fontSize: "12px" } }, "Bestellungen"), h("div", { style: { fontSize: "24px", fontWeight: 650 } }, t.orders ? fmtNum(t.orders) : "–"), t.cancelled ? h("div.faint", { style: { fontSize: "12px" } }, `${t.cancelled} storniert`) : null),
+        h("div", h("div.k.faint", { style: { fontSize: "12px" } }, "Eingecheckt"), h("div", { style: { fontSize: "24px", fontWeight: 650 } }, fmtNum(t.checked_in || 0)))),
+        t.tiers?.length ? h("div.list", { style: { marginTop: "12px" } }, t.tiers.map((x) => h("div.list-item",
+          h("div.li-main", h("div.li-title", x.name), h("div.li-sub", [x.price !== null && x.price !== undefined ? `${fmtEUR(x.price)} pro Ticket` : null, x.capacity ? `${x.sold}/${x.capacity}` : null].filter(Boolean).join(" · "))),
+          h("span.nowrap", `${fmtNum(x.sold)} × · ${fmtEUR(x.revenue)}`)))) : null));
   }
   function exportCsv() {
     const esc = (v) => { const t = v === null || v === undefined ? "" : String(v); return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };

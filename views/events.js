@@ -28,6 +28,7 @@ export default async function eventsView() {
       e.description ? h("p", e.description) : null,
       h("div.meta",
         daysLeft !== null && daysLeft >= 0 && e.status !== "done" && e.status !== "cancelled" ? h("span.badge.b-pri", daysLeft === 0 ? "heute" : `noch ${daysLeft} Tag${daysLeft === 1 ? "" : "e"}`) : null,
+        e.metadata?.tickets ? h("span", `${e.metadata.tickets.sold} Tickets`) : null,
         a.tasks ? h("span", `${a.done}/${a.tasks} Aufgaben`) : null,
         a.overdue ? h("span", { style: { color: "var(--bad)" } }, `${a.overdue} überfällig`) : null,
         e.budget !== null ? h("span", `Budget ${fmtEUR(e.budget)}`) : null,

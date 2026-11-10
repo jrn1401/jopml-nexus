@@ -3,6 +3,7 @@ import { h, icon, badge, catIcon, empty, naNote, md, fmtAgo, fmtDate, fmtDateTim
   formModal, confirmDialog, toast, toastErr, modal, errMsg, meter, fmtPct } from "../lib/ui.js";
 import { MODULE_TYPES, timeline, lazy } from "../lib/modules.js";
 import { newModule, uploadDialog, syncHelp, openAssistant } from "../lib/actions.js";
+import { openShareDialog } from "../lib/share.js";
 
 export default async function projectView({ args: [id], query }) {
   const project = await q(sb.from("cc_projects").select("*").eq("id", id).maybeSingle());
@@ -76,6 +77,7 @@ export default async function projectView({ args: [id], query }) {
             h("td", { "data-l": "" }, h("div.row", { style: { gap: "2px", justifyContent: "flex-end" } },
               h("button.icon-btn", { title: "KI-Zusammenfassung", "aria-label": "KI-Zusammenfassung", onclick: () => analyze(f) }, icon("sparkles")),
               h("button.icon-btn", { title: "Herunterladen", "aria-label": "Herunterladen", onclick: () => downloadFile(f).catch(toastErr) }, icon("download")),
+              h("button.icon-btn", { title: "Teilen", "aria-label": "Datei teilen", onclick: () => openShareDialog("file", f.id, f.file_name) }, icon("users")),
               h("button.icon-btn", { title: "Löschen", "aria-label": "Löschen", onclick: () => delFile(f) }, icon("trash"))))))))))
           : empty("file", "Keine Dateien", "Dateien hochladen oder das Projekt per Claude-Skill synchronisieren."));
     });
@@ -173,6 +175,7 @@ export default async function projectView({ args: [id], query }) {
           h("div.row.wrap", { style: { marginTop: "8px", gap: "8px" } }, badge(PROJECT_STATUS, project.status), h("span.tag", CATEGORIES[project.category]?.[0] || project.category),
             h("span.faint", { style: { fontSize: "12.5px" } }, `aktualisiert ${fmtAgo(project.updated_at)}`)))),
       h("div.actions",
+        h("button.btn", { onclick: () => openShareDialog("project", id, project.name) }, icon("users"), "Teilen"),
         h("button.btn", { onclick: () => openAssistant(id) }, icon("bot"), "Fragen"),
         h("button.btn", { onclick: () => uploadDialog({ projectId: id, onDone: () => show("files") }) }, icon("upload"), "Hochladen"),
         h("button.btn.primary", { onclick: () => newModule(id) }, icon("plus"), "Modul"))),

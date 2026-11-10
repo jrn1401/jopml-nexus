@@ -1,6 +1,7 @@
 import { sb, q, projects as loadProjects, downloadFile, removeFile } from "../lib/api.js";
 import { h, icon, fmtBytes, fmtAgo, fmtNum, empty, confirmDialog, toast, toastErr, debounce } from "../lib/ui.js";
 import { uploadDialog } from "../lib/actions.js";
+import { openShareDialog } from "../lib/share.js";
 
 const PAGE = 50;
 const CATS = ["code", "doku", "konfiguration", "daten", "design", "medien", "paket", "sonstiges", "other"];
@@ -32,6 +33,7 @@ export default async function filesView({ query }) {
         h("td", { "data-l": "Version" }, `v${f.version}`), h("td", { "data-l": "Quelle" }, f.source), h("td", { "data-l": "Hochgeladen" }, fmtAgo(f.uploaded_at)),
         h("td", { "data-l": "" }, h("div.row", { style: { gap: "2px", justifyContent: "flex-end" } },
           h("button.icon-btn", { "aria-label": "Herunterladen", onclick: () => downloadFile(f).catch(toastErr) }, icon("download")),
+          h("button.icon-btn", { title: "Teilen", "aria-label": "Datei teilen", onclick: () => openShareDialog("file", f.id, f.file_name) }, icon("users")),
           h("button.icon-btn", { "aria-label": "Löschen", onclick: async () => {
             if (!(await confirmDialog("Datei löschen?", `„${f.rel_path}“ wird mit allen Versionen dauerhaft gelöscht.`, { ok: "Endgültig löschen" }))) return;
             try { await removeFile(f.project_id, f.rel_path); toast("Gelöscht"); load(); } catch (e) { toastErr(e); } } }, icon("trash")))))))))),

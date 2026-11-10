@@ -9,11 +9,11 @@ const ROUTES = [
   [/^\/?$/, "dashboard"], [/^\/projects$/, "projects"], [/^\/projects\/([\w-]+)$/, "project"],
   [/^\/servers$/, "servers"], [/^\/servers\/([\w-]+)$/, "server"], [/^\/ai$/, "ai"],
   [/^\/events$/, "events"], [/^\/events\/([\w-]+)$/, "event"], [/^\/jopml$/, "jopml"],
-  [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"],
+  [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"], [/^\/shares$/, "shares"],
 ];
 const NAV_GROUPS = [
   ["Übersicht", [["#/", "dashboard", "Dashboard"]]],
-  ["Planung", [["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"]]],
+  ["Planung", [["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"], ["#/shares", "users", "Teilen & Gäste"]]],
   ["Betrieb", [["#/jopml", "layers", "JOPML"], ["#/servers", "server", "Server"], ["#/ai", "sparkles", "KI & Tokens"]]],
   ["Verlauf", [["#/activity", "activity", "Aktivitäten"], ["#/system", "check", "Systemprüfung"]]],
 ];
@@ -36,13 +36,19 @@ async function boot() {
   }
   const params = new URLSearchParams(location.search);
   const oauthErr = params.get("error_description");
+  // Gäste-Link: funktioniert ohne Anmeldung
+  const link = location.hash.match(/^#\/s\/([0-9a-f]{32})$/);
+  if (link) { const { renderLink } = await import("./views/guest.js"); return renderLink(root, link[1]); }
   const { data: { session } } = await sb.auth.getSession();
   if (!session) return renderLogin(oauthErr);
   let who;
   try { who = await rpc("cc_whoami"); } catch (e) { return renderLogin(errMsg(e)); }
   if (!who?.admin) {
-    await sb.auth.signOut();
-    return renderLogin(`Das Konto ${who?.email ?? ""} hat keinen Zugriff auf dieses Control Center.`);
+    if (location.search) history.replaceState(null, "", location.pathname + location.hash);
+    if (!who?.email) { await sb.auth.signOut(); return renderLogin("Dieses Konto hat keine bestätigte E-Mail-Adresse."); }
+    sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") location.reload(); });
+    const { renderGuest } = await import("./views/guest.js");
+    return renderGuest(root, who);
   }
   if (location.search) history.replaceState(null, "", location.pathname + location.hash);
   user = session.user;
@@ -57,14 +63,18 @@ function renderLogin(error) {
       options: { redirectTo: location.origin + location.pathname, queryParams: { prompt: "select_account" } } });
     if (e) { btn.disabled = false; toast(e.message, "err"); }
   };
+  const linkIn = h("input.input", { placeholder: "Gäste-Link oder Code einfügen", "aria-label": "Gäste-Link", autocomplete: "off" });
   const btn = h("button.gbtn", { onclick: go },
     svgGoogle(), "Mit Google anmelden");
   clear(root, h("div.login", h("div.card.login-card",
     h("div.brand-mark", icon("logo")),
     h("h1", CONFIG.appName), h("p", "Dein zentrales Control Center für Projekte, Server und KI."),
     btn,
+    h("div.login-sub", "Admin und Gäste melden sich mit Google an. Gäste sehen nur, was mit ihrer E-Mail geteilt wurde."),
+    h("form.login-link", { onsubmit: (e) => { e.preventDefault(); const m = linkIn.value.match(/([0-9a-f]{32})/); if (!m) return toast("Kein gültiger Gäste-Link", "err"); location.hash = `#/s/${m[1]}`; location.reload(); } },
+      linkIn, h("button.btn", { type: "submit" }, "Öffnen")),
     error ? h("div.login-err", error) : null,
-    h("div.login-foot", icon("lock"), "Zugang nur für das hinterlegte Admin-Konto"))));
+    h("div.login-foot", icon("lock"), "Verwaltung nur für das Admin-Konto · Gäste nur Lesezugriff"))));
 }
 function svgGoogle() {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -285,7 +295,7 @@ function openSearch() {
   if (document.querySelector(".palette")) return;
   const KIND = { project: ["folder", "Projekte"], module: ["layers", "Module"], server: ["server", "Server"], file: ["file", "Dateien"], event: ["calendar", "Events"], event_item: ["check", "Event-Einträge"], activity: ["activity", "Aktivitäten"], page: ["chevronR", "Seiten"] };
   const pages = [...NAV.map(([href, , t]) => ({ kind: "page", title: t, route: href })), { kind: "page", title: "Einstellungen", route: "#/settings" }];
-  const acts = [["Neues Event", () => newEvent()], ["Neues Projekt", () => newProject()], ["KI-Assistent", () => openAssistant()], ["Server verbinden", () => connectServer()], ["Datei hochladen", () => uploadDialog()]]
+  const acts = [["Teilen & Gäste", () => { location.hash = "#/shares"; }], ["Neues Event", () => newEvent()], ["Neues Projekt", () => newProject()], ["KI-Assistent", () => openAssistant()], ["Server verbinden", () => connectServer()], ["Datei hochladen", () => uploadDialog()]]
     .map(([t, run]) => ({ kind: "page", title: `Aktion: ${t}`, run }));
   const inp = h("input.input", { placeholder: "Projekte, Server, Dateien, Events … durchsuchen", "aria-label": "Suche", autocomplete: "off" });
   const res = h("div.results");
