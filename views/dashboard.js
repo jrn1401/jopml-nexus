@@ -7,15 +7,16 @@ import { maintenanceBanner } from "./jopml-admin.js";
 
 export const WIDGETS = {
   health: "Systemzustand", next: "Nächstes Event", tasks: "Offene Aufgaben", stats: "Kennzahlen", servers: "Serverstatus", ai: "KI-Nutzung", activity: "Letzte Aktivitäten",
-  jopml: "JOPML", events: "Nächste Events", quick: "Schnellaktionen",
+  jopml: "JOPML", events: "Nächste Events", quick: "Schnellaktionen", web: "Websites live",
 };
 
 export default async function dashboard({ user }) {
-  const [o, layout, servers, events] = await Promise.all([
+  const [o, layout, servers, events, web] = await Promise.all([
     rpc("cc_overview"),
     getSetting("dashboard", { order: Object.keys(WIDGETS), hidden: [] }),
     q(sb.from("cc_servers").select("id,name,hostname,status,kind,cpu_usage,memory_usage,disk_usage,last_heartbeat,metadata").order("kind").order("name").limit(8)),
     q(sb.from("cc_events").select("id,name,event_date,location,status").gte("event_date", new Date().toISOString()).not("status", "in", "(done,cancelled)").order("event_date").limit(4)),
+    rpc("cc_web_overview").catch(() => []),
   ]);
   const hour = new Date().getHours();
   const hello = hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Hallo" : "Guten Abend";
@@ -33,6 +34,11 @@ export default async function dashboard({ user }) {
   const worst = checks.some((c) => c[1] === "bad") ? "bad" : checks.some((c) => c[1] === "warn") ? "warn" : "ok";
   const ne = o.next_event;
   const W = {
+    web: () => card("Websites live", "#/web", web.length ? h("div.list", web.slice(0, 6).map((r) => h("a.list-item", { href: r.source === "cc" ? `#/projects/${r.source_id}` : `#/web/${r.id}` },
+        h("span.dot", { class: r.up === true ? "ok" : r.up === false ? "bad" : "idle" }),
+        h("div.li-main", h("div.li-title", r.name), h("div.li-sub", r.installed ? `heute ${fmtNum(r.today_uv)} Besucher · ${fmtNum(r.today_pv)} Aufrufe${r.ms ? ` · ${r.ms} ms` : ""}` : `Besucherzähler nicht eingebaut${r.ms ? ` · ${r.ms} ms` : ""}`)),
+        h("span.row", { style: { gap: "7px" } }, h("span.live-dot", { class: r.live ? "on" : "" }), h("strong", fmtNum(r.live))))))
+      : empty("globe", "Noch keine Websites", "Netlify-Websites erscheinen hier automatisch."), "w-5"),
     health: () => card("Systemzustand", "#/system", h("div.stack", { style: { gap: "10px" } },
       h("div.health-head", { class: worst }, h("span.dot.lg"), h("strong", worst === "ok" ? "Alles in Ordnung" : worst === "warn" ? "Kleinere Hinweise" : "Handlungsbedarf")),
       h("div.health-grid", checks.map(([k, st, t]) => h("div.health-item", h("span.dot", { class: st }), h("div", h("div.li-title", k), h("div.li-sub", t)))))), "w-7"),

@@ -3,6 +3,7 @@ import { sb, rpc } from "../lib/api.js";
 import { h, icon, clear, badge, EVENT_STATUS, fmtDateTime, fmtEUR, fmtBytes, fmtAgo, md, toast, toastErr, empty, errMsg } from "../lib/ui.js";
 import { LOC_STATUS } from "./event.js";
 import { CONFIG } from "../config.js";
+import { webSharedBlock } from "../lib/web.js";
 
 const SEC = { task: ["Aufgaben", "check"], schedule: ["Ablauf", "clock"], location: ["Location", "pin"], tech: ["Technik", "zap"], guest: ["Gästeliste", "users"], cost: ["Kosten", "wallet"], income: ["Einnahmen", "chart"] };
 
@@ -49,13 +50,16 @@ export function renderShared(p, ctx, reload) {
       canTick ? h("div.na-note", { style: { marginBottom: "16px" } }, icon("check"), h("div", "Du darfst Aufgaben abhaken.")) : null,
       h("div.grid.g-2", ["task", "schedule", "location", "tech", "guest", "cost", "income"].map(sec)));
   }
-  if (p.type === "project") {
-    const pr = p.project;
+  if (p.type === "project" || p.type === "site") {
+    const pr = p.project, t = p.tickets;
     return h("div",
-      h("div.page-head", h("div", h("h1", pr.name), h("p", (pr.tags || []).join(" · ")))),
+      h("div.page-head", h("div", h("h1", pr.name), h("p", [p.from ? `geteilt von ${p.from}` : null, ...(pr.tags || [])].filter(Boolean).join(" · ")))),
+      webSharedBlock(p.web),
+      t ? h("div.grid.g-3", { style: { marginBottom: "16px" } }, h("div.card.stat", h("div.k", icon("ticket"), "Tickets verkauft"), h("div.v", String(t.sold ?? 0))),
+        h("div.card.stat", h("div.k", icon("wallet"), "Umsatz"), h("div.v", fmtEUR(t.revenue))), h("div.card.stat", h("div.k", icon("clock"), "Stand"), h("div.v", { style: { fontSize: "16px" } }, fmtAgo(t.as_of)))) : null,
       pr.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(pr.description)) : null,
       h("div.grid.g-2",
-        h("section.card", h("div.card-head", h("h3", "Dateien")), h("div.card-body", fileList(p.files || []))),
+        p.files?.length ? h("section.card", h("div.card-head", h("h3", "Dateien")), h("div.card-body", fileList(p.files || []))) : null,
         p.events?.length ? h("section.card", h("div.card-head", h("h3", "Events")), h("div.card-body", h("div.list", p.events.map((e) => h("div.list-item", h("div.li-icon", icon("calendar")),
           h("div.li-main", h("div.li-title", e.name), h("div.li-sub", [e.date ? fmtDateTime(e.date) : null, e.location].filter(Boolean).join(" · "))), badge(EVENT_STATUS, e.status)))))) : null,
         p.links?.length ? h("section.card", h("div.card-head", h("h3", "Links")), h("div.card-body", h("div.list", p.links.filter((l) => /^https?:\/\//.test(l.url || "")).map((l) =>

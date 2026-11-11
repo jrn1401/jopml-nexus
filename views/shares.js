@@ -12,7 +12,8 @@ export default async function sharesView() {
   ]);
   const fileIds = shares.filter((s) => s.item_kind === "file").map((s) => s.item_id);
   const files = fileIds.length ? await q(sb.from("cc_files").select("id,file_name").in("id", fileIds)) : [];
-  const title = (s) => (s.item_kind === "event" ? events : s.item_kind === "project" ? projects : files.map((f) => ({ id: f.id, name: f.file_name }))).find((x) => x.id === s.item_id)?.name || "(gelöscht/abgesagt)";
+  const sites = shares.some((s) => s.item_kind === "site") ? await q(sb.from("cc_web_sites").select("id,name")) : [];
+  const title = (s) => (s.item_kind === "event" ? events : s.item_kind === "project" ? projects : s.item_kind === "site" ? sites : files.map((f) => ({ id: f.id, name: f.file_name }))).find((x) => x.id === s.item_id)?.name || "(gelöscht/abgesagt)";
   const cname = (em) => contacts.find((c) => c.email.toLowerCase() === em)?.name;
   const active = shares.filter((s) => !s.expires_at || new Date(s.expires_at) > Date.now());
   const reload = () => dispatchEvent(new Event("hashchange"));

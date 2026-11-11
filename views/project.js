@@ -4,6 +4,7 @@ import { h, icon, badge, catIcon, empty, naNote, md, fmtAgo, fmtDate, fmtDateTim
 import { MODULE_TYPES, timeline, lazy } from "../lib/modules.js";
 import { newModule, uploadDialog, syncHelp, openAssistant } from "../lib/actions.js";
 import { openShareDialog } from "../lib/share.js";
+import { webCockpit, siteFor } from "../lib/web.js";
 
 export default async function projectView({ args: [id], query }) {
   const project = await q(sb.from("cc_projects").select("*").eq("id", id).maybeSingle());
@@ -23,10 +24,22 @@ export default async function projectView({ args: [id], query }) {
   }
 
   // --- Übersicht: alle Module des Projekts
+  // Websites (z. B. Netlify): Live-Cockpit direkt auf der Projektseite statt nur einem Link
+  const isWeb = /^https?:\/\//.test(project.metadata?.url ?? "") && (project.category === "website" || project.metadata?.provider === "netlify");
+  let webEl = null;
+  const webSlot = () => {
+    if (!isWeb) return null;
+    if (!webEl) {
+      webEl = h("div", h("div.skel", { style: { height: "140px" } }));
+      siteFor("cc", project.id).then((site) => webCockpit(site, { onShare: () => openShareDialog("site", site.id, site.name) }))
+        .then((el) => webEl.replaceChildren(el)).catch((e) => webEl.replaceChildren(naNote(`Website-Daten: ${errMsg(e)}`, "alert")));
+    }
+    return webEl;
+  };
   function overview() {
-    const enabled = modules.filter((m) => m.enabled);
-    return h("div.stack",
-      enabled.length ? enabled.map(moduleCard) : empty("layers", "Noch keine Module", "Module sind die Bausteine dieser Projektseite – z. B. Dateien, Roblox-Spiel, Server oder Notizen.",
+    const enabled = modules.filter((m) => m.enabled && !(isWeb && ["metrics", "links"].includes(m.module_type) && ["Website", "Links"].includes(m.name)));
+    return h("div.stack", webSlot(),
+      enabled.length ? enabled.map(moduleCard) : isWeb ? null : empty("layers", "Noch keine Module", "Module sind die Bausteine dieser Projektseite – z. B. Dateien, Roblox-Spiel, Server oder Notizen.",
         h("button.btn.primary", { onclick: () => newModule(id) }, icon("plus"), "Modul hinzufügen")),
       modules.length > enabled.length ? h("div.faint", { style: { fontSize: "12.5px" } }, `${modules.length - enabled.length} ausgeblendete(s) Modul(e) – unter „Einstellungen“ einblendbar.`) : null);
   }

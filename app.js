@@ -9,17 +9,17 @@ const ROUTES = [
   [/^\/?$/, "dashboard"], [/^\/projects$/, "projects"], [/^\/projects\/([\w-]+)$/, "project"],
   [/^\/servers$/, "servers"], [/^\/servers\/([\w-]+)$/, "server"], [/^\/ai$/, "ai"],
   [/^\/events$/, "events"], [/^\/events\/([\w-]+)$/, "event"], [/^\/jopml$/, "jopml"],
-  [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"], [/^\/shares$/, "shares"],
+  [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"], [/^\/shares$/, "shares"], [/^\/web(?:\/([0-9a-f-]{36}))?$/, "web"],
   [/^\/(impressum|datenschutz|nutzung)$/, "legal"], [/^\/connections$/, "connections"],
 ];
 const NAV_GROUPS = [
   ["Übersicht", [["#/", "dashboard", "Dashboard"]]],
   ["Planung", [["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"], ["#/shares", "users", "Teilen & Gäste"]]],
-  ["Betrieb", [["#/jopml", "layers", "JOPML"], ["#/servers", "server", "Server"], ["#/ai", "sparkles", "KI & Tokens"], ["#/connections", "link", "Verbindungen"]]],
+  ["Betrieb", [["#/web", "globe", "Websites"], ["#/jopml", "layers", "JOPML"], ["#/servers", "server", "Server"], ["#/ai", "sparkles", "KI & Tokens"], ["#/connections", "link", "Verbindungen"]]],
   ["Verlauf", [["#/activity", "activity", "Aktivitäten"], ["#/system", "check", "Systemprüfung"]]],
 ];
 const NAV = NAV_GROUPS.flatMap(([, items]) => items);
-const MOBILE = [["#/", "dashboard", "Start"], ["#/events", "calendar", "Events"], ["#/jopml", "layers", "JOPML"], ["#/servers", "server", "Server"]];
+const MOBILE = [["#/", "dashboard", "Start"], ["#/events", "calendar", "Events"], ["#/web", "globe", "Websites"], ["#/jopml", "layers", "JOPML"], ["#/servers", "server", "Server"]];
 
 let user = null, shell = null, unread = 0, lastNotifId = null;
 
@@ -40,6 +40,9 @@ async function boot() {
   // Gäste-Link: funktioniert ohne Anmeldung
   const link = location.hash.match(/^#\/s\/([0-9a-f]{32})$/);
   if (link) { const { renderLink } = await import("./views/guest.js"); return renderLink(root, link[1]); }
+  // Öffentliche Statusseite einer Website (#/status/<key>)
+  const stat = location.hash.match(/^#\/status\/([0-9a-f]{18})$/);
+  if (stat) { const { renderStatus } = await import("./views/status.js"); return renderStatus(root, stat[1]); }
   const { data: { session } } = await sb.auth.getSession();
   if (!session) {
     // Rechtsseiten sind ohne Anmeldung erreichbar
@@ -56,7 +59,7 @@ async function boot() {
   try { who = await rpc("cc_whoami"); } catch (e) { return renderLogin(errMsg(e)); }
   if (!who?.admin) {
     if (location.search) history.replaceState(null, "", location.pathname + location.hash);
-    if (!who?.email) { await sb.auth.signOut(); return renderLogin("Dieses Konto hat keine bestätigte E-Mail-Adresse."); }
+    if (!who?.email && !who?.anonymous) { await sb.auth.signOut(); return renderLogin("Dieses Konto hat keine bestätigte E-Mail-Adresse."); }
     sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") location.reload(); });
     const { renderWorkspace } = await import("./views/workspace.js");
     return renderWorkspace(root, who);
@@ -77,11 +80,18 @@ function renderLogin(error) {
   const linkIn = h("input.input", { placeholder: "Gäste-Link oder Code einfügen", "aria-label": "Gäste-Link", autocomplete: "off" });
   const btn = h("button.gbtn", { onclick: go },
     svgGoogle(), "Mit Google anmelden");
+  // Gast-Konto: sofort ausprobieren ohne Google (anonyme Anmeldung, wird nach 7 Tagen gelöscht)
+  const guestBtn = h("button.btn", { style: { width: "100%", justifyContent: "center", height: "44px", marginTop: "8px" }, onclick: async () => {
+    guestBtn.disabled = true;
+    const { error: e } = await sb.auth.signInAnonymously();
+    if (e) { guestBtn.disabled = false; return toast(/disabled|not enabled/i.test(e.message) ? "Gast-Zugang ist noch nicht freigeschaltet – bitte mit Google anmelden." : e.message, "err", 7000); }
+    location.reload();
+  } }, icon("users"), "Als Gast ausprobieren");
   clear(root, h("div.login", h("div.card.login-card",
     h("div.brand-mark", icon("logo")),
     h("h1", CONFIG.appName), h("p", "Dein zentrales Control Center für Projekte, Server und KI."),
-    btn,
-    h("div.login-sub", "Jeder kann sich mit Google anmelden und bekommt einen eigenen, privaten Bereich: API-Schlüssel einfügen – Websites, Repos, Events und KI werden automatisch verknüpft."),
+    btn, guestBtn,
+    h("div.login-sub", "Jeder kann sich mit Google anmelden und bekommt einen eigenen, privaten Bereich: API-Schlüssel einfügen – Websites, Repos, Events und KI werden automatisch verknüpft. Als Gast kannst du alles 7 Tage lang ohne Konto ausprobieren."),
     h("form.login-link", { onsubmit: (e) => { e.preventDefault(); const m = linkIn.value.match(/([0-9a-f]{32})/); if (!m) return toast("Kein gültiger Gäste-Link", "err"); location.hash = `#/s/${m[1]}`; location.reload(); } },
       linkIn, h("button.btn", { type: "submit" }, "Öffnen")),
     error ? h("div.login-err", error) : null,

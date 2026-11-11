@@ -1,6 +1,6 @@
-import { sb, q, projects as loadProjects } from "../lib/api.js";
+import { sb, q, api, projects as loadProjects } from "../lib/api.js";
 import { h, icon, badge, EVENT_STATUS, fmtDateTime, fmtEUR, fmtNum, fmtAgo, empty, formModal, confirmDialog, toast, toastErr, meter, md } from "../lib/ui.js";
-import { donut } from "../lib/charts.js";
+import { donut, barChart, lineChart, PALETTE } from "../lib/charts.js";
 import { timeline, fileRow, lazy } from "../lib/modules.js";
 import { uploadDialog, download } from "../lib/actions.js";
 import { openShareDialog } from "../lib/share.js";
@@ -128,21 +128,52 @@ export default async function eventView({ args: [id] }) {
     try { await q(sb.from("cc_events").delete().eq("id", id)); await sb.from("cc_activities").insert({ kind: "event_deleted", description: `Event gelöscht: ${ev.name}`, status: "warning" }); toast("Event gelöscht"); location.hash = "#/events"; }
     catch (e) { toastErr(e); }
   }
-  // Echte Ticketverkäufe (vom Skill „nexus-sync“ gemeldet, z. B. Eventfrog-Export)
+  // Echte Ticketverkäufe – Eventfrog live (Abruf alle 10 Min. + Knopf), Verlauf, Kategorien, Check-in
   function ticketCard() {
-    const t = ev.metadata?.tickets;
-    if (!t) return null;
-    const cap = t.capacity || ev.expected_guests;
-    return h("section.card", { style: { marginBottom: "16px" } },
-      h("div.card-head", h("h3.row", icon("ticket"), "Ticketverkauf"), h("span.sub", `${t.source || "Import"} · Stand ${fmtDateTime(t.as_of || t.updated_at)}`)),
-      h("div.card-body", h("div.grid.g-4", { style: { gap: "12px" } },
-        h("div", h("div.k.faint", { style: { fontSize: "12px" } }, "Verkauft"), h("div", { style: { fontSize: "24px", fontWeight: 650 } }, fmtNum(t.sold), cap ? h("small.faint", ` / ${fmtNum(cap)}`) : null), cap ? meter((t.sold / cap) * 100, [101, 101]) : null),
-        h("div", h("div.k.faint", { style: { fontSize: "12px" } }, "Ticket-Umsatz"), h("div", { style: { fontSize: "24px", fontWeight: 650 } }, fmtEUR(t.revenue))),
-        h("div", h("div.k.faint", { style: { fontSize: "12px" } }, "Bestellungen"), h("div", { style: { fontSize: "24px", fontWeight: 650 } }, t.orders ? fmtNum(t.orders) : "–"), t.cancelled ? h("div.faint", { style: { fontSize: "12px" } }, `${t.cancelled} storniert`) : null),
-        h("div", h("div.k.faint", { style: { fontSize: "12px" } }, "Eingecheckt"), h("div", { style: { fontSize: "24px", fontWeight: 650 } }, fmtNum(t.checked_in || 0)))),
-        t.tiers?.length ? h("div.list", { style: { marginTop: "12px" } }, t.tiers.map((x) => h("div.list-item",
-          h("div.li-main", h("div.li-title", x.name), h("div.li-sub", [x.price !== null && x.price !== undefined ? `${fmtEUR(x.price)} pro Ticket` : null, x.capacity ? `${x.sold}/${x.capacity}` : null].filter(Boolean).join(" · "))),
-          h("span.nowrap", `${fmtNum(x.sold)} × · ${fmtEUR(x.revenue)}`)))) : null));
+    if (!ev.metadata?.tickets && !ev.metadata?.eventfrog_id) return null;
+    const box = h("div", { style: { marginBottom: "16px" } });
+    let snaps = null, timer = null;
+    const big = (v, extra) => h("div", { style: { fontSize: "24px", fontWeight: 650 } }, v, extra);
+    const k = (t) => h("div.k.faint", { style: { fontSize: "12px" } }, t);
+    async function refresh(pull = false) {
+      if (pull) {
+        try { await api("sync/eventfrog"); toast("Eventfrog abgerufen"); } catch (e) { toastErr(e); }
+      }
+      const [row, sn] = await Promise.all([q(sb.from("cc_events").select("metadata").eq("id", id).single()), q(sb.from("cc_ticket_snapshots").select("ts,sold,revenue,checked_in").eq("event_id", id).order("ts").limit(2000))]);
+      ev.metadata = row.metadata; snaps = sn; draw2();
+    }
+    function draw2() {
+      const t = ev.metadata?.tickets || {}, ef = ev.metadata?.eventfrog || {};
+      const cap = t.capacity || ev.expected_guests;
+      const eventDay = ev.event_date && Math.abs(new Date(ev.event_date) - Date.now()) < 20 * 3600_000;
+      const daily = t.daily || [];
+      const chart = daily.length
+        ? barChart(daily.slice(-30).map((d) => new Date(d.d).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })), [{ name: "Tickets", values: daily.slice(-30).map((d) => d.n), color: PALETTE[0] }], { height: 170, emptyText: "Noch keine Verkäufe" })
+        : (snaps?.length > 1 ? lineChart([{ name: "Verkauft", values: snaps.map((x) => ({ x: new Date(x.ts).getTime(), y: x.sold })), color: PALETTE[0] }], { height: 170, xFmt: (v) => new Date(v).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) })
+          : h("div.faint", { style: { fontSize: "13px", padding: "18px 0" } }, t.sold ? "Der Verkaufsverlauf füllt sich ab jetzt mit jedem Abruf (alle 10 Minuten)." : "Noch keine Tickets verkauft – sobald der Verkauf startet, erscheint hier der Verlauf."));
+      box.replaceChildren(h("section.card",
+        h("div.card-head", h("h3.row", icon("ticket"), "Ticketverkauf", t.source === "eventfrog" ? h("span.badge.b-ok", { style: { marginLeft: "6px" } }, "Eventfrog live") : null),
+          h("div.row", { style: { gap: "6px" } }, h("span.sub", `Stand ${fmtAgo(t.as_of || t.updated_at)}`),
+            ef.url ? h("a.btn.sm", { href: ef.url, target: "_blank", rel: "noopener noreferrer" }, icon("external"), "Eventfrog") : null,
+            h("button.btn.sm", { onclick: async (e) => { e.currentTarget.disabled = true; await refresh(true); } }, icon("refresh"), "Jetzt abrufen"))),
+        h("div.card-body",
+          h("div.grid.g-4", { style: { gap: "12px" } },
+            h("div", k("Verkauft"), big(fmtNum(t.sold ?? 0), cap ? h("small.faint", ` / ${fmtNum(cap)}`) : null), cap ? meter(((t.sold ?? 0) / cap) * 100, [101, 101]) : null),
+            h("div", k("Ticket-Umsatz"), big(fmtEUR(t.revenue ?? 0))),
+            h("div", k("Bestellungen"), big(t.orders ? fmtNum(t.orders) : "–"), t.cancelled ? h("div.faint", { style: { fontSize: "12px" } }, `${t.cancelled} storniert`) : null),
+            h("div", k(eventDay ? "Eingecheckt – live" : "Eingecheckt"), big(fmtNum(t.checked_in || 0), t.sold ? h("small.faint", ` / ${fmtNum(t.sold)}`) : null), t.sold ? meter(((t.checked_in || 0) / t.sold) * 100, [101, 101]) : null)),
+          h("div.grid.g-2", { style: { marginTop: "14px", alignItems: "start" } },
+            h("div", h("h4.sub-h", daily.length ? "Verkäufe pro Tag" : "Verlauf"), chart),
+            h("div", h("h4.sub-h", "Kategorien"), t.tiers?.length ? h("div.list", t.tiers.map((x) => h("div.list-item",
+              h("div.li-main", h("div.li-title", x.name), h("div.li-sub", [x.price !== null && x.price !== undefined ? `${fmtEUR(x.price)} pro Ticket` : null, x.capacity ? `${x.sold}/${x.capacity} verkauft` : null].filter(Boolean).join(" · ")),
+                x.capacity ? meter((x.sold / x.capacity) * 100, [80, 100]) : null),
+              h("span.nowrap", `${fmtNum(x.sold)} × · ${fmtEUR(x.revenue)}`)))) : h("div.faint", { style: { fontSize: "13px" } }, "Keine Kategorien"))))));
+    }
+    refresh().catch(() => draw2());
+    // Am Event-Tag jede Minute neu laden (Check-ins), sonst alle 2 Min. aus der Datenbank
+    timer = setInterval(() => { if (!box.isConnected) return clearInterval(timer); if (document.visibilityState === "visible") refresh().catch(() => {}); },
+      ev.event_date && Math.abs(new Date(ev.event_date) - Date.now()) < 20 * 3600_000 ? 60_000 : 120_000);
+    return box;
   }
   function exportCsv() {
     const esc = (v) => { const t = v === null || v === undefined ? "" : String(v); return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
