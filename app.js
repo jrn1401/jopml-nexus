@@ -27,10 +27,14 @@ let user = null, shell = null, unread = 0, lastNotifId = null;
 async function boot() {
   if ("serviceWorker" in navigator && location.protocol === "https:") {
     navigator.serviceWorker.register("sw.js").then((reg) => {
-      const ask = (w) => w && navigator.serviceWorker.controller && showUpdate(w);
+      const t0 = Date.now();
+      // Kurz nach dem Öffnen gefundene Updates sofort übernehmen, später nur anbieten (nichts Getipptes verlieren)
+      const ask = (w) => w && navigator.serviceWorker.controller && (Date.now() - t0 < 20_000 ? w.postMessage("skipWaiting") : showUpdate(w));
       if (reg.waiting) ask(reg.waiting);
       reg.addEventListener("updatefound", () => { const w = reg.installing; w?.addEventListener("statechange", () => w.state === "installed" && ask(w)); });
-      setInterval(() => reg.update().catch(() => {}), 30 * 60_000);
+      reg.update().catch(() => {});
+      setInterval(() => reg.update().catch(() => {}), 10 * 60_000);
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
     }).catch(() => {});
     let reloaded = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloaded) { reloaded = true; location.reload(); } });

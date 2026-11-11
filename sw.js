@@ -1,5 +1,5 @@
 // Service Worker: cached nur die App-Hülle (statische Dateien). Daten (Supabase) werden nie gecacht.
-const VERSION = "cc-v21";
+const VERSION = "cc-v22";
 const SHELL = [
   "./", "index.html", "styles.css", "theme.js", "app.js", "config.js", "manifest.webmanifest",
   "lib/api.js", "lib/ui.js", "lib/charts.js", "lib/modules.js", "lib/actions.js",
