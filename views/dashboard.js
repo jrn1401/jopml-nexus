@@ -5,6 +5,8 @@ import { timeline } from "../lib/modules.js";
 import { newProject, newModule, uploadDialog, connectServer, newEvent, syncHelp, openAssistant } from "../lib/actions.js";
 import { maintenanceBanner } from "./jopml-admin.js";
 import { syncCenter } from "../lib/sync.js";
+import { viewToggle, charts } from "../lib/viewmode.js";
+import { donut, lineChart, PALETTE } from "../lib/charts.js";
 
 export const WIDGETS = {
   health: "Systemzustand", next: "Nächstes Event", tasks: "Offene Aufgaben", stats: "Kennzahlen", servers: "Serverstatus", ai: "KI-Nutzung", activity: "Letzte Aktivitäten",
@@ -57,7 +59,7 @@ export default async function dashboard({ user }) {
       h("div.li-main", h("div.li-title", t.title), h("div.li-sub", [t.event, t.due ? `fällig ${fmtDateTime(t.due)}` : null].filter(Boolean).join(" · "))),
       t.due && new Date(t.due) < Date.now() ? h("span.badge.b-bad", "überfällig") : null)))
       : empty("check", "Keine offenen Aufgaben", "Aufgaben aus Events erscheinen hier."), "w-12"),
-    stats: () => h("div.grid.g-4.w-12",
+    stats: () => charts() ? chartsRow() : h("div.grid.g-4.w-12",
       stat("Projekte", fmtNum(o.projects_total), { ic: "folder", sub: `${fmtNum(o.projects_active)} aktiv · ${fmtNum(o.modules_active)} Module` }),
       o.servers_total ? stat("Server online", `${o.servers_online}`, { ic: "server", unit: `/ ${o.servers_total}`, sub: o.servers_load?.cpu !== null && o.servers_load?.cpu !== undefined ? `Ø CPU ${fmtPct(o.servers_load.cpu)} · RAM ${fmtPct(o.servers_load.mem)}` : "Keine Live-Werte" })
         : stat("Server", "", { ic: "server", na: "Nicht verbunden", sub: "Server über „Server verbinden“ anlegen" }),
@@ -100,8 +102,35 @@ export default async function dashboard({ user }) {
   return h("div",
     maintenanceBanner(cfg),
     h("div.page-head", h("div", h("h1", `${hello}${name ? ", " + name : ""}`), h("p", `${fmtNum(o.projects_total)} Projekte · ${o.servers_online}/${o.servers_total} Server online${o.events_upcoming ? ` · ${o.events_upcoming} Event(s) geplant` : ""} · ${fmtNum(o.notifications_unread)} ungelesene Hinweise`)),
-      h("div.actions", h("a.btn.ghost", { href: "#/settings?tab=dashboard" }, icon("dashboard"), "Anpassen"), h("button.btn.primary", { onclick: () => newProject() }, icon("plus"), "Neues Projekt"))),
+      h("div.actions", viewToggle(), h("a.btn.ghost", { href: "#/settings?tab=dashboard" }, icon("dashboard"), "Anpassen"), h("button.btn.primary", { onclick: () => newProject() }, icon("plus"), "Neues Projekt"))),
     h("div.grid.dash", order.filter((k) => !hidden.has(k)).map((k) => W[k]())));
+}
+
+// Diagramm-Ansicht der Kennzahlen: Projekte nach Status/Kategorie, Ticketverkauf je Event, Website-Besucher 7 Tage
+function chartsRow() {
+  const box = h("div.grid.g-3.w-12", h("div.skel", { style: { height: "220px" } }));
+  (async () => {
+    const [pr, ev, sites] = await Promise.all([
+      q(sb.from("cc_projects").select("status,category")),
+      q(sb.from("cc_events").select("id,name,event_date,status,expected_guests,metadata").not("status", "in", "(done,cancelled)").order("event_date").limit(6)),
+      rpc("cc_web_overview").catch(() => [])]);
+    const count = (arr, k) => Object.entries(arr.reduce((m, x) => ((m[x[k]] = (m[x[k]] || 0) + 1), m), {})).sort((a, b) => b[1] - a[1]);
+    const ST = { active: "Aktiv", development: "In Entwicklung", paused: "Pausiert", archived: "Archiviert", error: "Fehler", disconnected: "Getrennt" };
+    const web = await Promise.all(sites.slice(0, 3).map((s) => rpc("cc_web_stats", { p_site: s.id, p_days: 7 }).then((st) => ({ s, st })).catch(() => null)));
+    const tix = ev.filter((e) => e.metadata?.tickets);
+    box.replaceChildren(
+      h("section.card", h("div.card-head", h("h3", "Projekte nach Status")), h("div.card-body", donut(count(pr, "status").map(([k, n], i) => ({ name: ST[k] || k, value: n, color: PALETTE[i % 6] })), { size: 120 }))),
+      h("section.card", h("div.card-head", h("h3", "Ticketverkauf")), h("div.card-body", tix.length ? h("div.stack", { style: { gap: "12px" } }, tix.map((e) => {
+        const t = e.metadata.tickets, cap = t.capacity || e.expected_guests;
+        return h("a", { href: `#/events/${e.id}`, style: { color: "inherit", textDecoration: "none" } }, h("div.row.between", { style: { fontSize: "13px" } }, h("span", e.name), h("strong", `${fmtNum(t.sold)}${cap ? ` / ${fmtNum(cap)}` : ""}`)),
+          cap ? meter((t.sold / cap) * 100, [101, 101]) : null, h("div.faint", { style: { fontSize: "11.5px", marginTop: "3px" } }, `${(t.revenue ?? 0).toLocaleString("de-DE", { style: "currency", currency: "EUR" })} · Stand ${fmtAgo(t.as_of)}`));
+      })) : h("div.faint", "Noch keine Ticketdaten."))),
+      h("section.card", h("div.card-head", h("h3", "Website-Besucher · 7 Tage")), h("div.card-body", web.filter(Boolean).length
+        ? lineChart(web.filter(Boolean).map(({ s, st }, i) => ({ name: s.name, color: PALETTE[i % 6], values: (st.series || []).map((p) => ({ x: new Date(p.t).getTime(), y: p.uv })) })),
+          { height: 170, xFmt: (v) => new Date(v).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }), emptyText: "Noch keine Besucher – Besucherzähler unter „Websites“ einbauen." })
+        : h("div.faint", "Noch keine Websites."))));
+  })().catch(() => box.replaceChildren(h("div.faint", "Diagramme nicht verfügbar.")));
+  return box;
 }
 
 function card(title, link, body, w = "w-6") {

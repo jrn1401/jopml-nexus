@@ -11,6 +11,8 @@ import { CONFIG } from "../config.js";
 import { webCockpit, webList, siteFor } from "../lib/web.js";
 import { openShareDialog } from "../lib/share.js";
 import { openAiDrawer, memoryDialog } from "../lib/assistant.js";
+import { viewToggle, charts } from "../lib/viewmode.js";
+import { donut, PALETTE } from "../lib/charts.js";
 
 const KINDS = { all: ["Alle", "dashboard"], website: ["Websites", "globe"], repo: ["Repositories", "code"], event: ["Events", "calendar"], ai: ["KI", "sparkles"], database: ["Datenbanken", "server"], app: ["Apps", "box"], other: ["Sonstiges", "folder"] };
 const STATUS = { active: ["Aktiv", "b-ok"], error: ["Fehler", "b-bad"], building: ["Wird gebaut", "b-pri"], paused: ["Pausiert", "b-warn"], archived: ["Archiviert", "b-idle"] };
@@ -113,7 +115,10 @@ export async function renderWorkspace(root, who) {
         statBox("Projekte", projects.length, "folder"), statBox("Verbindungen", conns.length, "link", err ? `${err} mit Fehler` : null),
         web.length ? statBox("Websites live", h("span.row", { style: { gap: "10px" } }, h("span.live-dot", { class: live ? "on" : "" }), String(live)), "globe", `${web.reduce((a, w) => a + (w.today_uv || 0), 0)} Besucher heute`) : statBox("Mit dir geteilt", shared.length, "users"), statBox("KI-Fragen heute", usage ? `${usage.requests_today}${usage.limit ? ` / ${usage.limit}` : ""}` : "–", "sparkles", usage?.limit ? "eigener KI-Schlüssel = ohne Limit" : null)),
       err ? h("div.banner.bad", { style: { marginBottom: "14px" } }, icon("alert"), h("div", `${err} Verbindung${err === 1 ? "" : "en"} mit Fehler – `, h("a", { href: "#/verbindungen" }, "ansehen"))) : null,
-      h("div.row.wrap", { style: { justifyContent: "space-between", gap: "10px", marginBottom: "4px" } }, tabs, h("div.row", { style: { gap: "8px" } }, search, h("button.btn", { onclick: () => editProject() }, icon("plus"), "Projekt"))),
+      charts() && projects.length ? h("div.grid.g-2", { style: { marginBottom: "16px" } },
+        h("section.card", h("div.card-head", h("h3", "Projekte nach Art")), h("div.card-body", donut(Object.entries(counts).map(([k, n], i) => ({ name: KINDS[k]?.[0] || k, value: n, color: PALETTE[i % 6] })), { size: 110 }))),
+        h("section.card", h("div.card-head", h("h3", "Status")), h("div.card-body", donut(Object.entries(projects.reduce((m, p) => ((m[p.status] = (m[p.status] || 0) + 1), m), {})).map(([k, n], i) => ({ name: STATUS[k]?.[0] || k, value: n, color: PALETTE[(i + 2) % 6] })), { size: 110 })))) : null,
+      h("div.row.wrap", { style: { justifyContent: "space-between", gap: "10px", marginBottom: "4px" } }, tabs, h("div.row", { style: { gap: "8px" } }, viewToggle(), search, h("button.btn", { onclick: () => editProject() }, icon("plus"), "Projekt"))),
       grid);
   }
   const statBox = (label, v, ic, sub) => stat(label, typeof v === "object" ? v : String(v), { ic, sub });
