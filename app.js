@@ -36,7 +36,9 @@ async function boot() {
     navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloaded) { reloaded = true; location.reload(); } });
   }
   const params = new URLSearchParams(location.search);
-  const oauthErr = params.get("error_description");
+  const hashParams = new URLSearchParams(location.hash.startsWith("#error") ? location.hash.slice(1) : "");
+  const oauthErr = params.get("error_description") || hashParams.get("error_description");
+  if (hashParams.get("error")) history.replaceState(null, "", location.pathname + location.search);
   // Gäste-Link: funktioniert ohne Anmeldung
   const link = location.hash.match(/^#\/s\/([0-9a-f]{32})$/);
   if (link) { const { renderLink } = await import("./views/guest.js"); return renderLink(root, link[1]); }
@@ -62,7 +64,9 @@ async function boot() {
     if (!who?.email && !who?.anonymous) { await sb.auth.signOut(); return renderLogin("Dieses Konto hat keine bestätigte E-Mail-Adresse."); }
     sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") location.reload(); });
     const { renderWorkspace } = await import("./views/workspace.js");
-    return renderWorkspace(root, who);
+    await renderWorkspace(root, who);
+    const { finishUpgrade } = await import("./lib/upgrade.js");
+    return finishUpgrade(who, oauthErr);
   }
   if (location.search) history.replaceState(null, "", location.pathname + location.hash);
   user = session.user;

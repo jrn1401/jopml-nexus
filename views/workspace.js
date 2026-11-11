@@ -102,8 +102,9 @@ export async function renderWorkspace(root, who) {
     const web = guest ? [] : await rpc("cc_web_overview").catch(() => []);
     const live = web.reduce((a, w) => a + (w.live || 0), 0);
     return h("div",
-      guest ? h("div.banner", { style: { marginBottom: "14px" } }, icon("info"), h("div", "Du bist als Gast angemeldet. Alles hier wird nach 7 Tagen automatisch gelöscht. Für Verbindungen, Websites und Teilen ",
-        h("a", { href: "#", onclick: async (e) => { e.preventDefault(); await sb.auth.signOut(); location.hash = ""; location.reload(); } }, "mit Google anmelden"), ".")) : null,
+      guest ? h("div.banner", { style: { marginBottom: "14px", alignItems: "center" } }, icon("info"),
+        h("div", { style: { flex: 1 } }, "Du bist als Gast angemeldet – alles wird nach 7 Tagen gelöscht. Sichere dein Konto mit Google: deine Projekte und das KI-Wissen bleiben erhalten, und du kannst Dienste verbinden, Websites live sehen und teilen."),
+        h("button.btn.primary", { onclick: async (e) => { e.currentTarget.disabled = true; const { secureGuest } = await import("../lib/upgrade.js"); await secureGuest(); e.currentTarget.disabled = false; } }, icon("lock"), "Mit Google sichern")) : null,
       h("section.hero",
         h("div", h("h1", `${hour < 11 ? "Guten Morgen" : hour < 18 ? "Hallo" : "Guten Abend"}${first ? `, ${first}` : ""}`),
           h("p", conns.length ? `${projects.length} Projekte aus ${conns.length} Verbindung${conns.length === 1 ? "" : "en"} · stündlich aktualisiert` : "Füge einen API-Schlüssel ein – dein Bereich füllt sich automatisch.")),
