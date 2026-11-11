@@ -3,6 +3,7 @@ import { h, icon, badge, SERVER_STATUS, meter, fmtPct, fmtAgo, fmtDuration, fmtB
 import { lineChart } from "../lib/charts.js";
 import { showAgentInstall } from "../lib/actions.js";
 import { METRICS, sampleNow } from "./servers.js";
+import { hostingPanel } from "../lib/hosting.js";
 
 const RANGES = [["1h", "1 Std."], ["24h", "24 Std."], ["7d", "7 Tage"], ["30d", "30 Tage"]];
 
@@ -62,6 +63,7 @@ export default async function serverView({ args: [id] }) {
     h("div.grid.g-4", { style: { marginBottom: "16px" } },
       ...M.map(([k, label, extra, th], i) => metric(label, s[k], extra(s) || null, ["cpu", "layers", "disk"][i], th)),
       h("div.card.stat", h("div.k", icon("clock"), "Uptime"), h("div.v", { style: { fontSize: "20px" } }, live ? fmtDuration(s.uptime_seconds) : "–"), h("div.d", s.os || "Betriebssystem unbekannt"))),
+    cloud ? null : h("div", { style: { marginBottom: "16px" } }, hostingPanel(s)),
     h("div.row.between.wrap", { style: { marginBottom: "12px" } }, h("h3", { style: { margin: 0, fontSize: "15px" } }, "Verlauf"), seg),
     charts,
     h("div.grid.g-2", { style: { marginTop: "16px" } },

@@ -10,12 +10,12 @@ const ROUTES = [
   [/^\/servers$/, "servers"], [/^\/servers\/([\w-]+)$/, "server"], [/^\/ai$/, "ai"],
   [/^\/events$/, "events"], [/^\/events\/([\w-]+)$/, "event"], [/^\/jopml$/, "jopml"],
   [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"], [/^\/shares$/, "shares"], [/^\/web(?:\/([0-9a-f-]{36}))?$/, "web"],
-  [/^\/(impressum|datenschutz|nutzung)$/, "legal"], [/^\/connections$/, "connections"],
+  [/^\/(impressum|datenschutz|nutzung)$/, "legal"], [/^\/connections$/, "connections"], [/^\/hosting$/, "hosting"],
 ];
 const NAV_GROUPS = [
   ["Übersicht", [["#/", "dashboard", "Dashboard"]]],
   ["Planung", [["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"], ["#/shares", "users", "Teilen & Gäste"]]],
-  ["Betrieb", [["#/web", "globe", "Websites"], ["#/jopml", "layers", "JOPML"], ["#/servers", "server", "Server"], ["#/ai", "sparkles", "KI & Tokens"], ["#/connections", "link", "Verbindungen"]]],
+  ["Betrieb", [["#/web", "globe", "Websites"], ["#/jopml", "layers", "JOPML"], ["#/servers", "server", "Server"], ["#/hosting", "rocket", "Hosting"], ["#/ai", "sparkles", "KI & Tokens"], ["#/connections", "link", "Verbindungen"]]],
   ["Verlauf", [["#/activity", "activity", "Aktivitäten"], ["#/system", "check", "Systemprüfung"]]],
 ];
 const NAV = NAV_GROUPS.flatMap(([, items]) => items);

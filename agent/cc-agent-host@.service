@@ -1,0 +1,24 @@
+[Unit]
+Description=JOPML Nexus Agent mit Hosting (Benutzer %i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+EnvironmentFile=/etc/cc-agent.env
+Environment=CC_HOSTING=1
+ExecStart=/usr/bin/python3 /opt/cc-agent/cc_agent.py
+KillMode=mixed
+TimeoutStopSec=30
+Restart=always
+RestartSec=10
+# Läuft als normaler Benutzer (damit Ordner, Git und ggf. Docker funktionieren), ohne zusätzliche Rechte
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+
+[Install]
+WantedBy=multi-user.target
