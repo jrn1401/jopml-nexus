@@ -545,3 +545,13 @@ details.mem > summary { list-style: none; cursor: pointer; padding: 10px 12px; }
 details.mem > summary::-webkit-details-marker { display: none; }
 details.mem[open] > summary { border-bottom: 1px solid var(--line); }
 .mem-body { padding: 10px 12px; font-size: 13.5px; }
+
+/* Sync-Zentrale */
+.sync-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px; }
+.sync-tile { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
+.sync-tile svg { width: 15px; height: 15px; color: var(--text-2); }
+.sync-main { font-size: 17px; font-weight: 650; margin-top: 8px; }
+.sync-sub { font-size: 12.5px; color: var(--text-2); margin-top: 2px; overflow-wrap: anywhere; }
+.sync-err { font-size: 12px; color: var(--bad); margin-top: 6px; }
+.sync-log { margin-top: 12px; font-size: 13px; }
+.sync-log summary { cursor: pointer; color: var(--text-2); font-size: 12.5px; }

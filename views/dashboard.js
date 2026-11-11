@@ -4,10 +4,11 @@ import { barChart } from "../lib/charts.js";
 import { timeline } from "../lib/modules.js";
 import { newProject, newModule, uploadDialog, connectServer, newEvent, syncHelp, openAssistant } from "../lib/actions.js";
 import { maintenanceBanner } from "./jopml-admin.js";
+import { syncCenter } from "../lib/sync.js";
 
 export const WIDGETS = {
   health: "Systemzustand", next: "Nächstes Event", tasks: "Offene Aufgaben", stats: "Kennzahlen", servers: "Serverstatus", ai: "KI-Nutzung", activity: "Letzte Aktivitäten",
-  jopml: "JOPML", events: "Nächste Events", quick: "Schnellaktionen", web: "Websites live",
+  jopml: "JOPML", events: "Nächste Events", quick: "Schnellaktionen", web: "Websites live", sync: "Sync-Zentrale",
 };
 
 export default async function dashboard({ user }) {
@@ -34,6 +35,7 @@ export default async function dashboard({ user }) {
   const worst = checks.some((c) => c[1] === "bad") ? "bad" : checks.some((c) => c[1] === "warn") ? "warn" : "ok";
   const ne = o.next_event;
   const W = {
+    sync: () => card("Sync-Zentrale", "#/settings?tab=integrations", syncCenter(), "w-12"),
     web: () => card("Websites live", "#/web", web.length ? h("div.list", web.slice(0, 6).map((r) => h("a.list-item", { href: r.source === "cc" ? `#/projects/${r.source_id}` : `#/web/${r.id}` },
         h("span.dot", { class: r.up === true ? "ok" : r.up === false ? "bad" : "idle" }),
         h("div.li-main", h("div.li-title", r.name), h("div.li-sub", r.installed ? `heute ${fmtNum(r.today_uv)} Besucher · ${fmtNum(r.today_pv)} Aufrufe${r.ms ? ` · ${r.ms} ms` : ""}` : `Besucherzähler nicht eingebaut${r.ms ? ` · ${r.ms} ms` : ""}`)),
@@ -93,7 +95,7 @@ export default async function dashboard({ user }) {
         .map(([ic, t, fn]) => h("button.btn", { onclick: fn, style: { justifyContent: "flex-start", height: "44px" } }, icon(ic), t))), "w-6"),
   };
 
-  const order = [...Object.keys(W).filter((k) => !(layout.order || []).includes(k)), ...(layout.order || []).filter((k) => W[k])];
+  const order = [...new Set(["sync", ...Object.keys(W).filter((k) => !(layout.order || []).includes(k)), ...(layout.order || []).filter((k) => W[k])])];
   const hidden = new Set(layout.hidden || []);
   return h("div",
     maintenanceBanner(cfg),
