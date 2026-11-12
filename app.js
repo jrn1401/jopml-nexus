@@ -11,15 +11,17 @@ const ROUTES = [
   [/^\/events$/, "events"], [/^\/events\/([\w-]+)$/, "event"], [/^\/jopml$/, "jopml"],
   [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"], [/^\/shares$/, "shares"], [/^\/web(?:\/([0-9a-f-]{36}))?$/, "web"],
   [/^\/(impressum|datenschutz|nutzung)$/, "legal"], [/^\/connections$/, "connections"], [/^\/hosting$/, "hosting"],
+  [/^\/tasks$/, "tasks"], [/^\/door\/([\w-]+)$/, "door"], [/^\/links$/, "links"], [/^\/security$/, "security"], [/^\/help$/, "help"],
 ];
 const NAV_GROUPS = [
   ["Übersicht", [["#/", "dashboard", "Dashboard"]]],
-  ["Planung", [["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"], ["#/shares", "users", "Teilen & Gäste"]]],
-  ["Betrieb", [["#/web", "globe", "Websites"], ["#/jopml", "layers", "JOPML"], ["#/servers", "server", "Server"], ["#/hosting", "rocket", "Hosting"], ["#/ai", "sparkles", "KI & Tokens"], ["#/connections", "link", "Verbindungen"]]],
-  ["Verlauf", [["#/activity", "activity", "Aktivitäten"], ["#/system", "check", "Systemprüfung"]]],
+  ["Planung", [["#/tasks", "check", "Aufgaben"], ["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"], ["#/shares", "users", "Teilen & Team"]]],
+  ["Online", [["#/web", "globe", "Websites"], ["#/links", "link", "Marketing-Links"], ["#/jopml", "layers", "JOPML"]]],
+  ["Geräte", [["#/servers", "server", "Geräte & Server"], ["#/hosting", "rocket", "Hosting"]]],
+  ["System", [["#/security", "lock", "Sicherheit & Push"], ["#/ai", "sparkles", "KI & Tokens"], ["#/connections", "link", "Verbindungen"], ["#/activity", "activity", "Aktivitäten"], ["#/system", "check", "Systemprüfung"], ["#/help", "book", "Handbuch"]]],
 ];
 const NAV = NAV_GROUPS.flatMap(([, items]) => items);
-const MOBILE = [["#/", "dashboard", "Start"], ["#/events", "calendar", "Events"], ["#/web", "globe", "Websites"], ["#/jopml", "layers", "JOPML"], ["#/servers", "server", "Server"]];
+const MOBILE = [["#/", "dashboard", "Start"], ["#/tasks", "check", "Aufgaben"], ["#/events", "calendar", "Events"], ["#/web", "globe", "Websites"], ["#/servers", "server", "Geräte"]];
 
 let user = null, shell = null, unread = 0, lastNotifId = null;
 
@@ -75,7 +77,20 @@ async function boot() {
   if (location.search) history.replaceState(null, "", location.pathname + location.hash);
   user = session.user;
   renderShell();
+  logLogin();
   sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") location.reload(); });
+}
+
+// Anmeldung protokollieren (einmal je Sitzung); bei neuem Gerät warnt der Server
+function logLogin() {
+  try {
+    if (sessionStorage.getItem("cc:logged")) return;
+    sessionStorage.setItem("cc:logged", "1");
+    const ua = navigator.userAgent;
+    const os = /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iPhone/iPad" : /Mac OS/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "Unbekannt";
+    const br = /Edg\//.test(ua) ? "Edge" : /OPR\//.test(ua) ? "Opera" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Browser";
+    rpc("cc_log_login", { p_ua: ua.slice(0, 300), p_device: `${br} auf ${os}` }).catch(() => {});
+  } catch { /* privat */ }
 }
 
 function renderLogin(error) {
@@ -171,14 +186,14 @@ function renderShell() {
     if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable || document.querySelector(".overlay")) return;
     const k = e.key.toLowerCase();
     if (Date.now() - gPending < 1200) {
-      const to = { d: "#/", p: "#/projects", s: "#/servers", e: "#/events", j: "#/jopml", k: "#/ai", f: "#/files", a: "#/activity" }[k];
+      const to = { d: "#/", p: "#/projects", s: "#/servers", e: "#/events", j: "#/jopml", k: "#/ai", f: "#/files", a: "#/activity", t: "#/tasks", l: "#/links", h: "#/help" }[k];
       gPending = 0; if (to) { e.preventDefault(); location.hash = to; } return;
     }
     if (k === "g") gPending = Date.now();
     else if (k === "/") { e.preventDefault(); openSearch(); }
     else if (k === "a") { e.preventDefault(); openAssistant(); }
     else if (k === "n") { e.preventDefault(); openQuick(); }
-    else if (e.key === "?") location.hash = "#/system";
+    else if (e.key === "?") location.hash = "#/help";
   });
   route();
   poll();
@@ -300,7 +315,8 @@ function openQuick() {
   const items = [
     ["folder", "Neues Projekt erstellen", () => newProject()], ["layers", "Neues Modul hinzufügen", () => newModule()],
     ["upload", "Datei hochladen", () => uploadDialog()], ["server", "Server verbinden", () => connectServer()],
-    ["calendar", "Event erstellen", () => newEvent()], ["refresh", "Projekt synchronisieren", () => syncHelp()],
+    ["check", "Neue Aufgabe", () => { location.hash = "#/tasks"; }], ["link", "Marketing-Link anlegen", () => { location.hash = "#/links"; }],
+    ["calendar", "Event erstellen", () => newEvent()], ["refresh", "Projekt synchronisieren", () => syncHelp()], ["book", "Handbuch öffnen", () => { location.hash = "#/help"; }],
     ["bot", "KI-Assistent öffnen", () => openAssistant()],
   ];
   const m = modal("Schnellaktionen", h("div.list", items.map(([ic, t, fn]) =>
@@ -323,11 +339,11 @@ function openProfile() {
 // ---------------- Globale Suche (⌘K) ----------------
 function openSearch() {
   if (document.querySelector(".palette")) return;
-  const KIND = { project: ["folder", "Projekte"], module: ["layers", "Module"], server: ["server", "Server"], file: ["file", "Dateien"], event: ["calendar", "Events"], event_item: ["check", "Event-Einträge"], activity: ["activity", "Aktivitäten"], page: ["chevronR", "Seiten"] };
+  const KIND = { project: ["folder", "Projekte"], module: ["layers", "Module"], server: ["server", "Server"], file: ["file", "Dateien"], event: ["calendar", "Events"], event_item: ["check", "Event-Einträge"], activity: ["activity", "Aktivitäten"], task: ["check", "Aufgaben"], link: ["link", "Marketing-Links"], app: ["rocket", "Gehostete Apps"], comment: ["users", "Kommentare"], page: ["chevronR", "Seiten"] };
   const pages = [...NAV.map(([href, , t]) => ({ kind: "page", title: t, route: href })), { kind: "page", title: "Einstellungen", route: "#/settings" }];
   const acts = [["Teilen & Gäste", () => { location.hash = "#/shares"; }], ["Neues Event", () => newEvent()], ["Neues Projekt", () => newProject()], ["KI-Assistent", () => openAssistant()], ["Server verbinden", () => connectServer()], ["Datei hochladen", () => uploadDialog()]]
     .map(([t, run]) => ({ kind: "page", title: `Aktion: ${t}`, run }));
-  const inp = h("input.input", { placeholder: "Projekte, Server, Dateien, Events … durchsuchen", "aria-label": "Suche", autocomplete: "off" });
+  const inp = h("input.input", { placeholder: "Projekte, Aufgaben, Dateien, Events, Links … durchsuchen", "aria-label": "Suche", autocomplete: "off" });
   const res = h("div.results");
   let items = [], sel = 0;
   const ov = h("div.overlay", { onmousedown: (e) => e.target === ov && ov.remove() }, h("div.modal.palette", { role: "dialog", "aria-label": "Suche" }, inp, res));
@@ -348,7 +364,7 @@ function openSearch() {
     const qtxt = inp.value.trim();
     const pg = [...pages, ...acts].filter((p) => p.title.toLowerCase().includes(qtxt.toLowerCase()));
     if (qtxt.length < 2) { items = qtxt ? pg : pages; sel = 0; draw(); return; }
-    try { items = [...pg, ...(await rpc("cc_search", { q: qtxt }))]; } catch (e) { items = pg; toastErr(e); }
+    try { items = [...pg, ...(await rpc("cc_search2", { q: qtxt }))]; } catch (e) { items = pg; toastErr(e); }
     sel = 0; draw();
   }, 180);
   inp.addEventListener("input", search);

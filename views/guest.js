@@ -1,6 +1,6 @@
 // Gastansicht: zeigt nur freigegebene Inhalte (über cc_guest_* / cc_link_open – nie direkte Tabellenzugriffe).
 import { sb, rpc } from "../lib/api.js";
-import { h, icon, clear, badge, EVENT_STATUS, fmtDateTime, fmtEUR, fmtBytes, fmtAgo, md, toast, toastErr, empty, errMsg } from "../lib/ui.js";
+import { h, icon, clear, badge, EVENT_STATUS, fmtDateTime, fmtEUR, fmtBytes, fmtAgo, md, toast, toastErr, empty, errMsg, formModal } from "../lib/ui.js";
 import { LOC_STATUS } from "./event.js";
 import { CONFIG } from "../config.js";
 import { webSharedBlock } from "../lib/web.js";
@@ -18,9 +18,42 @@ async function fileUrl(ctx, fileId) {
   return d.url;
 }
 
+// Team-Bereich einer Event-Freigabe: Schichtplan, Kommentare und (mit Recht „Mitarbeiten“) neue Einträge
+function teamBlock(ctx, reload) {
+  const box = h("div", { style: { marginTop: "16px" } });
+  const call = (action = null) => rpc("cc_share_team", { p_share: ctx.shareId || null, p_token: ctx.token || null, p_action: action });
+  const toLocal = (iso) => { const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+  async function draw(action) {
+    let t;
+    try { t = await call(action); } catch (e) { if (action) toastErr(e); return; }
+    const edit = t.permission === "edit";
+    const add = (kind, label, it) => () => formModal(it ? "Bearbeiten" : label, [
+      { name: "title", label: kind === "guest" ? "Name" : kind === "shift" ? "Aufgabe der Schicht" : "Titel", required: true, max: 200, value: it?.title, placeholder: kind === "shift" ? "z. B. Garderobe" : "" },
+      ...(kind === "guest" ? [] : [{ name: "at", label: kind === "shift" ? "Beginn" : "Fällig am", type: "datetime-local", half: true, value: it?.at ? toLocal(it.at) : "" }]),
+      ...(kind === "shift" ? [{ name: "ends_at", label: "Ende", type: "datetime-local", half: true, value: it?.ends_at ? toLocal(it.ends_at) : "" }] : []),
+      ...(kind === "guest" ? [] : [{ name: "assignee", label: "Wer?", max: 120, value: it?.assignee }]),
+      { name: "note", label: "Notiz", max: 2000, value: it?.note },
+    ], async (v) => { await draw({ kind: "item", item: { id: it?.id, kind, title: v.title, note: v.note, assignee: v.assignee || null, at: v.at ? new Date(v.at).toISOString() : null, ends_at: v.ends_at ? new Date(v.ends_at).toISOString() : null } }); toast("Gespeichert"); if (kind !== "shift") reload?.(); });
+    const ta = h("textarea.input", { rows: 2, maxlength: 2000, placeholder: "Nachricht an das Team …", "aria-label": "Kommentar" });
+    const time = (d) => new Date(d).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    box.replaceChildren(h("div.grid.g-2", { style: { alignItems: "start" } },
+      t.shifts.length || edit ? h("section.card", h("div.card-head", h("h3.row", icon("clock"), "Schichtplan"), edit ? h("button.btn.sm.ghost", { onclick: add("shift", "Neue Schicht") }, icon("plus"), "Schicht") : null),
+        h("div.card-body", t.shifts.length ? h("div.list", t.shifts.map((s) => h("div.list-item", h("div.li-main", h("div.li-title", s.title, s.assignee ? ` – ${s.assignee}` : ""),
+          h("div.li-sub", [s.at ? time(s.at) : "Zeit offen", s.ends_at ? `bis ${new Date(s.ends_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}` : null, s.note].filter(Boolean).join(" · "))),
+          !s.assignee ? h("span.badge.b-warn", "frei") : null, edit ? h("button.icon-btn", { "aria-label": "Bearbeiten", onclick: add("shift", "", s) }, icon("edit")) : null)))
+          : h("div.faint", { style: { fontSize: "13px" } }, "Noch keine Schichten."))) : null,
+      h("section.card", h("div.card-head", h("h3.row", icon("users"), "Team-Kommentare"), edit ? h("div.row", { style: { gap: "6px" } }, h("button.btn.sm.ghost", { onclick: add("task", "Neue Aufgabe") }, icon("plus"), "Aufgabe"), h("button.btn.sm.ghost", { onclick: add("guest", "Gast hinzufügen") }, icon("plus"), "Gast")) : null),
+        h("div.card-body.stack", t.comments.length ? h("div.list", t.comments.map((c) => h("div.list-item", h("div.li-main", h("div.li-sub", `${c.author} · ${fmtAgo(c.at)}`), h("div", { style: { whiteSpace: "pre-wrap", fontSize: "14px" } }, c.body)))))
+          : h("div.faint", { style: { fontSize: "13px" } }, "Noch keine Kommentare."),
+          ta, h("div.row", { style: { justifyContent: "flex-end" } }, h("button.btn.primary", { onclick: async () => { const b = ta.value.trim(); if (!b) return; await draw({ kind: "comment", body: b }); } }, icon("send"), "Senden"))))));
+  }
+  draw();
+  return box;
+}
+
 // Inhalt einer Freigabe darstellen. ctx: { token } für Links oder { shareId } für angemeldete Gäste
 export function renderShared(p, ctx, reload) {
-  const canTick = p.share?.permission === "tasks" && p.type === "event";
+  const canTick = ["tasks", "edit"].includes(p.share?.permission) && p.type === "event";
   const fileList = (files) => files.length ? h("div.list", files.map((f) => h("div.list-item",
     h("div.li-icon", icon("file")), h("div.li-main", h("div.li-title", f.name), h("div.li-sub", `${f.path} · ${fmtBytes(f.size)}`)),
     h("button.btn.sm", { onclick: async (e) => { e.currentTarget.disabled = true; try { window.open(await fileUrl(ctx, f.id), "_blank", "noopener"); } catch (er) { toastErr(er); } finally { e.currentTarget.disabled = false; } } }, icon("download"), "Laden"))))
@@ -47,8 +80,9 @@ export function renderShared(p, ctx, reload) {
         h("span.faint", { style: { fontSize: "13px" } }, [ev.date ? fmtDateTime(ev.date) : "ohne Datum", ev.location].filter(Boolean).join(" · "))))),
       ms !== null && ms > 0 ? h("div.countdown", { style: { maxWidth: "360px" } }, h("div", h("strong", Math.floor(ms / 86400_000)), h("span", "Tage")), h("div", h("strong", Math.floor((ms % 86400_000) / 3600_000)), h("span", "Std."))) : null,
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(ev.description)) : null,
-      canTick ? h("div.na-note", { style: { marginBottom: "16px" } }, icon("check"), h("div", "Du darfst Aufgaben abhaken.")) : null,
-      h("div.grid.g-2", ["task", "schedule", "location", "tech", "guest", "cost", "income"].map(sec)));
+      canTick ? h("div.na-note", { style: { marginBottom: "16px" } }, icon("check"), h("div", p.share.permission === "edit" ? "Du arbeitest mit: Aufgaben abhaken und neue Aufgaben, Schichten und Gäste anlegen." : "Du darfst Aufgaben abhaken.")) : null,
+      h("div.grid.g-2", ["task", "schedule", "location", "tech", "guest", "cost", "income"].map(sec)),
+      teamBlock(ctx, reload));
   }
   if (p.type === "project" || p.type === "site") {
     const pr = p.project, t = p.tickets;
@@ -83,7 +117,8 @@ export async function renderLink(root, token) {
     try {
       const p = await rpc("cc_link_open", { p_token: token });
       if (!p) throw new Error("not_shared");
-      clear(root, frame(null, renderShared(p, { token }, null)));
+      if (p.share?.permission === "door") { const { doorPanel } = await import("./door.js"); clear(root, frame(null, doorPanel({ token }))); document.title = `Abendkasse · ${CONFIG.appName}`; return; }
+      clear(root, frame(null, renderShared(p, { token }, draw)));
       document.title = `${p.event?.name || p.project?.name || p.file?.name} · ${CONFIG.appName}`;
     } catch (e) {
       clear(root, frame(null, empty("lock", "Link ungültig oder abgelaufen", /not_shared/.test(errMsg(e)) ? "Bitte die Person, die dir den Link geschickt hat, um einen neuen Link." : errMsg(e))));

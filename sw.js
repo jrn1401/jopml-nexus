@@ -1,12 +1,12 @@
 // Service Worker: cached nur die App-Hülle (statische Dateien). Daten (Supabase) werden nie gecacht.
-const VERSION = "cc-v22";
+const VERSION = "cc-v23";
 const SHELL = [
   "./", "index.html", "styles.css", "theme.js", "app.js", "config.js", "manifest.webmanifest",
   "lib/api.js", "lib/ui.js", "lib/charts.js", "lib/modules.js", "lib/actions.js",
   "views/dashboard.js", "views/projects.js", "views/project.js", "views/servers.js", "views/server.js", "views/ai.js",
   "views/events.js", "views/event.js", "views/jopml.js", "views/jopml-admin.js", "views/files.js", "views/activity.js", "views/settings.js", "views/system.js", "views/guest.js", "views/shares.js", "lib/share.js", "lib/eventfrog.js",
   "lib/connect.js", "lib/design.js", "views/workspace.js", "views/legal.js", "views/connections.js",
-  "lib/web.js", "views/web.js", "views/status.js", "lib/assistant.js", "lib/upgrade.js", "lib/sync.js", "lib/viewmode.js", "lib/hosting.js", "views/hosting.js",
+  "lib/web.js", "views/web.js", "views/status.js", "lib/assistant.js", "lib/upgrade.js", "lib/sync.js", "lib/viewmode.js", "lib/hosting.js", "views/hosting.js", "lib/devfiles.js", "lib/nextup.js", "views/tasks.js", "views/door.js", "views/links.js", "views/security.js", "views/help.js",
   "icons/icon.svg", "icons/icon-192.png", "icons/apple-touch-icon.png",
 ];
 

@@ -18,6 +18,13 @@ Hosting (Apps über die Website auf diesem Gerät betreiben):
   CC_HOST_DIR        Arbeitsordner für Git-Repos und Projektdateien (Standard ~/.cc-agent/apps)
   CC_HOST_ROOTS      kommagetrennte Ordner, die als statische Seite freigegeben werden dürfen (Standard: Benutzerordner)
   CC_CLOUDFLARED     Pfad zu cloudflared für öffentliche Links (Standard: im PATH suchen)
+  CC_TUNNEL_TOKEN    Token eines festen Cloudflare-Tunnels (fester Link statt wechselndem; Adresse je App im Feld „Feste Adresse“)
+
+Geräte-Cloud (Dateien und Live-Daten des Geräts auf der Website):
+  CC_FILES           1 = Ordner ansehen und Dateien über die Website herunterladen (Standard aus)
+  CC_FILES_WRITE     1 = zusätzlich Dateien von der Website auf das Gerät legen und Ordner anlegen (Standard aus)
+  CC_FILE_ROOTS      kommagetrennte Ordner, die sichtbar sein dürfen (Standard: Benutzerordner)
+Versteckte Dateien und Ordner (.ssh, .env …) sowie Schlüsseldateien sind nie sichtbar.
 Statische Seiten liefern nie versteckte Dateien (.env, .git …) oder Schlüsseldateien aus.
 Abhängigkeit: psutil empfohlen (pip install psutil). Ohne psutil funktioniert der Agent unter Linux über /proc.
 """
@@ -32,7 +39,7 @@ try:
 except ImportError:  # Linux-Rückfall über /proc
     psutil = None
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 API = os.environ.get("CC_API_URL", "").rstrip("/")
 KEY = os.environ.get("CC_AGENT_KEY", "")
 INTERVAL = max(10, int(os.environ.get("CC_INTERVAL", "30")))
@@ -47,6 +54,11 @@ HOME = Path.home()
 HOST_DIR = Path(os.environ.get("CC_HOST_DIR") or HOME / ".cc-agent" / "apps").expanduser()
 HOST_ROOTS = [Path(p.strip()).expanduser().resolve() for p in os.environ.get("CC_HOST_ROOTS", "").split(",") if p.strip()] or [HOME.resolve(), HOST_DIR.resolve()]
 HOST_API = re.sub(r"/cc-api$", "/nx-host", API)
+FILES = os.environ.get("CC_FILES", "").lower() in ON
+FILES_WRITE = FILES and os.environ.get("CC_FILES_WRITE", "").lower() in ON
+FILE_ROOTS = [Path(p.strip()).expanduser().resolve() for p in os.environ.get("CC_FILE_ROOTS", "").split(",") if p.strip()] or [HOME.resolve()]
+TUNNEL_TOKEN = os.environ.get("CC_TUNNEL_TOKEN", "")
+MAX_FILE = 50 * 1024 * 1024
 
 
 def log(msg):
@@ -174,6 +186,170 @@ def port_open(port):
         return False
 
 
+# ---------------------------------------------------------------- Geräte-Cloud
+def cloud_path(p):
+    """Pfad prüfen: nur innerhalb der freigegebenen Ordner, nichts Verstecktes, keine Schlüsseldateien."""
+    d = Path(str(p)).expanduser().resolve()
+    root = next((r for r in FILE_ROOTS if d == r or r in d.parents), None)
+    if root is None:
+        raise RuntimeError("Dieser Ordner ist auf dem Gerät nicht freigegeben (CC_FILE_ROOTS).")
+    rel = d.relative_to(root).parts
+    if any(x.startswith(".") for x in rel) or SECRET_RE.search(d.as_posix()):
+        raise RuntimeError("Versteckte Dateien und Schlüsseldateien sind gesperrt.")
+    return d
+
+
+def cloud_list(path):
+    if not path:
+        return {"path": "", "parent": None, "roots": True,
+                "entries": [{"name": str(r), "dir": True, "size": None, "mtime": None, "path": str(r)} for r in FILE_ROOTS if r.is_dir()]}
+    d = cloud_path(path)
+    if not d.is_dir():
+        raise RuntimeError("Ordner nicht gefunden.")
+    out, more = [], False
+    with os.scandir(d) as it:
+        for e in it:
+            if e.name.startswith(".") or SECRET_RE.search("/" + e.name):
+                continue
+            if len(out) >= 1000:
+                more = True
+                break
+            try:
+                st = e.stat()
+                isdir = e.is_dir()
+                out.append({"name": e.name, "dir": isdir, "size": None if isdir else st.st_size, "mtime": int(st.st_mtime), "path": str(d / e.name)})
+            except OSError:
+                continue
+    out.sort(key=lambda x: (not x["dir"], x["name"].lower()))
+    parent = str(d.parent) if d not in FILE_ROOTS else ""
+    free = None
+    try:
+        free = shutil.disk_usage(d).free
+    except OSError:
+        pass
+    return {"path": str(d), "parent": parent, "entries": out, "more": more, "free": free, "writable": FILES_WRITE and os.access(d, os.W_OK)}
+
+
+def cloud_get(path, args):
+    f = cloud_path(path)
+    if not f.is_file():
+        raise RuntimeError("Datei nicht gefunden.")
+    size = f.stat().st_size
+    if size > MAX_FILE:
+        raise RuntimeError("Datei ist größer als 50 MB.")
+    with open(f, "rb") as fh:
+        req = urllib.request.Request(args["upload_url"], data=fh, method="PUT",
+                                     headers={"Content-Type": "application/octet-stream", "Content-Length": str(size), "x-upsert": "true"})
+        with urllib.request.urlopen(req, timeout=300):
+            pass
+    return {"storage_path": args["storage_path"], "name": f.name, "size": size}
+
+
+def cloud_put(path, args):
+    if not FILES_WRITE:
+        raise RuntimeError("Schreiben ist auf dem Gerät nicht freigeschaltet (CC_FILES_WRITE=1).")
+    d = cloud_path(path)
+    if not d.is_dir():
+        raise RuntimeError("Zielordner nicht gefunden.")
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", str(args.get("name") or "")).strip(". ")[:200]
+    if not name or name.startswith(".") or SECRET_RE.search("/" + name):
+        raise RuntimeError("Dieser Dateiname ist nicht erlaubt.")
+    dest = d / name
+    n = 1
+    while dest.exists():
+        dest = d / f"{Path(name).stem} ({n}){Path(name).suffix}"
+        n += 1
+    tmp = dest.with_name(dest.name + ".part")
+    got = 0
+    try:
+        with urllib.request.urlopen(args["download_url"], timeout=300) as r, open(tmp, "wb") as out:
+            while True:
+                chunk = r.read(1 << 20)
+                if not chunk:
+                    break
+                got += len(chunk)
+                if got > MAX_FILE:
+                    raise RuntimeError("Datei ist größer als 50 MB.")
+                out.write(chunk)
+        tmp.replace(dest)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    return {"name": dest.name, "size": got, "cleanup": args.get("storage_path")}
+
+
+def cloud_mkdir(path, _args):
+    if not FILES_WRITE:
+        raise RuntimeError("Schreiben ist auf dem Gerät nicht freigeschaltet (CC_FILES_WRITE=1).")
+    d = cloud_path(path)
+    if not d.parent.is_dir():
+        raise RuntimeError("Übergeordneter Ordner nicht gefunden.")
+    d.mkdir(exist_ok=True)
+    return {"path": str(d)}
+
+
+def cloud_handle(r):
+    try:
+        if not FILES:
+            raise RuntimeError("Dateizugriff ist auf dem Gerät nicht freigeschaltet (CC_FILES=1 setzen und Agent neu starten).")
+        fn = {"list": lambda p, a: cloud_list(p), "get": cloud_get, "put": cloud_put, "mkdir": cloud_mkdir}.get(r.get("kind"))
+        if not fn:
+            raise RuntimeError("Unbekannte Anfrage.")
+        return {"id": r["id"], "result": fn(r.get("path") or "", r.get("args") or {})}
+    except (RuntimeError, OSError, ValueError, KeyError, urllib.error.URLError) as e:
+        return {"id": r.get("id"), "error": str(e)[:300]}
+
+
+def device_info():
+    """Live-Daten des Geräts für die Website (Temperatur, Netzwerk, Prozesse, Laufwerke)."""
+    info = {"version": VERSION, "files": FILES, "write": FILES_WRITE, "roots": [str(r) for r in FILE_ROOTS] if FILES else [],
+            "hostname": socket.gethostname(), "ip": lan_ip(), "python": platform.python_version(), "arch": platform.machine()}
+    try:
+        info["model"] = Path("/proc/device-tree/model").read_text().strip("\x00\n ")[:80]
+    except OSError:
+        pass
+    try:
+        info["temp"] = round(int(Path("/sys/class/thermal/thermal_zone0/temp").read_text()) / 1000, 1)
+    except (OSError, ValueError):
+        pass
+    if psutil:
+        try:
+            if "temp" not in info and hasattr(psutil, "sensors_temperatures"):
+                for arr in (psutil.sensors_temperatures() or {}).values():
+                    if arr:
+                        info["temp"] = round(arr[0].current, 1)
+                        break
+            n = psutil.net_io_counters()
+            info["net"] = {"sent": n.bytes_sent, "recv": n.bytes_recv}
+            info["boot"] = int(psutil.boot_time())
+            disks = []
+            for part in psutil.disk_partitions(all=False)[:8]:
+                try:
+                    u = psutil.disk_usage(part.mountpoint)
+                    disks.append({"mount": part.mountpoint, "total": u.total, "used": u.used, "fs": part.fstype})
+                except OSError:
+                    continue
+            info["disks"] = disks
+            procs = []
+            for pr in psutil.process_iter(["name", "cpu_percent", "memory_info"]):
+                try:
+                    procs.append({"name": (pr.info["name"] or "?")[:40], "cpu": round(pr.info["cpu_percent"] or 0, 1), "mem": pr.info["memory_info"].rss if pr.info["memory_info"] else 0})
+                except (psutil.Error, AttributeError):
+                    continue
+            info["procs"] = sorted(procs, key=lambda x: (x["cpu"], x["mem"]), reverse=True)[:6]
+            info["proc_count"] = len(procs)
+            if hasattr(psutil, "sensors_battery") and psutil.sensors_battery():
+                bt = psutil.sensors_battery()
+                info["battery"] = {"percent": round(bt.percent), "plugged": bool(bt.power_plugged)}
+        except Exception:  # Messwerte sind Zusatzinfos – nie den Agenten stoppen
+            pass
+    try:
+        info["load"] = [round(x, 2) for x in os.getloadavg()]
+    except (OSError, AttributeError):
+        pass
+    return info
+
+
 class SafeHandler(http.server.SimpleHTTPRequestHandler):
     """Statische Dateien ohne Verzeichnislisten, ohne versteckte Dateien und ohne Schlüsseldateien."""
     app = None
@@ -209,6 +385,9 @@ class App:
         self.started = 0.0
         self.fails = 0
         self.workdir = HOST_DIR / self.id[:8]
+        self.src = None            # Ordner mit den Dateien der App (für Sicherungen)
+        self.checked = time.time()
+        self.backed = 0.0
 
     # -- Hilfen
     def say(self, line):
@@ -332,7 +511,7 @@ class App:
     def start(self, manifest=None):
         c, kind, port = self.cfg.get("config") or {}, self.cfg["kind"], int(self.cfg["port"])
         self.stop(quiet=True)
-        self.error, self.public_url, self.state = None, None, "starting"
+        self.error, self.public_url, self.state, self.src = None, None, "starting", None
         self.started = time.time()
         self.say(f"Starte „{self.cfg['name']}“ ({kind}) auf Port {port}")
         try:
@@ -346,7 +525,8 @@ class App:
             for k in ("CC_AGENT_KEY", "CC_API_URL"):
                 env.pop(k, None)
             if kind == "static":
-                self._serve(self._static_dir(c.get("path") or ""))
+                self.src = self._static_dir(c.get("path") or "")
+                self._serve(self.src)
             elif kind == "nexus":
                 if manifest is None:
                     raise RuntimeError("Projektdateien nicht erhalten.")
@@ -354,7 +534,7 @@ class App:
                     raise RuntimeError("Das Projekt hat keine Dateien" + (f" im Ordner „{c.get('root')}“" if c.get("root") else "") + ".")
                 self._serve(self._nexus(manifest))
             elif kind == "git":
-                repo = self._git()
+                repo = self.src = self._git()
                 if c.get("cmd"):
                     if c.get("install"):
                         self.say(f"Installiere: {c['install']}")
@@ -373,6 +553,7 @@ class App:
                 cwd = Path(c.get("cwd") or HOST_DIR).expanduser()
                 if not cwd.is_dir():
                     raise RuntimeError(f"Arbeitsordner nicht gefunden: {cwd}")
+                self.src = cwd if c.get("cwd") else None
                 self.proc = self._spawn(shlex.split(str(c.get("cmd") or ""), posix=os.name != "nt"), cwd, env)
             elif kind == "docker":
                 docker = shutil.which("docker")
@@ -384,14 +565,28 @@ class App:
                 cport = int(c.get("container_port") or 80)
                 name = f"nexus-{self.id[:8]}"
                 subprocess.run([docker, "rm", "-f", name], capture_output=True, timeout=60)
-                self.proc = self._spawn([docker, "run", "--rm", "--name", name, "-p", f"{'' if self.host() == '0.0.0.0' else '127.0.0.1:'}{port}:{cport}", image], HOST_DIR, env)
+                extra = []
+                for pair in str(c.get("env") or "").split(","):
+                    if re.match(r"^[A-Z_][A-Z0-9_]{0,40}=[\w.:/@+-]{0,200}$", pair.strip()):
+                        extra += ["-e", pair.strip()]
+                data = self.workdir / "data"      # bleibende Daten des Containers (z. B. Minecraft-Welt)
+                data.mkdir(parents=True, exist_ok=True)
+                self.src = data
+                self.proc = self._spawn([docker, "run", "--rm", "--name", name, "-p", f"{'' if self.host() == '0.0.0.0' else '127.0.0.1:'}{port}:{cport}",
+                                         "-v", f"{data}:/data", *extra, image], HOST_DIR, env)
             else:
                 raise RuntimeError(f"Unbekannte Art: {kind}")
             self.started = time.time()
             self.local_url = f"http://localhost:{port}"
             ip = lan_ip() if self.host() == "0.0.0.0" else None
             self.lan_url = f"http://{ip}:{port}" if ip else None
-            if self.cfg.get("public"):
+            fixed = str(c.get("public_host") or "").strip().lower()
+            if self.cfg.get("public") and fixed and TUNNEL_TOKEN and re.match(r"^[a-z0-9.-]{4,120}$", fixed):
+                self.public_url = f"https://{fixed}"
+                self.fixed = True
+                self.say(f"Fester Link: {self.public_url} (Cloudflare-Tunnel des Geräts)")
+            elif self.cfg.get("public"):
+                self.fixed = False
                 cf = os.environ.get("CC_CLOUDFLARED") or shutil.which("cloudflared")
                 if cf:
                     self.tunnel = self._spawn([cf, "tunnel", "--no-autoupdate", "--url", f"http://127.0.0.1:{port}"], HOST_DIR, tunnel=True)
@@ -421,11 +616,17 @@ class App:
             self.httpd.shutdown()
             self.httpd.server_close()
             self.httpd = None
+        if self.proc and self.cfg.get("kind") == "docker" and shutil.which("docker"):
+            try:
+                subprocess.run([shutil.which("docker"), "stop", "-t", "20", f"nexus-{self.id[:8]}"], capture_output=True, timeout=40)
+            except (OSError, subprocess.SubprocessError):
+                pass
         self._kill(self.proc)
         self._kill(self.tunnel)
         self.proc = self.tunnel = None
         self.pid = None
         self.local_url = self.lan_url = self.public_url = None
+        self.fixed = False
         if not quiet:
             self.state, self.error = "stopped", None
             self.say("Gestoppt")
@@ -444,6 +645,28 @@ class App:
         if self.tunnel and self.tunnel.poll() is not None:
             self.say("Tunnel beendet")
             self.tunnel, self.public_url = None, None
+        c = self.cfg.get("config") or {}
+        # Git: regelmäßig nach neuem Stand sehen und bei Änderung neu starten
+        try:
+            every = max(5, int(c.get("auto_update") or 0)) * 60 if c.get("auto_update") else 0
+        except (TypeError, ValueError):
+            every = 0
+        if every and self.cfg["kind"] == "git" and self.state == "running" and time.time() - self.checked > every:
+            self.checked = time.time()
+            try:
+                git, repo = shutil.which("git"), self.workdir / "repo"
+                local = subprocess.run([git, "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=20).stdout.strip()
+                remote = subprocess.run([git, "-C", str(repo), "ls-remote", "origin", str(c.get("branch") or "HEAD")], capture_output=True, text=True, timeout=40,
+                                        env=dict(os.environ, GIT_TERMINAL_PROMPT="0")).stdout.split()
+                if remote and local and remote[0] != local:
+                    self.say("Git: neuer Stand gefunden – aktualisiere")
+                    self.rev = -1
+            except (OSError, subprocess.SubprocessError, TypeError):
+                pass
+        # Sicherung: einmal täglich als ZIP (höchstens 5 behalten)
+        if c.get("backup") and self.src and self.state == "running" and time.time() - self.backed > 86400:
+            self.backed = time.time()
+            threading.Thread(target=self._backup, args=(Path(self.src),), daemon=True).start()
         up = bool(self.httpd) or port_open(int(self.cfg["port"]))
         if up:
             self.state = "running"
@@ -451,6 +674,30 @@ class App:
             self.pid = self.proc.pid if self.proc else os.getpid()
         elif time.time() - self.started > 120:
             self.state, self.error = "error", f"Port {self.cfg['port']} antwortet nach 2 Minuten nicht."
+
+    def _backup(self, src):
+        try:
+            total = 0
+            for root, dirs, files in os.walk(src):
+                dirs[:] = [d for d in dirs if d not in ("node_modules", ".git", "__pycache__")]
+                for f in files:
+                    try:
+                        total += os.path.getsize(os.path.join(root, f))
+                    except OSError:
+                        pass
+                if total > 2 * 1024 ** 3:
+                    self.say("Sicherung übersprungen: Ordner ist größer als 2 GB")
+                    return
+            dest = HOST_DIR / "backups"
+            dest.mkdir(parents=True, exist_ok=True)
+            base = dest / f"{self.id[:8]}-{datetime.now().strftime('%Y%m%d-%H%M')}"
+            shutil.make_archive(str(base), "zip", str(src))
+            old = sorted(dest.glob(f"{self.id[:8]}-*.zip"))
+            for f in old[:-5]:
+                f.unlink()
+            self.say(f"Sicherung erstellt: {base.name}.zip ({total // 1024} KB)")
+        except (OSError, ValueError) as e:
+            self.say(f"Sicherung fehlgeschlagen: {e}")
 
     def report(self):
         return {"id": self.id, "rev": self.rev, "state": self.state, "pid": self.pid, "local_url": self.local_url,
@@ -466,6 +713,21 @@ class Host:
                 "cloudflared": bool(os.environ.get("CC_CLOUDFLARED") or shutil.which("cloudflared")), "python": platform.python_version(),
                 "os": f"{platform.system()} {platform.release()}", "lan_ip": lan_ip()}
 
+    def start_tunnel(self):
+        """Fester Cloudflare-Tunnel (ein Tunnel je Gerät, Adressen werden im Cloudflare-Konto zugeordnet)."""
+        cf = os.environ.get("CC_CLOUDFLARED") or shutil.which("cloudflared")
+        if not TUNNEL_TOKEN or not cf:
+            if TUNNEL_TOKEN:
+                log("Fester Tunnel: cloudflared ist nicht installiert.")
+            return None
+        kw = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "stdin": subprocess.DEVNULL, "env": dict(os.environ, TUNNEL_TOKEN=TUNNEL_TOKEN)}
+        if os.name == "nt":
+            kw["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        else:
+            kw["start_new_session"] = True
+        log("Fester Tunnel wird gestartet")
+        return subprocess.Popen([cf, "tunnel", "--no-autoupdate", "run"], **kw)
+
     def call(self, payload):
         req = urllib.request.Request(f"{HOST_API}/sync", data=json.dumps(payload).encode(), method="POST",
                                      headers={"Content-Type": "application/json", "x-cc-key": KEY, "User-Agent": f"cc-agent/{VERSION}"})
@@ -474,18 +736,29 @@ class Host:
 
     def loop(self):
         HOST_DIR.mkdir(parents=True, exist_ok=True)
-        log(f"Hosting aktiv (Befehle {'erlaubt' if ALLOW_CMD else 'aus'}, Arbeitsordner {HOST_DIR})")
-        need, wait, n = [], 5, 0
+        log(f"Hosting {'aktiv' if HOSTING else 'aus'} (Befehle {'erlaubt' if ALLOW_CMD else 'aus'}), Dateizugriff {'lesen+schreiben' if FILES_WRITE else 'lesen' if FILES else 'aus'}, Arbeitsordner {HOST_DIR}")
+        need, wait, n, results, last_info = [], 5, 0, [], 0.0
+        tunnel = self.start_tunnel() if HOSTING else None
         while RUN:
             for a in self.apps.values():
                 a.tick()
-            payload = {"apps": [a.report() for a in self.apps.values()], "need_manifest": need}
+            if tunnel and tunnel.poll() is not None:
+                tunnel = self.start_tunnel()
+            payload = {"apps": [a.report() for a in self.apps.values()], "need_manifest": need, "results": results}
             if n % 60 == 0:
-                payload["caps"] = self.caps()
+                payload["caps"] = dict(self.caps(), hosting=HOSTING, files=FILES, write=FILES_WRITE)
+            if time.time() - last_info > 30:
+                payload["info"] = device_info()
+                last_info = time.time()
             try:
                 res = self.call(payload)
-                wait = int(res.get("poll") or 5) if res.get("apps") else 20
-                need = self.apply(res.get("apps") or [], res.get("manifests") or {})
+                results = []
+                wait = min(60, max(2, int(res.get("poll") or 15)))
+                need = self.apply(res.get("apps") or [], res.get("manifests") or {}) if HOSTING else []
+                for r in (res.get("requests") or [])[:5]:
+                    results.append(cloud_handle(r))
+                if results:
+                    wait = 0
             except urllib.error.HTTPError as e:
                 if e.code in (401, 403):
                     log(f"Hosting: Schlüssel abgelehnt ({e.code}) – Hosting pausiert 10 Min.")
@@ -502,6 +775,7 @@ class Host:
                 time.sleep(1)
         for a in self.apps.values():
             a.stop()
+        App._kill(tunnel)
 
     def apply(self, desired, manifests):
         need = []
@@ -555,9 +829,9 @@ def main():
         psutil.cpu_percent(interval=None)  # erste Messung initialisieren
     else:
         _proc_cpu()
-    log(f"gestartet v{VERSION} (Intervall {INTERVAL}s, psutil={'ja' if psutil else 'nein'}, Dienste={len(SERVICES)}, Hosting={'an' if HOSTING else 'aus'})")
+    log(f"gestartet v{VERSION} (Intervall {INTERVAL}s, psutil={'ja' if psutil else 'nein'}, Dienste={len(SERVICES)}, Hosting={'an' if HOSTING else 'aus'}, Dateien={'an' if FILES else 'aus'})")
     host_thread = None
-    if HOSTING:
+    if HOSTING or FILES:
         host_thread = threading.Thread(target=Host().loop, name="hosting", daemon=True)
         host_thread.start()
     backoff, info_every, n = INTERVAL, max(1, 600 // INTERVAL), 0

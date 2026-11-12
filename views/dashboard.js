@@ -6,6 +6,7 @@ import { newProject, newModule, uploadDialog, connectServer, newEvent, syncHelp,
 import { maintenanceBanner } from "./jopml-admin.js";
 import { syncCenter } from "../lib/sync.js";
 import { viewToggle, charts } from "../lib/viewmode.js";
+import { nextUp } from "../lib/nextup.js";
 import { donut, lineChart, PALETTE } from "../lib/charts.js";
 
 export const WIDGETS = {
@@ -103,6 +104,7 @@ export default async function dashboard({ user }) {
     maintenanceBanner(cfg),
     h("div.page-head", h("div", h("h1", `${hello}${name ? ", " + name : ""}`), h("p", `${fmtNum(o.projects_total)} Projekte · ${o.servers_online}/${o.servers_total} Server online${o.events_upcoming ? ` · ${o.events_upcoming} Event(s) geplant` : ""} · ${fmtNum(o.notifications_unread)} ungelesene Hinweise`)),
       h("div.actions", viewToggle(), h("a.btn.ghost", { href: "#/settings?tab=dashboard" }, icon("dashboard"), "Anpassen"), h("button.btn.primary", { onclick: () => newProject() }, icon("plus"), "Neues Projekt"))),
+    nextUp(),
     h("div.grid.dash", order.filter((k) => !hidden.has(k)).map((k) => W[k]())));
 }
 

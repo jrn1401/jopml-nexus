@@ -4,6 +4,7 @@ import { h, icon, stat, fmtNum, fmtBytes, fmtAgo, fmtCompact, naNote, empty, toa
 import { barChart, donut, PALETTE } from "../lib/charts.js";
 import { timeline, fileRow, lazy } from "../lib/modules.js";
 import { uploadDialog, openAssistant } from "../lib/actions.js";
+import { releaseChecklist } from "../lib/nextup.js";
 import { maintenanceBanner, controlCard, aiCheckCard, budgetCard, onlineCard, ticketsCard, reportsCard, errorGroupsCard } from "./jopml-admin.js";
 
 export default async function jopmlView() {
@@ -32,6 +33,7 @@ export default async function jopmlView() {
     h("div.page-head", h("div", h("h1", "JOPML"), h("p", "Jaron's OP Makro – Launcher, Community und KI-Hilfe · Supabase-Projekt „jopml“")),
       h("div.actions", project ? h("a.btn.ghost", { href: `#/projects/${project.id}` }, icon("folder"), "Projektseite") : null,
         h("button.btn", { onclick: () => openAssistant(project?.id ?? null) }, icon("bot"), "Fragen"), syncBtn)),
+    h("div", { style: { marginBottom: "16px" } }, releaseChecklist()),
     !ok ? naNote(`JOPML-Admin-Daten nicht verfügbar: ${ov.__err}`, "alert") : h("div.stack",
       h("div.grid.g-4",
         stat("Registrierte Nutzer", fmtNum(ov.registered), { ic: "users", sub: `+${fmtNum(ov.new_7d)} in 7 Tagen` }),
