@@ -317,6 +317,7 @@ function openQuick() {
     ["upload", "Datei hochladen", () => uploadDialog()], ["server", "Server verbinden", () => connectServer()],
     ["check", "Neue Aufgabe", () => { location.hash = "#/tasks"; }], ["link", "Marketing-Link anlegen", () => { location.hash = "#/links"; }],
     ["calendar", "Event erstellen", () => newEvent()], ["refresh", "Projekt synchronisieren", () => syncHelp()], ["book", "Handbuch öffnen", () => { location.hash = "#/help"; }],
+    ["sparkles", "KI-Wochenbericht", () => import("./lib/nextup.js").then((m) => m.weeklyReport())],
     ["bot", "KI-Assistent öffnen", () => openAssistant()],
   ];
   const m = modal("Schnellaktionen", h("div.list", items.map(([ic, t, fn]) =>

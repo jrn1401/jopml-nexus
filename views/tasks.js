@@ -92,6 +92,10 @@ export default async function tasksView() {
       h("div.row.wrap.between", { style: { marginBottom: "14px", gap: "10px" } },
         seg(filter, (k) => { filter = k; local.set("taskFilter", k); draw(); }, [["open", `Offen (${open.length})`], ["over", `Überfällig (${over.length})`], ["week", "Diese Woche"], ["done", "Erledigt"], ["all", "Alle"]]),
         seg(view, (k) => { view = k; local.set("taskView", k); draw(); }, [["list", "Liste"], ["cal", "Kalender"]])),
+      h("form.row", { style: { gap: "8px", marginBottom: "14px" }, onsubmit: async (e) => {
+        e.preventDefault(); const inp = e.target.querySelector("input"), t = inp.value.trim(); if (!t) return;
+        try { await q(sb.from("cc_tasks").insert({ title: t.slice(0, 200) })); inp.value = ""; toast("Aufgabe angelegt"); load(); } catch (er) { toastErr(er); } } },
+        h("input.input", { placeholder: "Schnell notieren: Aufgabe eintippen und Enter drücken …", "aria-label": "Neue Aufgabe", maxlength: 200 }), h("button.btn", { type: "submit" }, icon("plus"), "Hinzufügen")),
       view === "cal" ? calendar(all)
         : list.length ? h("div.stack", { style: { gap: "14px" } }, Object.entries(groups).map(([g, items]) => h("section.card",
           h("div.card-head", h("h3", g), h("span.sub", `${items.filter((t) => !t.done).length} offen`)), h("div.card-body", h("div.list", items.map(row))))))
