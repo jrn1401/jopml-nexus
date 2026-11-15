@@ -1,7 +1,7 @@
 // Zusatzfunktionen für alle Konten (nicht nur Admin): eigene Aufgaben, Erste-Schritte-Liste, kurzes Handbuch.
 // Daten liegen in nx_tasks (RLS: owner_id = auth.uid()), höchstens 500 Aufgaben pro Konto.
 import { sb, q, local, nx } from "../lib/api.js";
-import { h, icon, toast, toastErr, fmtDateTime, empty, formModal, confirmDialog, debounce } from "../lib/ui.js";
+import { h, icon, toast, toastErr, fmtDateTime, empty, formModal, confirmDialog, debounce, errMsg } from "../lib/ui.js";
 
 const PRIO = [["2", "Wichtig"], ["1", "Normal"], ["0", "Irgendwann"]];
 
@@ -67,7 +67,7 @@ export async function tasksPage() {
   draw();
   return h("div",
     h("div.page-head", h("div", h("h1", "Aufgaben"), h("p", "Deine persönliche To-do-Liste – nur du siehst sie."), counter),
-      h("button.btn.primary", { onclick: () => edit() }, icon("plus"), "Neue Aufgabe")),
+      h("div.actions", h("button.btn", { onclick: () => aiPrioritize(rows.filter((t) => !t.done)) }, icon("bot"), "KI: Was zuerst?"), h("button.btn.primary", { onclick: () => edit() }, icon("plus"), "Neue Aufgabe"))),
     h("section.card", h("div.card-body",
       quick,
       h("div.row.wrap", { style: { justifyContent: "space-between", gap: "10px", margin: "12px 0 6px" } }, tabs, search),
@@ -191,4 +191,17 @@ Wähle GENAU EINE Aktion und antworte NUR mit JSON:
     h("div.row.wrap", { style: { gap: "6px", marginTop: "8px" } }, ["Was steht diese Woche an?", "Plane einen Geburtstag für 20 Leute", "Morgen 18 Uhr Training"].map((t) =>
       h("button.chip", { type: "button", onclick: () => { input.value = t; run(t); } }, t))),
     out));
+}
+
+// KI sortiert offene Aufgaben nach Dringlichkeit und Wirkung
+async function aiPrioritize(open) {
+  if (!open.length) return toast("Keine offenen Aufgaben – alles erledigt!");
+  const { modal } = await import("../lib/ui.js");
+  const box = h("div.faint", "Die KI sortiert …");
+  modal("Was zuerst?", box, { wide: true });
+  const list = open.slice(0, 60).map((t, i) => `${i + 1}. ${t.title}${t.due ? ` (fällig ${new Date(t.due).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })})` : ""}${t.priority === 2 ? " [wichtig]" : ""}`).join("\n");
+  try {
+    const r = await nx("ai", { history: [], question: `Jetzt: ${new Date().toLocaleString("de-DE")}. Hier sind meine offenen Aufgaben:\n${list}\nSag mir in Markdown: 1) die 3 Aufgaben, mit denen ich jetzt anfangen sollte (je 1 kurzer Grund), 2) was warten kann, 3) was ich zusammenfassen oder streichen könnte. Kurz und konkret, Deutsch.` });
+    box.className = ""; box.replaceChildren(h("div", { style: { whiteSpace: "pre-wrap", lineHeight: 1.55 } }, r.answer || "Keine Antwort."));
+  } catch (e) { box.replaceChildren(h("div.banner.bad", errMsg(e))); }
 }

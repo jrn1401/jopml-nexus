@@ -2,7 +2,7 @@
 // Planen, Aufgaben, Ablauf, Kosten & Einnahmen, Gäste, Schichten, Tickets (von Hand oder live über Eventfrog-Verbindung),
 // teilen (Ticket-Live oder Planung) und mit der KI planen lassen.
 import { sb, q, nx, local } from "../lib/api.js";
-import { h, icon, toast, toastErr, fmtDateTime, fmtEUR, empty, formModal, confirmDialog, errMsg } from "../lib/ui.js";
+import { h, icon, toast, toastErr, fmtDateTime, fmtEUR, empty, formModal, confirmDialog, errMsg, modal } from "../lib/ui.js";
 import { openShareDialog } from "../lib/share.js";
 
 const STATUS = { idea: "Idee", planning: "In Planung", confirmed: "Fest", done: "Vorbei", cancelled: "Abgesagt" };
@@ -182,6 +182,7 @@ export async function eventPage(id) {
         h("div.actions",
           h("button.btn.primary", { onclick: () => openShareDialog("nx_event", id, ev.name, { admin: false }) }, icon("users"), "Teilen"),
           h("button.btn", { onclick: () => aiDialog(id, () => reload()) }, icon("bot"), "KI-Ideen"),
+          h("button.btn", { onclick: () => aiCheck(ev, rows, ticketsOf(ev, linked)) }, icon("sparkles"), "KI-Check"),
           h("button.btn.ghost", { onclick: () => eventForm(ev, (e) => { ev = e; draw(); }) }, icon("edit"), "Bearbeiten"),
           h("button.btn.ghost", { "aria-label": "Event löschen", onclick: async () => {
             if (!(await confirmDialog("Event löschen?", `„${ev.name}“ mit allen Einträgen und Freigaben wird gelöscht.`, { ok: "Löschen" }))) return;
@@ -193,4 +194,20 @@ export async function eventPage(id) {
   }
   try { draw(); } catch (e) { root.replaceChildren(h("div.banner.bad", errMsg(e))); }
   return root;
+}
+
+// KI prüft das Event: Was fehlt, Risiken, Budget, nächste Schritte
+async function aiCheck(ev, rows, t) {
+  const box = h("div", h("div.row", { style: { gap: "8px" } }, h("div.spinner", { style: { width: "16px", height: "16px" } }), h("span.faint", "Die KI prüft dein Event …")));
+  modal("KI-Check", box, { wide: true });
+  const by = (k) => rows.filter((r) => r.kind === k);
+  const sum = (k) => by(k).reduce((a, r) => a + (+r.amount || 0), 0);
+  const facts = [`Event: ${ev.name}; Datum: ${ev.event_date || "offen"}; Ort: ${ev.location || "offen"}; Plätze: ${ev.capacity ?? "?"}; Ticketpreis: ${ev.ticket_price ?? "?"} €; Stand: ${ev.status}`,
+    `Tickets verkauft: ${t.sold || 0}${t.revenue ? `, Umsatz ${t.revenue} €` : ""}`, `Kosten gesamt: ${sum("cost")} €; weitere Einnahmen: ${sum("income")} €`,
+    `Offene Aufgaben: ${by("task").filter((r) => !r.done).map((r) => r.title).join("; ") || "keine"}`, `Erledigt: ${by("task").filter((r) => r.done).length}`,
+    `Ablauf: ${by("schedule").map((r) => r.title).join("; ") || "leer"}`, `Schichten: ${by("shift").length}; Gäste auf Liste: ${by("guest").length}`].join("\n");
+  try {
+    const r = await nx("ai", { history: [], question: `Prüfe dieses Event wie ein erfahrener Veranstalter. Antworte auf Deutsch, kurz, in Markdown mit den Abschnitten „Was gut ist“, „Was fehlt“, „Geld“ (Break-even, Risiken) und „Nächste 3 Schritte“. Nur auf Basis dieser Daten, nichts erfinden:\n${facts}` });
+    box.replaceChildren(h("div.md", { style: { whiteSpace: "pre-wrap", lineHeight: 1.55 } }, r.answer || "Keine Antwort."), h("div.faint", { style: { fontSize: "12px", marginTop: "10px" } }, `KI: ${r.provider || ""} ${r.model || ""}`.trim()));
+  } catch (e) { box.replaceChildren(h("div.banner.bad", errMsg(e))); }
 }

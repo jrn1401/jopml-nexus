@@ -46,6 +46,9 @@ async function boot() {
   const oauthErr = params.get("error_description") || hashParams.get("error_description");
   if (hashParams.get("error")) history.replaceState(null, "", location.pathname + location.search);
   // Gäste-Link: funktioniert ohne Anmeldung
+  // Nach Google-Anmeldung zurück zum geteilten Link (der Hash geht bei der Weiterleitung verloren)
+  const back = localStorage.getItem("cc:after-login");
+  if (back && /^#\/s\/[0-9a-f]{32}$/.test(back)) { localStorage.removeItem("cc:after-login"); if (!location.hash || location.hash === "#") history.replaceState(null, "", back); }
   const link = location.hash.match(/^#\/s\/([0-9a-f]{32})$/);
   if (link) { const { renderLink } = await import("./views/guest.js"); return renderLink(root, link[1]); }
   // Öffentliche Statusseite einer Website (#/status/<key>)

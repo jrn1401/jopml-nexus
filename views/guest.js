@@ -80,6 +80,15 @@ function ticketBlock(t, { compact = false } = {}) {
             h("span.faint", { style: { fontSize: "10.5px" } }, new Date(d.d).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }))))))) : null));
 }
 
+// Geld auf einen Blick (nur wenn freigegeben)
+function financeCard(f) {
+  const row = (k, v, strong) => (v === null || v === undefined ? null : h("div.row.between", strong ? { style: { borderTop: "1px solid var(--line)", paddingTop: "8px", marginTop: "4px" } } : null, h("span", k),
+    h("strong", { style: strong ? { color: v >= 0 ? "var(--ok)" : "var(--bad)", fontSize: "18px" } : null }, fmtEUR(v))));
+  return h("section.card", { style: { marginBottom: "16px" } }, h("div.card-head", h("h3.row", icon("wallet"), "Einnahmen & Kosten")),
+    h("div.card-body.stack", { style: { gap: "8px", fontSize: "14.5px" } },
+      row("Ticket-Einnahmen", f.ticket_revenue), row("Weitere Einnahmen", f.income), row("Kosten", f.costs), row("Ergebnis", f.result, true)));
+}
+
 // Inhalt einer Freigabe darstellen. ctx: { token } für Links oder { shareId } für angemeldete Gäste
 export function renderShared(p, ctx, reload) {
   if (p.type === "tickets") {
@@ -95,8 +104,8 @@ export function renderShared(p, ctx, reload) {
     h("div.li-icon", icon("file")), h("div.li-main", h("div.li-title", f.name), h("div.li-sub", `${f.path} · ${fmtBytes(f.size)}`)),
     h("button.btn.sm", { onclick: async (e) => { const ct = e.currentTarget; ct.disabled = true; try { window.open(await fileUrl(ctx, f.id), "_blank", "noopener"); } catch (er) { toastErr(er); } finally { ct.disabled = false; } } }, icon("download"), "Laden"))))
     : h("div.faint", "Keine Dateien.");
-  if (p.type === "event") {
-    const ev = p.event, items = p.items || [];
+  if (p.type === "event" || p.type === "board") {
+    const ev = p.event, items = p.items || [], board = p.type === "board";
     const sec = (kind) => {
       const list = items.filter((i) => i.kind === kind);
       if (!list.length) return null;
@@ -116,11 +125,13 @@ export function renderShared(p, ctx, reload) {
       h("div.page-head", h("div", h("h1", ev.name), h("div.row.wrap", { style: { gap: "8px", marginTop: "8px" } }, badge(EVENT_STATUS, ev.status),
         h("span.faint", { style: { fontSize: "13px" } }, [ev.date ? fmtDateTime(ev.date) : "ohne Datum", ev.location].filter(Boolean).join(" · "))))),
       ms !== null && ms > 0 ? h("div.countdown", { style: { maxWidth: "360px" } }, h("div", h("strong", Math.floor(ms / 86400_000)), h("span", "Tage")), h("div", h("strong", Math.floor((ms % 86400_000) / 3600_000)), h("span", "Std."))) : null,
-      p.tickets && p.tickets.sold ? h("div", { style: { marginBottom: "16px" } }, ticketBlock(p.tickets, { compact: true })) : null,
+      p.note || p.share?.note ? h("div.na-note", { style: { marginBottom: "16px" } }, icon("info"), h("div", { style: { whiteSpace: "pre-wrap" } }, p.note || p.share.note)) : null,
+      p.tickets && (p.tickets.sold !== undefined || p.tickets.revenue !== undefined) ? h("div", { style: { marginBottom: "16px" } }, ticketBlock(p.tickets, { compact: !board })) : null,
+      p.finance ? financeCard(p.finance) : null,
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(ev.description)) : null,
       canTick ? h("div.na-note", { style: { marginBottom: "16px" } }, icon("check"), h("div", p.share.permission === "edit" ? "Du arbeitest mit: Aufgaben abhaken und neue Aufgaben, Schichten und Gäste anlegen." : "Du darfst Aufgaben abhaken.")) : null,
       h("div.grid.g-2", ["task", "schedule", "location", "tech", "guest", "cost", "income"].map(sec)),
-      teamBlock(ctx, reload));
+      board ? null : teamBlock(ctx, reload));
   }
   if (p.type === "project" || p.type === "site") {
     const pr = p.project, t = p.tickets;
@@ -157,9 +168,18 @@ export async function renderLink(root, token) {
       if (!p) throw new Error("not_shared");
       if (p.share?.permission === "door") { const { doorPanel } = await import("./door.js"); clear(root, frame(null, doorPanel({ token }))); document.title = `Abendkasse · ${CONFIG.appName}`; return; }
       clear(root, frame(null, renderShared(p, { token }, draw)));
-      if (p.type === "tickets" || p.type === "site") liveRefresh(root, () => rpc("cc_link_refresh", { p_token: token }), (np) => renderShared(np, { token }, draw));
-      document.title = `${p.event?.name || p.project?.name || p.file?.name} · ${CONFIG.appName}`;
+      if (["tickets", "site", "board"].includes(p.type)) liveRefresh(root, () => rpc("cc_link_refresh", { p_token: token }), (np) => renderShared(np, { token }, draw));
+      document.title = `${p.event?.name || p.project?.name || p.file?.name || "Geteilt"} · ${CONFIG.appName}`;
     } catch (e) {
+      if (/restricted/.test(errMsg(e))) {
+        const { data: { session } } = await sb.auth.getSession();
+        clear(root, frame(null, empty("lock", "Nur für bestimmte Personen", session ? "Dein Google-Konto ist für diesen Link nicht freigegeben. Bitte die Person, die ihn geschickt hat, dich hinzuzufügen." : "Melde dich mit dem Google-Konto an, für das der Link freigegeben wurde.",
+          session ? h("button.btn", { onclick: async () => { await sb.auth.signOut(); location.reload(); } }, "Anderes Konto") : h("button.btn.primary", { onclick: async () => {
+            localStorage.setItem("cc:after-login", location.hash);
+            await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname, queryParams: { prompt: "select_account" } } });
+          } }, "Mit Google anmelden"))));
+        return;
+      }
       clear(root, frame(null, empty("lock", "Link ungültig oder abgelaufen", /not_shared/.test(errMsg(e)) ? "Bitte die Person, die dir den Link geschickt hat, um einen neuen Link." : errMsg(e))));
     }
   };
@@ -179,7 +199,7 @@ export async function renderGuest(root, who) {
         const p = await rpc("cc_guest_open", { p_share: m[1] });
         body.replaceChildren(h("div.crumb", h("a", { href: "#/" }, "Mit dir geteilt"), icon("chevronR"), h("span", p.event?.name || p.project?.name || p.file?.name)),
           renderShared(p, { shareId: m[1] }, null));
-        if (p.type === "tickets") liveRefresh(body, () => rpc("cc_guest_open", { p_share: m[1] }), (np) => [h("div.crumb", h("a", { href: "#/" }, "Mit dir geteilt"), icon("chevronR"), h("span", np.event?.name || "")), renderShared(np, { shareId: m[1] }, null)], 120_000);
+        if (["tickets", "board"].includes(p.type)) liveRefresh(body, () => rpc("cc_guest_open", { p_share: m[1] }), (np) => [h("div.crumb", h("a", { href: "#/" }, "Mit dir geteilt"), icon("chevronR"), h("span", np.event?.name || "")), renderShared(np, { shareId: m[1] }, null)], 120_000);
         return;
       }
       const list = await rpc("cc_guest_list");
