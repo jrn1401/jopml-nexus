@@ -13,6 +13,7 @@ import { openShareDialog } from "../lib/share.js";
 import { openAiDrawer, memoryDialog } from "../lib/assistant.js";
 import { viewToggle, charts } from "../lib/viewmode.js";
 import { donut, PALETTE } from "../lib/charts.js";
+import { tasksPage, tasksCard, firstSteps, helpPage } from "./wsextra.js";
 
 const KINDS = { all: ["Alle", "dashboard"], website: ["Websites", "globe"], repo: ["Repositories", "code"], event: ["Events", "calendar"], ai: ["KI", "sparkles"], database: ["Datenbanken", "server"], app: ["Apps", "box"], other: ["Sonstiges", "folder"] };
 const STATUS = { active: ["Aktiv", "b-ok"], error: ["Fehler", "b-bad"], building: ["Wird gebaut", "b-pri"], paused: ["Pausiert", "b-warn"], archived: ["Archiviert", "b-idle"] };
@@ -28,18 +29,18 @@ export async function renderWorkspace(root, who) {
   const body = h("main.content", { id: "content", tabindex: -1 });
   const top = h("header.guest-top",
     h("a.brand", { href: "#/" }, h("div.brand-mark", icon("logo")), h("div.brand-text", CONFIG.appName, h("small", "Mein Bereich"))),
-    h("nav.ws-nav", [["#/", "Übersicht"], ["#/websites", "Websites"], ["#/verbindungen", "Verbindungen"], ["#/geteilt", "Geteilt"], ["#/einstellungen", "Einstellungen"]].filter(([r]) => !(guest && ["#/verbindungen", "#/websites"].includes(r))).map(([href, t]) => h("a", { href, dataset: { r: href } }, t))),
+    h("nav.ws-nav", [["#/", "Übersicht"], ["#/aufgaben", "Aufgaben"], ["#/websites", "Websites"], ["#/verbindungen", "Verbindungen"], ["#/geteilt", "Geteilt"], ["#/hilfe", "Hilfe"], ["#/einstellungen", "Einstellungen"]].filter(([r]) => !(guest && ["#/verbindungen", "#/websites"].includes(r))).map(([href, t]) => h("a", { href, dataset: { r: href } }, t))),
     h("div.spacer"),
     h("button.icon-btn", { title: "KI-Assistent", "aria-label": "KI-Assistent", onclick: () => aiDrawer() }, icon("bot")),
     h("button.icon-btn", { title: "Verbinden", "aria-label": "Dienst verbinden", onclick: () => connect(show) }, icon("plus")),
     h("button.icon-btn", { title: who.email, "aria-label": "Profil", style: { padding: 0 }, onclick: () => (location.hash = "#/einstellungen") }, avatar));
-  clear(root, h("div.guest-wrap", top, body));
+  clear(root, h("a.skip-link", { href: "#content", onclick: (e) => { e.preventDefault(); body.focus(); } }, "Zum Inhalt springen"), h("div.guest-wrap", top, body));
 
   let seq = 0;
   async function show() {
     const hash = location.hash || "#/";
     const s = ++seq;
-    top.querySelectorAll(".ws-nav a").forEach((a) => a.classList.toggle("on", a.dataset.r === hash || (a.dataset.r === "#/geteilt" && hash.startsWith("#/g/")) || (a.dataset.r === "#/websites" && hash.startsWith("#/web/"))));
+    top.querySelectorAll(".ws-nav a").forEach((a) => { const on = a.dataset.r === hash || (a.dataset.r === "#/geteilt" && hash.startsWith("#/g/")) || (a.dataset.r === "#/websites" && hash.startsWith("#/web/")); a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
     body.replaceChildren(h("div.skel", { style: { height: "160px" } }));
     try {
       let node;
@@ -51,11 +52,14 @@ export async function renderWorkspace(root, who) {
       else if (hash === "#/websites") node = h("div", h("div.page-head", h("div", h("h1", "Websites"), h("p", "Live-Besucher, Erreichbarkeit und Netlify-Daten deiner Websites"))), await webList((r) => `#/web/${r.id}`));
       else if (/^#\/web\/[0-9a-f-]{36}$/.test(hash)) node = await sitePage(hash.slice(6));
       else if (hash === "#/geteilt") node = await sharedPage();
+      else if (hash === "#/aufgaben") node = await tasksPage();
+      else if (hash === "#/hilfe") node = helpPage((t) => aiDrawer(t));
       else if (hash === "#/einstellungen") node = settingsPage();
       else node = await overview();
       if (s !== seq) return;
       body.replaceChildren(node, leg ? null : legalLinks());
-      document.title = `${leg ? LEGAL_PAGES[leg[1]] : "Mein Bereich"} · ${CONFIG.appName}`;
+      document.title = `${leg ? LEGAL_PAGES[leg[1]] : (top.querySelector(".ws-nav a.on")?.textContent || "Mein Bereich")} · ${CONFIG.appName}`;
+      if (location.hash !== "#/" && document.activeElement?.closest?.(".ws-nav")) body.focus({ preventScroll: true });
     } catch (e) {
       if (s === seq) body.replaceChildren(empty("alert", "Konnte nicht geladen werden", /not_shared/.test(errMsg(e)) ? "Diese Freigabe gibt es nicht mehr." : errMsg(e), h("button.btn", { onclick: show }, icon("refresh"), "Erneut versuchen")));
     }
@@ -114,6 +118,11 @@ export async function renderWorkspace(root, who) {
       h("div.grid.g-4", { style: { marginBottom: "18px" } },
         statBox("Projekte", projects.length, "folder"), statBox("Verbindungen", conns.length, "link", err ? `${err} mit Fehler` : null),
         web.length ? statBox("Websites live", h("span.row", { style: { gap: "10px" } }, h("span.live-dot", { class: live ? "on" : "" }), String(live)), "globe", `${web.reduce((a, w) => a + (w.today_uv || 0), 0)} Besucher heute`) : statBox("Mit dir geteilt", shared.length, "users"), statBox("KI-Fragen heute", usage ? `${usage.requests_today}${usage.limit ? ` / ${usage.limit}` : ""}` : "–", "sparkles", usage?.limit ? "eigener KI-Schlüssel = ohne Limit" : null)),
+      firstSteps({ projects: projects.length, conns: conns.length, guest, shared: shared.length || 0 }),
+      h("div.grid.g-2", { style: { marginBottom: "16px" } }, await tasksCard(), h("section.card", h("div.card-head", h("h3", "Schnellzugriff")), h("div.card-body", h("div.list",
+        h("a.list-item", { href: "#/aufgaben" }, icon("check"), h("div.li-main", h("div.li-title", "Aufgabe notieren"))),
+        h("button.list-item", { onclick: () => aiDrawer() }, icon("bot"), h("div.li-main", h("div.li-title", "KI fragen"))),
+        h("a.list-item", { href: "#/hilfe" }, icon("info"), h("div.li-main", h("div.li-title", "Hilfe & Anleitungen"))))))),
       err ? h("div.banner.bad", { style: { marginBottom: "14px" } }, icon("alert"), h("div", `${err} Verbindung${err === 1 ? "" : "en"} mit Fehler – `, h("a", { href: "#/verbindungen" }, "ansehen"))) : null,
       charts() && projects.length ? h("div.grid.g-2", { style: { marginBottom: "16px" } },
         h("section.card", h("div.card-head", h("h3", "Projekte nach Art")), h("div.card-body", donut(Object.entries(counts).map(([k, n], i) => ({ name: KINDS[k]?.[0] || k, value: n, color: PALETTE[i % 6] })), { size: 110 }))),
@@ -198,7 +207,7 @@ export async function renderWorkspace(root, who) {
   }
 
   // ---------- KI-Assistent ----------
-  function aiDrawer(prefill = "") { openAiDrawer({ prefill, guest, storeKey: "ws:chat", onAction: show }); }
+  function aiDrawer(prefill = "") { local.set("ws:did-ai", true); openAiDrawer({ prefill, guest, storeKey: "ws:chat", onAction: show }); }
 
   window.addEventListener("hashchange", show);
   document.addEventListener("keydown", (e) => {

@@ -34,7 +34,7 @@ export default async function tasksView() {
     let token;
     try { token = await rpc("cc_ics_token", { p_reset: false }); } catch (e) { return toastErr(e); }
     const url = () => `${CONFIG.supabaseUrl}/functions/v1/nx-hub/ics/${token}.ics`;
-    const inp = h("input.input.mono", { readOnly: true, value: url(), onclick: (e) => e.target.select() });
+    const inp = h("input.input.mono", { readOnly: true, "aria-label": "Kalender-Adresse", value: url(), onclick: (e) => e.target.select() });
     modal("Kalender-Abo fürs Handy", h("div.stack",
       h("p", { style: { margin: 0 } }, "Mit diesem Link erscheinen alle Events, Aufgaben mit Frist, Schichten und Posting-Termine automatisch in deinem Kalender. Er aktualisiert sich etwa stündlich von selbst."),
       inp,

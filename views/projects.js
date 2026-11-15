@@ -56,7 +56,7 @@ export default async function projectsView({ query }) {
     h("div.page-head", h("div", h("h1", "Projekte"), h("p", `${rows.length} Projekte in allen Kategorien`)),
       h("div.actions", h("button.btn.primary", { onclick: () => newProject() }, icon("plus"), "Neues Projekt"))),
     h("div.row.wrap", { style: { marginBottom: "16px", gap: "8px" } },
-      h("div.search", { style: { maxWidth: "280px", cursor: "auto" } }, icon("search"), h("input", { value: st.q, placeholder: "Filtern …", style: { border: 0, background: "none", outline: "none", flex: 1, minWidth: 0 }, oninput: (e) => { st.q = e.target.value; draw(); } })),
+      h("div.search", { style: { maxWidth: "280px", cursor: "auto" } }, icon("search"), h("input", { value: st.q, placeholder: "Filtern …", "aria-label": "Projekte filtern", style: { border: 0, background: "none", outline: "none", flex: 1, minWidth: 0 }, oninput: (e) => { st.q = e.target.value; draw(); } })),
       sel("cat", Object.entries(CATEGORIES).map(([k, v]) => [k, v[0]]), "Alle Kategorien"),
       sel("status", Object.entries(PROJECT_STATUS).map(([k, v]) => [k, v[0]]), "Alle Status"),
       allTags.length ? sel("tag", allTags.map((t) => [t, t]), "Alle Tags") : null,

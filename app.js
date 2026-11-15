@@ -110,7 +110,7 @@ function renderLogin(error) {
     if (e) { guestBtn.disabled = false; return toast(/disabled|not enabled/i.test(e.message) ? "Gast-Zugang ist noch nicht freigeschaltet – bitte mit Google anmelden." : e.message, "err", 7000); }
     location.reload();
   } }, icon("users"), "Als Gast ausprobieren");
-  clear(root, h("div.login", h("div.card.login-card",
+  clear(root, h("main.login", h("div.card.login-card",
     h("div.brand-mark", icon("logo")),
     h("h1", CONFIG.appName), h("p", "Dein zentrales Control Center für Projekte, Server und KI."),
     btn, guestBtn,
@@ -171,7 +171,7 @@ function renderShell() {
   const net = () => offline.classList.toggle("hidden", navigator.onLine);
   window.addEventListener("online", () => { net(); poll(); }); window.addEventListener("offline", net); net();
   app.addEventListener("click", (e) => { if (e.target === app || e.target.closest(".nav a")) app.classList.remove("nav-open"); });
-  clear(root, app);
+  clear(root, h("a.skip-link", { href: "#content", onclick: (e) => { e.preventDefault(); content.focus(); } }, "Zum Inhalt springen"), app);
   shell = { app, nav, pinned, content, bellBadge, statusPill };
 
   for (const [group, items] of NAV_GROUPS) {
@@ -204,6 +204,9 @@ function renderShell() {
     const cur = location.hash.replace(/^#\/?/, "");
     if (["", "servers", "jopml"].includes(cur) && !document.querySelector(".overlay, .drawer") && !document.activeElement?.closest?.("input,textarea,select")) route(true);
   }, CONFIG.pollSeconds * 1000);
+  // Zurück im Tab: sofort aktualisieren statt auf den nächsten Takt zu warten
+  let lastVis = Date.now();
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Date.now() - lastVis > 60_000) poll(); lastVis = Date.now(); });
   document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && poll());
 }
 
@@ -222,7 +225,8 @@ function markActive() {
   const cur = location.hash.replace(/^#\/?/, "").split("?")[0];
   shell.app.querySelectorAll(".nav a[data-route], .bottom-nav a[data-route]").forEach((a) => {
     const r = a.dataset.route;
-    a.classList.toggle("active", r === "dashboard" ? cur === "" : cur === r || (cur.startsWith(r + "/") && !shell.pinned.querySelector(`[data-route="${cur}"]`)));
+    const on = r === "dashboard" ? cur === "" : cur === r || (cur.startsWith(r + "/") && !shell.pinned.querySelector(`[data-route="${cur}"]`));
+    a.classList.toggle("active", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
 }
 

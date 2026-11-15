@@ -145,8 +145,8 @@ export default async function settingsView({ query }) {
     };
     const showToken = (tok) => modal("Neuer API-Schlüssel", h("div.stack",
       naNote("Nur jetzt sichtbar – gespeichert wird lediglich ein SHA-256-Hash. Sicher ablegen (z. B. als Umgebungsvariable CC_API_KEY), nie in Git einchecken.", "key"),
-      h("div.row", h("input.input.mono", { value: tok, readonly: true, onfocus: (e) => e.target.select() }), h("button.btn", { onclick: () => copyText(tok) }, icon("copy"), "Kopieren")),
-      h("div.field", h("label", "API-Adresse"), h("div.row", h("input.input.mono", { value: `${CONFIG.supabaseUrl}/functions/v1/cc-api`, readonly: true }), h("button.btn", { onclick: () => copyText(`${CONFIG.supabaseUrl}/functions/v1/cc-api`) }, icon("copy"))))),
+      h("div.row", h("input.input.mono", { value: tok, readonly: true, "aria-label": "API-Token", onfocus: (e) => e.target.select() }), h("button.btn", { onclick: () => copyText(tok) }, icon("copy"), "Kopieren")),
+      h("div.field", h("label", "API-Adresse"), h("div.row", h("input.input.mono", { value: `${CONFIG.supabaseUrl}/functions/v1/cc-api`, readonly: true, "aria-label": "API-Adresse" }), h("button.btn", { onclick: () => copyText(`${CONFIG.supabaseUrl}/functions/v1/cc-api`) }, icon("copy"))))),
       { onClose: () => show("keys") });
     return h("div.card", h("div.card-head", h("h3", "API-Schlüssel"), h("button.btn.sm.primary", { onclick: create }, icon("plus"), "Neuer Schlüssel")),
       h("div.card-body", h("p.muted", { style: { marginTop: 0, fontSize: "13px" } }, "Für den Claude-Skill „jopml-project-integrator“, Serveragenten und eigene Apps. Jeder Schlüssel hat nur die gewählten Berechtigungen und ist auf 240 Anfragen pro Minute begrenzt."),

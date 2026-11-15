@@ -54,7 +54,7 @@ export default async function filesView({ query }) {
     h("div.page-head", h("div", h("h1", "Dateien"), h("p", `${fmtBytes(stored)} belegt${logical > stored ? ` · ${fmtBytes(logical - stored)} durch Deduplizierung gespart` : ""} · privater Speicher, nur für dich`)),
       h("div.actions", h("button.btn.primary", { onclick: up }, icon("upload"), "Hochladen"))),
     h("div.row.wrap", { style: { marginBottom: "16px", gap: "8px" } },
-      h("div.search", { style: { maxWidth: "320px", cursor: "auto" } }, icon("search"), h("input", { value: st.q, placeholder: "Dateiname oder Pfad …", style: { border: 0, background: "none", outline: "none", flex: 1, minWidth: 0 },
+      h("div.search", { style: { maxWidth: "320px", cursor: "auto" } }, icon("search"), h("input", { value: st.q, placeholder: "Dateiname oder Pfad …", "aria-label": "Dateien durchsuchen", style: { border: 0, background: "none", outline: "none", flex: 1, minWidth: 0 },
         oninput: debounce((e) => { st.q = e.target.value.trim(); reload(); }, 250) })),
       sel("project", projects.map((p) => [p.id, p.name]), "Alle Projekte"), sel("cat", CATS.map((c) => [c, c]), "Alle Kategorien"),
       sel("source", [["ui", "Upload"], ["skill", "Claude-Skill"], ["jopml", "JOPML"]], "Alle Quellen"), h("span", { style: { marginLeft: "auto" } }, info)),

@@ -36,7 +36,7 @@ export default async function securityView() {
                 h("li", "Kostenlose App „ntfy“ installieren (App Store / Google Play)."),
                 h("li", "In der App auf „+“ tippen und dieses Thema abonnieren:"),
                 h("li", "Unten „Test senden“ – die Nachricht muss auf dem Handy erscheinen.")),
-              h("div.row", { style: { gap: "8px" } }, h("input.input.mono", { readOnly: true, value: topic, onclick: (e) => e.target.select() }), h("button.btn", { onclick: () => copyText(topic) }, icon("copy"), "Kopieren")),
+              h("div.row", { style: { gap: "8px" } }, h("input.input.mono", { readOnly: true, "aria-label": "Push-Thema", value: topic, onclick: (e) => e.target.select() }), h("button.btn", { onclick: () => copyText(topic) }, icon("copy"), "Kopieren")),
               h("div.row.wrap", h("a.btn", { href: `https://ntfy.sh/${topic}`, target: "_blank", rel: "noopener noreferrer" }, icon("external"), "Im Browser abonnieren"),
                 h("button.btn.primary", { onclick: act("test") }, icon("send"), "Test senden"),
                 h("button.btn.ghost", { onclick: act("disable") }, "Ausschalten")),
