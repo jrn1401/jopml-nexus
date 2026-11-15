@@ -15,6 +15,7 @@ import { viewToggle, charts } from "../lib/viewmode.js";
 import { donut, PALETTE } from "../lib/charts.js";
 import { tasksPage, tasksCard, firstSteps, helpPage, interestsCard, aiCommand } from "./wsextra.js";
 import { eventsPage, eventPage, aiPlan } from "./wsevents.js";
+import { projectPage, importDialog } from "./wsproject.js";
 
 const KINDS = { all: ["Alle", "dashboard"], website: ["Websites", "globe"], repo: ["Repositories", "code"], event: ["Events", "calendar"], ai: ["KI", "sparkles"], database: ["Datenbanken", "server"], app: ["Apps", "box"], other: ["Sonstiges", "folder"] };
 const STATUS = { active: ["Aktiv", "b-ok"], error: ["Fehler", "b-bad"], building: ["Wird gebaut", "b-pri"], paused: ["Pausiert", "b-warn"], archived: ["Archiviert", "b-idle"] };
@@ -79,6 +80,7 @@ export async function renderWorkspace(root, who) {
       else if (hash === "#/geteilt" && feat("shares")) node = await sharedPage();
       else if (hash === "#/aufgaben" && feat("tasks")) node = await tasksPage();
       else if (hash === "#/events" && feat("events")) node = await eventsPage();
+      else if (/^#\/p\/[0-9a-f-]{36}$/.test(hash)) node = await projectPage(hash.slice(4), { ask: feat("ai") ? (t) => aiDrawer(t) : null });
       else if (/^#\/events\/[0-9a-f-]{36}$/.test(hash) && feat("events")) node = await eventPage(hash.slice(9));
       else if (hash === "#/hilfe" && feat("help")) node = helpPage((t) => aiDrawer(t));
       else if (hash === "#/einstellungen") node = settingsPage();
@@ -109,14 +111,14 @@ export async function renderWorkspace(root, who) {
       const list = projects.filter((p) => (kind === "all" || p.kind === kind) && (!term || `${p.name} ${p.description} ${p.url ?? ""} ${p.provider}`.toLowerCase().includes(term)));
       grid.replaceChildren(...(list.length ? list.map(card) : [h("div.card", { style: { gridColumn: "1 / -1" } }, projects.length ? empty("search", "Nichts gefunden", "Anderen Filter oder Suchbegriff probieren.")
         : empty("link", "Noch keine Projekte", "Verbinde Netlify, GitHub, Vercel, Supabase oder Eventfrog – deine Websites, Repos und Events erscheinen dann automatisch hier. Oder lege ein Projekt von Hand an.",
-          h("div.row", { style: { justifyContent: "center", gap: "8px" } }, h("button.btn.primary", { onclick: () => connect(show) }, icon("link"), "Dienst verbinden"), h("button.btn", { onclick: () => editProject() }, icon("plus"), "Von Hand"))))]));
+          h("div.row", { style: { justifyContent: "center", gap: "8px" } }, h("button.btn.primary", { onclick: () => connect(show) }, icon("link"), "Dienst verbinden"), h("button.btn", { onclick: () => importDialog() }, icon("sparkles"), "Aus Claude/Text einfügen"), h("button.btn", { onclick: () => editProject() }, icon("plus"), "Von Hand"))))]));
     }
     const card = (p) => {
       const t = p.metadata?.tickets;
       return h("article.card.ws-card",
         h("div.row", { style: { gap: "10px", alignItems: "flex-start" } },
           h("div.li-icon", icon(KINDS[p.kind]?.[1] || "folder")),
-          h("div.li-main", h("div.li-title", p.name), h("div.li-sub", [PNAME[p.provider] || (p.provider === "manual" ? "Von Hand" : p.provider), `aktualisiert ${fmtAgo(p.updated_at)}`].join(" · "))),
+          h("div.li-main", h("a.li-title", { href: `#/p/${p.id}`, style: { color: "inherit" } }, p.name), h("div.li-sub", [PNAME[p.provider] || (p.provider === "manual" ? "Von Hand" : p.provider), `aktualisiert ${fmtAgo(p.updated_at)}`].join(" · "))),
           h("button.icon-btn.sm", { title: p.pinned ? "Lösen" : "Anheften", "aria-label": p.pinned ? "Lösen" : "Anheften", class: p.pinned ? "on" : "", onclick: async () => { try { await q(sb.from("nx_projects").update({ pinned: !p.pinned }).eq("id", p.id)); show(); } catch (e) { toastErr(e); } } }, icon("pin"))),
         p.description ? h("p.ws-desc", p.description.slice(0, 220)) : null,
         t ? h("div.row.wrap.faint", { style: { gap: "12px", fontSize: "12.5px" } }, h("span", `${t.sold ?? 0} Tickets`), t.revenue !== undefined ? h("span", fmtEUR(t.revenue)) : null, p.metadata?.date ? h("span", fmtDateTime(p.metadata.date)) : null) : null,
@@ -150,6 +152,7 @@ export async function renderWorkspace(root, who) {
       firstSteps({ projects: projects.length, conns: conns.length, guest, shared: shared.length || 0 }),
       h("div.grid.g-2", { style: { marginBottom: "16px" } }, feat("tasks") ? await tasksCard() : null, h("section.card", h("div.card-head", h("h3", "Schnellzugriff")), h("div.card-body", h("div.list",
         h("a.list-item", { href: "#/aufgaben" }, icon("check"), h("div.li-main", h("div.li-title", "Aufgabe notieren"))),
+        h("button.list-item", { onclick: () => importDialog() }, icon("sparkles"), h("div.li-main", h("div.li-title", "Aus Claude oder Text einfügen"), h("div.li-sub", "Notizen, Zahlen, Tabellen → übersichtliche Kacheln"))),
         h("button.list-item", { onclick: () => aiDrawer() }, icon("bot"), h("div.li-main", h("div.li-title", "KI fragen"))),
         h("a.list-item", { href: "#/hilfe" }, icon("info"), h("div.li-main", h("div.li-title", "Hilfe & Anleitungen"))))))),
       err ? h("div.banner.bad", { style: { marginBottom: "14px" } }, icon("alert"), h("div", `${err} Verbindung${err === 1 ? "" : "en"} mit Fehler – `, h("a", { href: "#/verbindungen" }, "ansehen"))) : null,

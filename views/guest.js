@@ -4,6 +4,7 @@ import { h, icon, clear, badge, EVENT_STATUS, fmtDateTime, fmtEUR, fmtBytes, fmt
 import { LOC_STATUS } from "./event.js";
 import { CONFIG } from "../config.js";
 import { webSharedBlock } from "../lib/web.js";
+import { staticWidgets } from "../lib/modules.js";
 
 const SEC = { task: ["Aufgaben", "check"], schedule: ["Ablauf", "clock"], location: ["Location", "pin"], tech: ["Technik", "zap"], guest: ["Gästeliste", "users"], cost: ["Kosten", "wallet"], income: ["Einnahmen", "chart"] };
 
@@ -141,6 +142,8 @@ export function renderShared(p, ctx, reload) {
       t ? h("div.grid.g-3", { style: { marginBottom: "16px" } }, h("div.card.stat", h("div.k", icon("ticket"), "Tickets verkauft"), h("div.v", String(t.sold ?? 0))),
         h("div.card.stat", h("div.k", icon("wallet"), "Umsatz"), h("div.v", fmtEUR(t.revenue))), h("div.card.stat", h("div.k", icon("clock"), "Stand"), h("div.v", { style: { fontSize: "16px" } }, fmtAgo(t.as_of)))) : null,
       pr.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(pr.description)) : null,
+      p.note ? h("div.na-note", { style: { marginBottom: "16px" } }, icon("info"), h("div", { style: { whiteSpace: "pre-wrap" } }, p.note)) : null,
+      p.widgets?.length ? h("div", { style: { marginBottom: "16px" } }, staticWidgets(p.widgets.map((x) => x.widget))) : null,
       h("div.grid.g-2",
         p.files?.length ? h("section.card", h("div.card-head", h("h3", "Dateien")), h("div.card-body", fileList(p.files || []))) : null,
         p.events?.length ? h("section.card", h("div.card-head", h("h3", "Events")), h("div.card-body", h("div.list", p.events.map((e) => h("div.list-item", h("div.li-icon", icon("calendar")),
