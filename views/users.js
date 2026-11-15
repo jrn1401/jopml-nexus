@@ -1,7 +1,7 @@
 // #/users – Benutzer & Rollen: alle Konten sehen, Admins ernennen (nur Eigentümer), sperren,
 // Funktionen für normale Konten an/aus, Ankündigung an alle, Speicher- und Gratis-Limits.
-import { rpc, local } from "../lib/api.js";
-import { h, icon, toast, toastErr, fmtAgo, fmtDate, fmtBytes, fmtNum, empty, confirmDialog, meter, stat, debounce } from "../lib/ui.js";
+import { rpc, local, api } from "../lib/api.js";
+import { h, icon, toast, toastErr, fmtAgo, fmtDate, fmtBytes, fmtNum, empty, confirmDialog, meter, stat, debounce, modal } from "../lib/ui.js";
 
 export const FEATURES = [
   ["events", "Events", "Eigene Events planen, Tickets, Budget, mit KI"],
@@ -41,6 +41,7 @@ export default async function usersView() {
         stp > 80 || dbp > 80 ? h("div.banner.bad", icon("alert"), h("div", `Achtung: ${stp > 80 ? "Dateispeicher" : "Datenbank"} ist zu über 80 % voll. Alte Dateien in „Dateien“ löschen oder auf Supabase Pro wechseln.`)) : null,
         h("div", h("div.row.between", h("span", "Datenbank"), h("span.muted", `${fmtBytes(limits.db_bytes)} von ${fmtBytes(limits.db_limit)}`)), meter(dbp)),
         h("div", h("div.row.between", h("span", "Dateispeicher"), h("span.muted", `${fmtBytes(limits.storage_bytes)} von ${fmtBytes(limits.storage_limit)}`)), meter(stp)),
+        h("div.row", { style: { justifyContent: "flex-end" } }, h("button.btn", { onclick: cleanupDialog }, icon("trash"), "Speicher aufräumen")),
         h("div.faint", { style: { fontSize: "12.5px" } }, "Grenzen des kostenlosen Supabase-Tarifs. Größte Tabellen: ", (limits.top_tables || []).slice(0, 4).map((t) => `${t.t} ${fmtBytes(t.bytes)}`).join(" · "))))));
   }
 
@@ -116,4 +117,29 @@ function announceCard(cur, save) {
         if (!text.value.trim()) return toast("Bitte Text eingeben", "err");
         save("announcement", { text: text.value.trim(), level: level.value, until: new Date(Date.now() + Number(days.value) * 864e5).toISOString(), at: new Date().toISOString() });
       } }, icon("bell"), "Veröffentlichen"))));
+}
+
+// Alte Installer-Versionen im Dateispeicher löschen (gesichert: version.json, aktuelle + vorletzte Version, neuester Mac-Installer)
+async function cleanupDialog() {
+  let inv;
+  try { inv = await api("list", {}, "nx-storage"); } catch (e) { return toastErr(e); }
+  const pick = new Set(inv.files.filter((f) => !f.keep).map((f) => f.name));
+  const total = h("strong");
+  const upd = () => { total.textContent = fmtBytes(inv.files.filter((f) => pick.has(f.name)).reduce((a, f) => a + f.size, 0)); };
+  const list = h("div.list", inv.files.map((f) => h("label.list-item", { style: { cursor: f.keep ? "default" : "pointer" } },
+    h("input", { type: "checkbox", disabled: f.keep, checked: pick.has(f.name), "aria-label": `${f.name} löschen`, onchange: (e) => { e.target.checked ? pick.add(f.name) : pick.delete(f.name); upd(); } }),
+    h("div.li-main", h("div.li-title", f.name), h("div.li-sub", `${fmtBytes(f.size)} · ${fmtDate(f.created_at)}`)),
+    f.keep ? h("span.badge.b-ok", "bleibt") : null)));
+  upd();
+  const m = modal("Speicher aufräumen", h("div.stack",
+    h("div.na-note", icon("info"), h("div", `Im Speicher liegen nur JOPML-Installer. Aktuelle Version: ${inv.current || "unbekannt"}. Grün markierte bleiben immer erhalten. Updates laden immer die aktuelle Version – alte Installer werden nicht mehr gebraucht.`)),
+    list,
+    h("div.row.between", h("span", "Wird frei: ", total),
+      h("button.btn.danger", { onclick: async (e) => {
+        if (!pick.size) return toast("Nichts ausgewählt", "err");
+        if (!(await confirmDialog("Endgültig löschen?", `${pick.size} Dateien werden dauerhaft gelöscht. Das lässt sich nicht rückgängig machen.`, { ok: "Endgültig löschen" }))) return;
+        e.currentTarget.disabled = true;
+        try { const r = await api("delete", { names: [...pick] }, "nx-storage"); toast(`${r.deleted.length} Dateien gelöscht – ${fmtBytes(r.freed)} frei`); m.close(); location.reload(); }
+        catch (er) { toastErr(er); e.currentTarget.disabled = false; }
+      } }, icon("trash"), "Ausgewählte löschen"))), { wide: true });
 }
