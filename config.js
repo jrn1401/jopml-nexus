@@ -4,6 +4,8 @@ export const CONFIG = {
   appName: "JOPML Nexus",
   supabaseUrl: "https://qeomooxbfpwvcprvmows.supabase.co",
   supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlb21vb3hiZnB3dmNwcnZtb3dzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwMzYyNjAsImV4cCI6MjEwODYxMjI2MH0.zMz_jQZKvLJlBrRFaZgGGdd_drllyoEyjTS7cnzGDGE",
+  // Öffentliche Google-Client-ID (keine geheime Angabe) – für den Google-Anmeldeknopf
+  googleClientId: "1074605193535-edplvmfud08vo1lebb2vb82s64r9m4aq.apps.googleusercontent.com",
   pollSeconds: 60,
   version: "2.0.0",
 };

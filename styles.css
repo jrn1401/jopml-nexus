@@ -705,3 +705,5 @@ details.list-item > summary { list-style: none; } details.list-item > summary::-
   .ws-tabbar a.on { color: var(--primary); }
   .guest-wrap:has(.ws-tabbar) .content { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
 }
+.gsi-box { display: flex; justify-content: center; min-height: 44px; margin-bottom: 10px; }
+.gbtn.gbtn-alt { background: transparent; color: var(--text-2); border: 1px solid var(--line-2); font-size: 13px; min-height: 40px; }

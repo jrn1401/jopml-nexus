@@ -108,6 +108,11 @@ function renderLogin(error) {
     if (e) { btn.disabled = false; toast(e.message, "err"); }
   };
   const linkIn = h("input.input", { placeholder: "Gäste-Link oder Code einfügen", "aria-label": "Gäste-Link", autocomplete: "off" });
+  // Googles eigener Knopf zeigt „JOPML“ bzw. unsere Website statt der Supabase-Adresse; der alte Knopf bleibt als Rückfall
+  const gbox = h("div.gsi-box");
+  import("./lib/gsi.js").then(({ googleButton }) => googleButton(gbox, { onDone: () => location.reload() }))
+    .then(() => { btn.classList.add("gbtn-alt"); btn.lastChild && (btn.lastChild.textContent = "Anderer Anmeldeweg"); })
+    .catch(() => gbox.remove());
   const btn = h("button.gbtn", { onclick: go },
     svgGoogle(), "Mit Google anmelden");
   // Gast-Konto: sofort ausprobieren ohne Google (anonyme Anmeldung, wird nach 7 Tagen gelöscht)
@@ -120,7 +125,7 @@ function renderLogin(error) {
   clear(root, h("main.login", h("div.card.login-card",
     h("img.login-cube", { src: "icons/cube.svg", alt: "", width: 180, height: 165, decoding: "async" }),
     h("h1", CONFIG.appName), h("p", "Dein KI-Kontrollzentrum: Server, Websites, Events und API-Schlüssel an einem Ort – übersichtlich ansehen und mit anderen teilen."),
-    btn, guestBtn,
+    gbox, btn, guestBtn,
     h("div.login-sub", "Jeder kann sich mit Google anmelden und bekommt einen eigenen, privaten Bereich: API-Schlüssel einfügen – Websites, Repos, Events und KI werden automatisch verknüpft. Als Gast kannst du alles 7 Tage lang ohne Konto ausprobieren."),
     h("form.login-link", { onsubmit: (e) => { e.preventDefault(); const m = linkIn.value.match(/([0-9a-f]{32})/); if (!m) return toast("Kein gültiger Gäste-Link", "err"); location.hash = `#/s/${m[1]}`; location.reload(); } },
       linkIn, h("button.btn", { type: "submit" }, "Öffnen")),
