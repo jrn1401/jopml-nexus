@@ -119,7 +119,7 @@ function renderLogin(error) {
   } }, icon("users"), "Als Gast ausprobieren");
   clear(root, h("main.login", h("div.card.login-card",
     h("img.login-cube", { src: "icons/cube.svg", alt: "", width: 180, height: 165, decoding: "async" }),
-    h("h1", CONFIG.appName), h("p", "Dein zentrales Control Center für Projekte, Server und KI."),
+    h("h1", CONFIG.appName), h("p", "Dein KI-Kontrollzentrum: Server, Websites, Events und API-Schlüssel an einem Ort – übersichtlich ansehen und mit anderen teilen."),
     btn, guestBtn,
     h("div.login-sub", "Jeder kann sich mit Google anmelden und bekommt einen eigenen, privaten Bereich: API-Schlüssel einfügen – Websites, Repos, Events und KI werden automatisch verknüpft. Als Gast kannst du alles 7 Tage lang ohne Konto ausprobieren."),
     h("form.login-link", { onsubmit: (e) => { e.preventDefault(); const m = linkIn.value.match(/([0-9a-f]{32})/); if (!m) return toast("Kein gültiger Gäste-Link", "err"); location.hash = `#/s/${m[1]}`; location.reload(); } },
