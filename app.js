@@ -49,6 +49,9 @@ async function boot() {
   // Nach Google-Anmeldung zurück zum geteilten Link (der Hash geht bei der Weiterleitung verloren)
   const back = localStorage.getItem("cc:after-login");
   if (back && /^#\/s\/[0-9a-f]{32}$/.test(back)) { localStorage.removeItem("cc:after-login"); if (!location.hash || location.hash === "#") history.replaceState(null, "", back); }
+  // Öffentliche Seiten: Claude-Skills und Launcher-Download
+  if (location.hash === "#/skills") { const { renderSkills } = await import("./views/public.js"); return renderSkills(root); }
+  if (location.hash === "#/download") { const { renderDownload } = await import("./views/public.js"); return renderDownload(root); }
   const link = location.hash.match(/^#\/s\/([0-9a-f]{32})$/);
   if (link) { const { renderLink } = await import("./views/guest.js"); return renderLink(root, link[1]); }
   // Öffentliche Statusseite einer Website (#/status/<key>)
@@ -131,6 +134,8 @@ function renderLogin(error) {
       linkIn, h("button.btn", { type: "submit" }, "Öffnen")),
     error ? h("div.login-err", error) : null,
     h("div.login-foot", icon("lock"), "Jeder sieht nur seine eigenen Daten · Schlüssel verschlüsselt gespeichert"),
+    h("div.login-sub", { style: { marginTop: "10px" } }, h("a", { href: "#/skills", onclick: (e) => { e.preventDefault(); location.hash = "#/skills"; location.reload(); } }, "Claude-Skills für Nexus"), " · ",
+      h("a", { href: "#/download", onclick: (e) => { e.preventDefault(); location.hash = "#/download"; location.reload(); } }, "JOPML Launcher herunterladen")),
     h("div.footer-links", h("a", { href: "#/impressum" }, "Impressum"), h("a", { href: "#/datenschutz" }, "Datenschutz"), h("a", { href: "#/nutzung" }, "Nutzungsbedingungen")))));
 }
 function svgGoogle() {

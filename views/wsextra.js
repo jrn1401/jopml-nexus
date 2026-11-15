@@ -117,6 +117,7 @@ const HELP = [
   ["KI-Assistent", "bot", "Roboter oben rechts. Frag in normalen Worten, z. B. „Welche Website hat Fehler?“. Die KI kennt nur deine eigenen Daten. Unter Einstellungen → KI-Wissen siehst und löschst du, was sie sich gemerkt hat."],
   ["Barrierefreiheit", "eye", "Einstellungen → Design: Schriftgröße bis 120 %, hoher Kontrast, Links unterstreichen, weniger Bewegung. Alles ist mit der Tastatur bedienbar: Tab springt weiter, „Zum Inhalt springen“ erscheint beim ersten Tab."],
   ["Daten & Datenschutz", "lock", "Einstellungen → Konto & Daten: alles als Datei exportieren oder vollständig löschen. Niemand sonst sieht deine Projekte, Aufgaben oder Schlüssel."],
+  ["Claude-Skills", "bot", "Mit den Skills „nexus-sync“ oder „nexus-board“ macht Claude aus jedem Chat einen Steckbrief, den du hier unter „Aus Claude oder Text einfügen“ einfügst. Anleitung, Download und ein fertiger Prompt: Übersicht → Schnellzugriff → „Claude-Skills für Nexus“ (oder #/skills)."],
   ["Wenn etwas hakt", "alert", "Seite neu laden (die App aktualisiert sich selbst). Steht eine Verbindung auf „Fehler“, ist meist der Schlüssel abgelaufen – unter Verbindungen neu einfügen. Sonst die KI fragen."],
 ];
 export function helpPage(ask) {

@@ -15,8 +15,16 @@ function normalize(o) {
   if (!p || typeof p !== "object" || !p.name) return null;
   const widgets = (Array.isArray(p.widgets) ? p.widgets : []).filter((w) => W_OK.includes(w?.type)).slice(0, 40)
     .map((w) => (w.type === "links" ? { ...w, items: (w.items || []).filter((l) => /^https?:\/\//.test(l.url || "")) } : w));
+  const tasks = (Array.isArray(p.tasks) ? p.tasks : []).slice(0, 100).map((t) => (typeof t === "string" ? { title: t } : t)).filter((t) => t?.title)
+    .map((t) => ({ title: String(t.title).slice(0, 300), due: t.due && !Number.isNaN(Date.parse(t.due)) ? new Date(t.due).toISOString() : null, priority: [0, 1, 2].includes(t.priority) ? t.priority : 1, done: !!t.done }));
+  const KINDS = ["task", "cost", "income", "guest", "schedule", "shift"];
+  const ev = p.event && p.event.name ? { name: String(p.event.name).slice(0, 160), event_date: p.event.date && !Number.isNaN(Date.parse(p.event.date)) ? new Date(p.event.date).toISOString() : null,
+    location: String(p.event.location || "").slice(0, 300), capacity: Number.isFinite(+p.event.capacity) && +p.event.capacity > 0 ? Math.round(+p.event.capacity) : null,
+    ticket_price: Number.isFinite(+p.event.ticket_price) && +p.event.ticket_price > 0 ? +p.event.ticket_price : null, description: String(p.event.description || "").slice(0, 8000),
+    items: (Array.isArray(p.event.items) ? p.event.items : []).slice(0, 300).filter((i) => i?.title && KINDS.includes(i.kind || "task")).map((i) => ({ kind: i.kind || "task", title: String(i.title).slice(0, 200),
+      note: String(i.note || "").slice(0, 2000), at: i.at && !Number.isNaN(Date.parse(i.at)) ? new Date(i.at).toISOString() : null, amount: Number.isFinite(+i.amount) && i.amount !== null && i.amount !== "" ? +i.amount : null, done: !!i.done })) } : null;
   return { name: String(p.name).slice(0, 120), slug: slugify(p.slug || p.name), kind: KIND_OK.includes(p.kind) ? p.kind : "other",
-    description: String(p.description || "").slice(0, 4000), url: /^https?:\/\//.test(p.url || "") ? String(p.url).slice(0, 500) : null, widgets };
+    description: String(p.description || "").slice(0, 4000), url: /^https?:\/\//.test(p.url || "") ? String(p.url).slice(0, 500) : null, widgets, tasks, event: ev };
 }
 const findJson = (text) => { const m = String(text).match(/\{[\s\S]*\}/); if (!m) return null; try { return JSON.parse(m[0]); } catch { return null; } };
 
@@ -35,6 +43,32 @@ Kacheln (nur passende, wichtigste zuerst, höchstens 10):
 Inhalt:
 ${String(text).slice(0, 12000)}` });
   return findJson(r.answer);
+}
+
+// Aufgaben und Event aus dem Steckbrief übernehmen – Gleiches wird aktualisiert statt doppelt angelegt
+async function saveExtras(b) {
+  const out = { tasks: 0, items: 0, event: null };
+  if (b.tasks?.length) {
+    const have = new Set((await q(sb.from("nx_tasks").select("title").limit(1000))).map((t) => t.title.toLowerCase()));
+    const rows = b.tasks.filter((t) => !have.has(t.title.toLowerCase()));
+    if (rows.length) { await q(sb.from("nx_tasks").insert(rows)); out.tasks = rows.length; }
+  }
+  if (b.event) {
+    const { items, ...ev } = b.event;
+    const found = (await q(sb.from("nx_events").select("id,name").ilike("name", ev.name).limit(1)))[0];
+    const patch = Object.fromEntries(Object.entries(ev).filter(([, v]) => v !== null && v !== ""));
+    const e = found ? await q(sb.from("nx_events").update(patch).eq("id", found.id).select("id").single()) : await q(sb.from("nx_events").insert(ev).select("id").single());
+    out.event = e.id;
+    if (items.length) {
+      const cur = await q(sb.from("nx_event_items").select("id,kind,title").eq("event_id", e.id));
+      for (const it of items) {
+        const hit = cur.find((c) => c.kind === it.kind && c.title.toLowerCase() === it.title.toLowerCase());
+        if (hit) await q(sb.from("nx_event_items").update(Object.fromEntries(Object.entries(it).filter(([, v]) => v !== null && v !== ""))).eq("id", hit.id));
+        else { await q(sb.from("nx_event_items").insert({ ...it, event_id: e.id })); out.items++; }
+      }
+    }
+  }
+  return out;
 }
 
 async function saveBoard(b) {
@@ -59,13 +93,17 @@ export function importDialog() {
       board = normalize(findJson(text));
       if (!board) { preview.replaceChildren(h("div.faint", "Kein Steckbrief erkannt – die KI macht daraus eine Übersicht …")); board = normalize(await textToBoard(text)); }
       if (!board) throw new Error("Daraus konnte keine Übersicht gemacht werden.");
-      preview.replaceChildren(h("div.card.card-pad", h("strong", board.name), h("div.faint", { style: { margin: "4px 0 10px" } }, `${board.widgets.length} Kacheln · ${board.description.slice(0, 160)}`), staticWidgets(board.widgets) || h("div.faint", "Keine Kacheln – nur Name und Beschreibung.")));
+      preview.replaceChildren(h("div.card.card-pad", h("strong", board.name), h("div.faint", { style: { margin: "4px 0 10px" } }, [`${board.widgets.length} Kacheln`, board.tasks.length ? `${board.tasks.length} Aufgaben` : null, board.event ? `Event „${board.event.name}“ mit ${board.event.items.length} Einträgen` : null, board.description.slice(0, 160)].filter(Boolean).join(" · ")), staticWidgets(board.widgets) || h("div.faint", "Keine Kacheln – nur Name und Beschreibung.")));
       save.hidden = false;
     } catch (e) { preview.replaceChildren(h("div.banner.bad", errMsg(e))); } finally { go.disabled = false; }
   };
   save.onclick = async () => {
     save.disabled = true;
-    try { const r = await saveBoard(board); toast(r.updated ? "Vorhandenes Projekt aktualisiert" : "Projekt angelegt"); m.close(); location.hash = `#/p/${r.id}`; }
+    try {
+      const r = await saveBoard(board); const x = await saveExtras(board);
+      toast([r.updated ? "Projekt aktualisiert" : "Projekt angelegt", x.tasks ? `${x.tasks} Aufgaben` : null, x.event ? `Event (${x.items} neue Einträge)` : null].filter(Boolean).join(" · "));
+      m.close(); location.hash = x.event && !board.widgets.length ? `#/events/${x.event}` : `#/p/${r.id}`;
+    }
     catch (e) { toastErr(e); save.disabled = false; }
   };
   const m = modal("Aus Claude oder Text einfügen", h("div.stack",

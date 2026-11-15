@@ -153,6 +153,8 @@ export async function renderWorkspace(root, who) {
       h("div.grid.g-2", { style: { marginBottom: "16px" } }, feat("tasks") ? await tasksCard() : null, h("section.card", h("div.card-head", h("h3", "Schnellzugriff")), h("div.card-body", h("div.list",
         h("a.list-item", { href: "#/aufgaben" }, icon("check"), h("div.li-main", h("div.li-title", "Aufgabe notieren"))),
         h("button.list-item", { onclick: () => importDialog() }, icon("sparkles"), h("div.li-main", h("div.li-title", "Aus Claude oder Text einfügen"), h("div.li-sub", "Notizen, Zahlen, Tabellen → übersichtliche Kacheln"))),
+        h("a.list-item", { href: "#/skills", onclick: (e) => { e.preventDefault(); location.hash = "#/skills"; location.reload(); } }, icon("bot"), h("div.li-main", h("div.li-title", "Claude-Skills für Nexus"), h("div.li-sub", "Anleitung, Download und Prompt"))),
+        h("a.list-item", { href: "#/download", onclick: (e) => { e.preventDefault(); location.hash = "#/download"; location.reload(); } }, icon("download"), h("div.li-main", h("div.li-title", "JOPML Launcher herunterladen"))),
         h("button.list-item", { onclick: () => aiDrawer() }, icon("bot"), h("div.li-main", h("div.li-title", "KI fragen"))),
         h("a.list-item", { href: "#/hilfe" }, icon("info"), h("div.li-main", h("div.li-title", "Hilfe & Anleitungen"))))))),
       err ? h("div.banner.bad", { style: { marginBottom: "14px" } }, icon("alert"), h("div", `${err} Verbindung${err === 1 ? "" : "en"} mit Fehler – `, h("a", { href: "#/verbindungen" }, "ansehen"))) : null,
