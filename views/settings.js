@@ -1,5 +1,5 @@
 import { sb, q, rpc, getSetting, setSetting, local, api } from "../lib/api.js";
-import { h, icon, toast, toastErr, confirmDialog, modal, copyText, fmtAgo, fmtDate, empty, naNote, badge } from "../lib/ui.js";
+import { h, icon, toast, toastErr, confirmDialog, modal, copyText, fmtAgo, fmtDate, empty, naNote} from "../lib/ui.js";
 import { MODULE_TYPES } from "../lib/modules.js";
 import { WIDGETS } from "./dashboard.js";
 import { CONFIG } from "../config.js";

@@ -1,5 +1,5 @@
 import { sb, q, rpc, api } from "../lib/api.js";
-import { h, icon, stat, fmtNum, fmtCompact, fmtUSD, fmtAgo, empty, naNote, toast, toastErr } from "../lib/ui.js";
+import { h, icon, stat, fmtNum, fmtCompact, fmtUSD, fmtAgo, empty, toast, toastErr } from "../lib/ui.js";
 import { barChart, donut, lineChart, PALETTE } from "../lib/charts.js";
 
 const PROVIDER_NAMES = { anthropic: "Anthropic Claude", gemini: "Google Gemini", groq: "Groq", openai: "OpenAI" };

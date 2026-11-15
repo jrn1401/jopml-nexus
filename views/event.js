@@ -144,6 +144,7 @@ export default async function eventView({ args: [id] }) {
           h("span", h("strong", `Break-even bei ${fmtNum(be)} Tickets`), ` (Ø ${fmtEUR(avg)} pro Ticket)`), h("span.faint", `${fmtNum(sold)} verkauft${sold >= be ? " – Kosten gedeckt" : ` · es fehlen ${fmtNum(be - sold)}`}`)),
           meter(Math.min(100, (sold / be) * 100), [101, 101]),
           cap && be > cap ? h("div.sync-err", `Achtung: Der Break-even (${be}) liegt über der Kapazität (${cap}). Kosten senken oder Preise erhöhen.`) : null,
+          forecast !== null && be && forecast < be && sold < be ? h("div.sync-err", `Budget-Warnung: Bei gleichem Verkaufstempo kommen etwa ${fmtNum(forecast)} Tickets zusammen – für den Break-even fehlen dann rund ${fmtNum(be - forecast)}. Werbung verstärken oder Kosten senken.`) : null,
           forecast !== null ? h("div.faint", { style: { fontSize: "12.5px", marginTop: "6px" } }, `Prognose: bei gleichem Tempo (${pace.toFixed(1).replace(".", ",")} Tickets/Tag) etwa ${fmtNum(forecast)} Tickets bis zum Event${cap ? ` von ${fmtNum(cap)}` : ""}.`) : null) : null));
   }
   function commentsCard() {

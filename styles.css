@@ -666,3 +666,6 @@ img, video, canvas, svg { max-width: 100%; }
 button.list-item { width: 100%; background: none; border: 0; color: inherit; text-align: left; font: inherit; cursor: pointer; }
 details.list-item > summary { list-style: none; } details.list-item > summary::-webkit-details-marker { display: none; }
 :root[data-theme="light"] .nav-badge { background: #b8322c; }
+.login-cube { display: block; width: 150px; height: auto; margin: -8px auto 6px; filter: drop-shadow(0 10px 30px rgba(125,126,255,.25)); }
+@media (prefers-reduced-motion: no-preference) { .login-cube { animation: cube-float 6s ease-in-out infinite; } }
+@keyframes cube-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }

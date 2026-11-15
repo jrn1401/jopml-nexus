@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="JOPML Nexus – Würfel-Logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d0f16"/><stop offset="1" stop-color="#07080b"/></linearGradient>
+    <radialGradient id="glow" cx="0.72" cy="0.5" r="0.45"><stop offset="0" stop-color="#7d7eff" stop-opacity=".38"/><stop offset=".55" stop-color="#46d3ee" stop-opacity=".08"/><stop offset="1" stop-color="#46d3ee" stop-opacity="0"/></radialGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b9baff"/><stop offset="1" stop-color="#8b8cff"/></linearGradient>
+    <linearGradient id="left" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6f70f0"/><stop offset="1" stop-color="#3b3dbd"/></linearGradient>
+    <linearGradient id="right" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#46d3ee"/><stop offset="1" stop-color="#1f8fb0"/></linearGradient>
+    <linearGradient id="txt" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#eceef2"/><stop offset="1" stop-color="#b9c2d6"/></linearGradient>
+    <pattern id="iso" width="56" height="32.33" patternUnits="userSpaceOnUse"><path d="M0 16.17 28 0 56 16.17 28 32.33z" fill="none" stroke="#ffffff" stroke-opacity=".045" stroke-width="1"/></pattern>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="22"/></filter>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#iso)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- kleine Satelliten-Würfel (Netzwerk) -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#8b8cff" stroke-opacity=".28" stroke-width="1.5" stroke-dasharray="3 7">
+      <path d="M862 315 1040 170M862 315 1065 430M862 315 700 500M862 315 690 140"/>
+    </g>
+    <g stroke="#ffffff" stroke-opacity=".5" stroke-width="2">
+      <path d="M1040 150 1062 162.5v25L1040 200l-22-12.5v-25z"/><path d="m1018 162.5 22 12.5 22-12.5M1040 175v25"/>
+      <path d="M1065 410 1083 420.3v20.6L1065 451.2l-18-10.3v-20.6z"/><path d="m1047 420.3 18 10.3 18-10.3M1065 430.6v20.6"/>
+      <path d="M700 482 716 491.2v18.4L700 518.8l-16-9.2v-18.4z" stroke-opacity=".35"/><path d="m684 491.2 16 9.2 16-9.2M700 500.4v18.4" stroke-opacity=".35"/>
+      <path d="M690 124 704 132v16L690 156l-14-8v-16z" stroke-opacity=".35"/><path d="m676 132 14 8 14-8M690 140v16" stroke-opacity=".35"/>
+    </g>
+  </g>
+
+  <!-- Hauptwürfel -->
+  <g transform="translate(862 315)">
+    <path d="M0 -150 130 -75 130 75 0 150 -130 75 -130 -75z" fill="#8b8cff" opacity=".55" filter="url(#soft)"/>
+    <path d="M0 -150 130 -75 0 0 -130 -75z" fill="url(#top)"/>
+    <path d="M-130 -75 0 0 0 150 -130 75z" fill="url(#left)"/>
+    <path d="M130 -75 0 0 0 150 130 75z" fill="url(#right)"/>
+    <g fill="none" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" stroke-opacity=".9">
+      <path d="M0 -150 130 -75 130 75 0 150 -130 75 -130 -75z"/><path d="M-130 -75 0 0 130 -75M0 0v150"/>
+    </g>
+    <path d="M0 -150 130 -75 0 0 -130 -75z" fill="#ffffff" opacity=".12"/>
+  </g>
+
+  <!-- Schrift -->
+  <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif">
+    <text x="96" y="262" font-size="22" font-weight="600" letter-spacing="5" fill="#8b8cff">CONTROL CENTER</text>
+    <text x="92" y="346" font-size="84" font-weight="750" letter-spacing="-2.5" fill="url(#txt)">JOPML Nexus</text>
+    <text x="96" y="400" font-size="26" fill="#a3a9b5">Projekte, Events, Server und KI – an einem Ort.</text>
+    <rect x="96" y="440" width="56" height="4" rx="2" fill="#46d3ee"/>
+  </g>
+</svg>

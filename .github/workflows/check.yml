@@ -1,0 +1,14 @@
+# Prüft bei jedem Push, ob der Code fehlerfrei geladen werden kann (Syntax, unbekannte Namen, doppelte Schlüssel).
+name: Prüfen
+on: [push, pull_request]
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npx --yes eslint@9 -c eslint.config.mjs app.js lib views
+      - name: Service-Worker-Liste vollständig
+        run: |
+          for f in $(grep -o '"\(lib\|views\)/[a-z0-9-]*\.js"' sw.js | tr -d '"'); do test -f "$f" || { echo "fehlt: $f"; exit 1; }; done

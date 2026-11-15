@@ -2,7 +2,7 @@
 // Verbinden-Assistent, KI-Assistent über die eigenen Daten, Geteiltes, Design und Datenschutz.
 // Alles läuft über RLS (owner_id = auth.uid()) bzw. die Edge Function nx-api – keine fremden Daten sichtbar.
 import { sb, q, rpc, nx, local } from "../lib/api.js";
-import { h, icon, clear, toast, toastErr, fmtAgo, fmtDateTime, fmtEUR, md, empty, errMsg, confirmDialog, formModal, copyText, debounce, stat } from "../lib/ui.js";
+import { h, icon, clear, toast, toastErr, fmtAgo, fmtDateTime, fmtEUR, empty, errMsg, confirmDialog, formModal, debounce, stat } from "../lib/ui.js";
 import { connectDialog, connectionsList, PROVIDERS } from "../lib/connect.js";
 import { designPanel } from "../lib/design.js";
 import { legalLinks, legalPage, LEGAL_PAGES } from "./legal.js";
@@ -27,12 +27,22 @@ export async function renderWorkspace(root, who) {
   const first = (meta.full_name || meta.name || who.email || "").split(/[\s@]/)[0];
   const avatar = meta.avatar_url ? h("img.avatar", { src: meta.avatar_url, alt: "", referrerpolicy: "no-referrer" }) : h("div.avatar", (first || "?")[0].toUpperCase());
   const body = h("main.content", { id: "content", tabindex: -1 });
+  // Vom Admin gesteuert: Funktionsschalter und Ankündigung (fehlt die Funktion noch, gilt: alles an)
+  const pub = await rpc("cc_public_config").catch(() => null);
+  const feat = (k) => pub?.features?.[k] !== false;
+  const ann = pub?.announcement;
+  const annKey = ann ? `ws:ann:${ann.at || ann.text}` : null;
+  const banner = h("div", { role: "status" },
+    who.preview ? h("div.banner", { style: { margin: "0 0 12px" } }, icon("eye"), h("div", { style: { flex: 1 } }, "Vorschau: So sieht ein normales Konto die Website (mit deinen eigenen privaten Daten)."),
+      h("button.btn.sm.primary", { onclick: () => { local.set("asuser", false); location.hash = "#/users"; location.reload(); } }, "Zurück zur Admin-Ansicht")) : null,
+    ann && !local.get(annKey, false) ? h(`div.banner${ann.level === "warn" ? ".warn" : ann.level === "ok" ? ".ok" : ""}`, { style: { margin: "0 0 12px" } }, icon(ann.level === "warn" ? "alert" : "bell"),
+      h("div", { style: { flex: 1 } }, ann.text), h("button.btn.sm.ghost", { "aria-label": "Ankündigung schließen", onclick: (e) => { local.set(annKey, true); e.currentTarget.closest(".banner").remove(); } }, "OK")) : null);
   const top = h("header.guest-top",
     h("a.brand", { href: "#/" }, h("div.brand-mark", icon("logo")), h("div.brand-text", CONFIG.appName, h("small", "Mein Bereich"))),
-    h("nav.ws-nav", [["#/", "Übersicht"], ["#/aufgaben", "Aufgaben"], ["#/websites", "Websites"], ["#/verbindungen", "Verbindungen"], ["#/geteilt", "Geteilt"], ["#/hilfe", "Hilfe"], ["#/einstellungen", "Einstellungen"]].filter(([r]) => !(guest && ["#/verbindungen", "#/websites"].includes(r))).map(([href, t]) => h("a", { href, dataset: { r: href } }, t))),
+    h("nav.ws-nav", [["#/", "Übersicht"], ["#/aufgaben", "Aufgaben", "tasks"], ["#/websites", "Websites", "websites"], ["#/verbindungen", "Verbindungen", "connections"], ["#/geteilt", "Geteilt", "shares"], ["#/hilfe", "Hilfe", "help"], ["#/einstellungen", "Einstellungen"]].filter(([r, , f]) => !(guest && ["#/verbindungen", "#/websites"].includes(r)) && (!f || feat(f))).map(([href, t]) => h("a", { href, dataset: { r: href } }, t))),
     h("div.spacer"),
-    h("button.icon-btn", { title: "KI-Assistent", "aria-label": "KI-Assistent", onclick: () => aiDrawer() }, icon("bot")),
-    h("button.icon-btn", { title: "Verbinden", "aria-label": "Dienst verbinden", onclick: () => connect(show) }, icon("plus")),
+    feat("ai") ? h("button.icon-btn", { title: "KI-Assistent", "aria-label": "KI-Assistent", onclick: () => aiDrawer() }, icon("bot")) : null,
+    feat("connections") ? h("button.icon-btn", { title: "Verbinden", "aria-label": "Dienst verbinden", onclick: () => connect(show) }, icon("plus")) : null,
     h("button.icon-btn", { title: who.email, "aria-label": "Profil", style: { padding: 0 }, onclick: () => (location.hash = "#/einstellungen") }, avatar));
   clear(root, h("a.skip-link", { href: "#content", onclick: (e) => { e.preventDefault(); body.focus(); } }, "Zum Inhalt springen"), h("div.guest-wrap", top, body));
 
@@ -48,16 +58,16 @@ export async function renderWorkspace(root, who) {
       const leg = hash.match(/^#\/(impressum|datenschutz|nutzung)$/);
       if (leg) node = await legalPage(leg[1]);
       else if (g) { const p = await rpc("cc_guest_open", { p_share: g[1] }); node = h("div", h("div.crumb", h("a", { href: "#/geteilt" }, "Mit dir geteilt"), icon("chevronR"), h("span", p.event?.name || p.project?.name || p.file?.name)), renderShared(p, { shareId: g[1] }, null)); }
-      else if (hash === "#/verbindungen") node = await connectionsPage();
-      else if (hash === "#/websites") node = h("div", h("div.page-head", h("div", h("h1", "Websites"), h("p", "Live-Besucher, Erreichbarkeit und Netlify-Daten deiner Websites"))), await webList((r) => `#/web/${r.id}`));
+      else if (hash === "#/verbindungen" && feat("connections")) node = await connectionsPage();
+      else if (hash === "#/websites" && feat("websites")) node = h("div", h("div.page-head", h("div", h("h1", "Websites"), h("p", "Live-Besucher, Erreichbarkeit und Netlify-Daten deiner Websites"))), await webList((r) => `#/web/${r.id}`));
       else if (/^#\/web\/[0-9a-f-]{36}$/.test(hash)) node = await sitePage(hash.slice(6));
-      else if (hash === "#/geteilt") node = await sharedPage();
-      else if (hash === "#/aufgaben") node = await tasksPage();
-      else if (hash === "#/hilfe") node = helpPage((t) => aiDrawer(t));
+      else if (hash === "#/geteilt" && feat("shares")) node = await sharedPage();
+      else if (hash === "#/aufgaben" && feat("tasks")) node = await tasksPage();
+      else if (hash === "#/hilfe" && feat("help")) node = helpPage((t) => aiDrawer(t));
       else if (hash === "#/einstellungen") node = settingsPage();
       else node = await overview();
       if (s !== seq) return;
-      body.replaceChildren(node, leg ? null : legalLinks());
+      body.replaceChildren(banner, node, leg ? null : legalLinks());
       document.title = `${leg ? LEGAL_PAGES[leg[1]] : (top.querySelector(".ws-nav a.on")?.textContent || "Mein Bereich")} · ${CONFIG.appName}`;
       if (location.hash !== "#/" && document.activeElement?.closest?.(".ws-nav")) body.focus({ preventScroll: true });
     } catch (e) {
@@ -119,7 +129,7 @@ export async function renderWorkspace(root, who) {
         statBox("Projekte", projects.length, "folder"), statBox("Verbindungen", conns.length, "link", err ? `${err} mit Fehler` : null),
         web.length ? statBox("Websites live", h("span.row", { style: { gap: "10px" } }, h("span.live-dot", { class: live ? "on" : "" }), String(live)), "globe", `${web.reduce((a, w) => a + (w.today_uv || 0), 0)} Besucher heute`) : statBox("Mit dir geteilt", shared.length, "users"), statBox("KI-Fragen heute", usage ? `${usage.requests_today}${usage.limit ? ` / ${usage.limit}` : ""}` : "–", "sparkles", usage?.limit ? "eigener KI-Schlüssel = ohne Limit" : null)),
       firstSteps({ projects: projects.length, conns: conns.length, guest, shared: shared.length || 0 }),
-      h("div.grid.g-2", { style: { marginBottom: "16px" } }, await tasksCard(), h("section.card", h("div.card-head", h("h3", "Schnellzugriff")), h("div.card-body", h("div.list",
+      h("div.grid.g-2", { style: { marginBottom: "16px" } }, feat("tasks") ? await tasksCard() : null, h("section.card", h("div.card-head", h("h3", "Schnellzugriff")), h("div.card-body", h("div.list",
         h("a.list-item", { href: "#/aufgaben" }, icon("check"), h("div.li-main", h("div.li-title", "Aufgabe notieren"))),
         h("button.list-item", { onclick: () => aiDrawer() }, icon("bot"), h("div.li-main", h("div.li-title", "KI fragen"))),
         h("a.list-item", { href: "#/hilfe" }, icon("info"), h("div.li-main", h("div.li-title", "Hilfe & Anleitungen"))))))),
@@ -207,7 +217,7 @@ export async function renderWorkspace(root, who) {
   }
 
   // ---------- KI-Assistent ----------
-  function aiDrawer(prefill = "") { local.set("ws:did-ai", true); openAiDrawer({ prefill, guest, storeKey: "ws:chat", onAction: show }); }
+  function aiDrawer(prefill = "") { if (!feat("ai")) return toast("Der KI-Assistent ist derzeit ausgeschaltet.", "info"); local.set("ws:did-ai", true); openAiDrawer({ prefill, guest, storeKey: "ws:chat", onAction: show }); }
 
   window.addEventListener("hashchange", show);
   document.addEventListener("keydown", (e) => {

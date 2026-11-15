@@ -1,5 +1,5 @@
-import { sb, q, rpc, getSetting } from "../lib/api.js";
-import { h, icon, stat, fmtNum, fmtCompact, fmtBytes, fmtPct, fmtAgo, fmtDateTime, badge, SERVER_STATUS, meter, empty, naNote } from "../lib/ui.js";
+import { sb, q, rpc, getSetting, local } from "../lib/api.js";
+import { h, icon, stat, fmtNum, fmtCompact, fmtBytes, fmtPct, fmtAgo, fmtDateTime, badge, SERVER_STATUS, meter, empty} from "../lib/ui.js";
 import { barChart } from "../lib/charts.js";
 import { timeline } from "../lib/modules.js";
 import { newProject, newModule, uploadDialog, connectServer, newEvent, syncHelp, openAssistant } from "../lib/actions.js";
@@ -100,12 +100,22 @@ export default async function dashboard({ user }) {
 
   const order = [...new Set(["sync", ...Object.keys(W).filter((k) => !(layout.order || []).includes(k)), ...(layout.order || []).filter((k) => W[k])])];
   const hidden = new Set(layout.hidden || []);
+  // Modus: blendet je nach Aufgabe nur die passenden Karten ein (pro Gerät gespeichert)
+  const MODES = { all: null, event: ["next", "events", "tasks", "quick", "stats"], tech: ["health", "sync", "servers", "web", "jopml", "ai", "activity"] };
+  let mode = local.get("dashmode", "all");
+  const grid = h("div.grid.dash");
+  const drawGrid = () => grid.replaceChildren(...order.filter((k) => !hidden.has(k) && (!MODES[mode] || MODES[mode].includes(k))).map((k) => W[k]()));
+  const modeSeg = h("div.seg", { role: "group", "aria-label": "Ansicht" }, [["all", "Alles"], ["event", "Event"], ["tech", "Technik"]].map(([k, t]) =>
+    h("button", { class: k === mode ? "on" : "", "aria-pressed": String(k === mode), onclick: (e) => { mode = k; local.set("dashmode", k);
+      modeSeg.querySelectorAll("button").forEach((b) => { b.classList.toggle("on", b === e.currentTarget); b.setAttribute("aria-pressed", String(b === e.currentTarget)); }); drawGrid(); } }, t)));
+  drawGrid();
   return h("div",
     maintenanceBanner(cfg),
+    limitBanner(),
     h("div.page-head", h("div", h("h1", `${hello}${name ? ", " + name : ""}`), h("p", `${fmtNum(o.projects_total)} Projekte · ${o.servers_online}/${o.servers_total} Server online${o.events_upcoming ? ` · ${o.events_upcoming} Event(s) geplant` : ""} · ${fmtNum(o.notifications_unread)} ungelesene Hinweise`)),
-      h("div.actions", viewToggle(), h("a.btn.ghost", { href: "#/settings?tab=dashboard" }, icon("dashboard"), "Anpassen"), h("button.btn.primary", { onclick: () => newProject() }, icon("plus"), "Neues Projekt"))),
+      h("div.actions", modeSeg, viewToggle(), h("a.btn.ghost", { href: "#/settings?tab=dashboard" }, icon("dashboard"), "Anpassen"), h("button.btn.primary", { onclick: () => newProject() }, icon("plus"), "Neues Projekt"))),
     nextUp(),
-    h("div.grid.dash", order.filter((k) => !hidden.has(k)).map((k) => W[k]())));
+    grid);
 }
 
 // Diagramm-Ansicht der Kennzahlen: Projekte nach Status/Kategorie, Ticketverkauf je Event, Website-Besucher 7 Tage
@@ -139,4 +149,16 @@ function card(title, link, body, w = "w-6") {
   return h("section.card", { class: w },
     h("div.card-head", h("h3", title), link ? h("a.btn.sm.ghost", { href: link }, "Alle", icon("chevronR")) : null),
     h("div.card-body", body));
+}
+
+// Warnt, bevor die Gratis-Grenzen von Supabase erreicht sind (lädt im Hintergrund, blockiert nichts)
+function limitBanner() {
+  const box = h("div");
+  rpc("cc_usage_limits").then((l) => {
+    const parts = [["Dateispeicher", l.storage_bytes / l.storage_limit], ["Datenbank", l.db_bytes / l.db_limit]].filter(([, p]) => p > 0.8);
+    if (parts.length) box.replaceChildren(h("div.banner.warn", { style: { marginBottom: "14px" } }, icon("alert"),
+      h("div", { style: { flex: 1 } }, `${parts.map(([n, p]) => `${n} zu ${Math.round(p * 100)} %`).join(" · ")} voll – bald ist die Gratis-Grenze erreicht.`),
+      h("a.btn.sm", { href: "#/users" }, "Details")));
+  }).catch(() => {});
+  return box;
 }

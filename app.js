@@ -11,14 +11,14 @@ const ROUTES = [
   [/^\/events$/, "events"], [/^\/events\/([\w-]+)$/, "event"], [/^\/jopml$/, "jopml"],
   [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"], [/^\/shares$/, "shares"], [/^\/web(?:\/([0-9a-f-]{36}))?$/, "web"],
   [/^\/(impressum|datenschutz|nutzung)$/, "legal"], [/^\/connections$/, "connections"], [/^\/hosting$/, "hosting"],
-  [/^\/tasks$/, "tasks"], [/^\/door\/([\w-]+)$/, "door"], [/^\/links$/, "links"], [/^\/security$/, "security"], [/^\/help$/, "help"],
+  [/^\/tasks$/, "tasks"], [/^\/door\/([\w-]+)$/, "door"], [/^\/links$/, "links"], [/^\/security$/, "security"], [/^\/help$/, "help"], [/^\/users$/, "users"],
 ];
 const NAV_GROUPS = [
   ["Übersicht", [["#/", "dashboard", "Dashboard"]]],
   ["Planung", [["#/tasks", "check", "Aufgaben"], ["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"], ["#/shares", "users", "Teilen & Team"]]],
   ["Online", [["#/web", "globe", "Websites"], ["#/links", "link", "Marketing-Links"], ["#/jopml", "layers", "JOPML"]]],
   ["Geräte", [["#/servers", "server", "Geräte & Server"], ["#/hosting", "rocket", "Hosting"]]],
-  ["System", [["#/security", "lock", "Sicherheit & Push"], ["#/ai", "sparkles", "KI & Tokens"], ["#/connections", "link", "Verbindungen"], ["#/activity", "activity", "Aktivitäten"], ["#/system", "check", "Systemprüfung"], ["#/help", "book", "Handbuch"]]],
+  ["System", [["#/users", "users", "Benutzer & Rollen"], ["#/security", "lock", "Sicherheit & Push"], ["#/ai", "sparkles", "KI & Tokens"], ["#/connections", "link", "Verbindungen"], ["#/activity", "activity", "Aktivitäten"], ["#/system", "check", "Systemprüfung"], ["#/help", "book", "Handbuch"]]],
 ];
 const NAV = NAV_GROUPS.flatMap(([, items]) => items);
 const MOBILE = [["#/", "dashboard", "Start"], ["#/tasks", "check", "Aufgaben"], ["#/events", "calendar", "Events"], ["#/web", "globe", "Websites"], ["#/servers", "server", "Geräte"]];
@@ -65,6 +65,10 @@ async function boot() {
   }
   let who;
   try { who = await rpc("cc_whoami"); } catch (e) { return renderLogin(errMsg(e)); }
+  if (who?.admin && local.get("asuser", false)) {
+    const { renderWorkspace } = await import("./views/workspace.js");
+    return renderWorkspace(root, { ...who, preview: true });
+  }
   if (!who?.admin) {
     if (location.search) history.replaceState(null, "", location.pathname + location.hash);
     if (!who?.email && !who?.anonymous) { await sb.auth.signOut(); return renderLogin("Dieses Konto hat keine bestätigte E-Mail-Adresse."); }
@@ -111,7 +115,7 @@ function renderLogin(error) {
     location.reload();
   } }, icon("users"), "Als Gast ausprobieren");
   clear(root, h("main.login", h("div.card.login-card",
-    h("div.brand-mark", icon("logo")),
+    h("img.login-cube", { src: "icons/cube.svg", alt: "", width: 180, height: 165, decoding: "async" }),
     h("h1", CONFIG.appName), h("p", "Dein zentrales Control Center für Projekte, Server und KI."),
     btn, guestBtn,
     h("div.login-sub", "Jeder kann sich mit Google anmelden und bekommt einen eigenen, privaten Bereich: API-Schlüssel einfügen – Websites, Repos, Events und KI werden automatisch verknüpft. Als Gast kannst du alles 7 Tage lang ohne Konto ausprobieren."),
