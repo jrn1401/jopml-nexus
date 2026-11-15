@@ -1,5 +1,5 @@
 // Service Worker: cached nur die App-Hülle (statische Dateien). Daten (Supabase) werden nie gecacht.
-const VERSION = "cc-v30";
+const VERSION = "cc-v31";
 const SHELL = [
   "./", "index.html", "styles.css", "theme.js", "app.js", "config.js", "manifest.webmanifest",
   "lib/api.js", "lib/ui.js", "lib/charts.js", "lib/modules.js", "lib/actions.js",
@@ -12,7 +12,7 @@ const SHELL = [
 
 self.addEventListener("install", (e) => {
   // Neue Version wartet, bis der Nutzer „Neu laden“ tippt (kein Neuladen mitten in der Arbeit)
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)));
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: "reload" })))));
 });
 self.addEventListener("message", (e) => { if (e.data === "skipWaiting") self.skipWaiting(); });
 self.addEventListener("activate", (e) => {
@@ -24,7 +24,8 @@ self.addEventListener("fetch", (e) => {
   // Supabase/APIs immer live; nur eigene Dateien und die supabase-js-Bibliothek cachen
   if (url.origin === location.origin) {
     // Netzwerk zuerst (immer aktuell), Cache als Offline-Rückfall
-    e.respondWith(fetch(e.request).then((r) => {
+    // „no-cache“: Browser fragt immer nach, ob es eine neuere Version gibt (sonst bis zu 10 Min. alte Dateien)
+    e.respondWith(fetch(e.request, { cache: "no-cache" }).then((r) => {
       if (r.ok) { const copy = r.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); }
       return r;
     }).catch(() => caches.match(e.request).then((m) => m || caches.match("index.html"))));
