@@ -17,7 +17,7 @@ export default async function securityView() {
       q(sb.from("cc_connections").select("id,provider,account,created_at,status")).catch(() => []),
       q(sb.from("cc_shares").select("id,label,email,share_type,permission,expires_at,created_at").is("revoked_at", null)).catch(() => []),
     ]);
-    const act = (a, extra = {}) => async (e) => { e.currentTarget.disabled = true; try { await rpc("cc_push_setup", { p_action: a, ...extra }); if (a === "test") toast("Test gesendet – kommt in wenigen Sekunden an"); load(); } catch (er) { toastErr(er); e.currentTarget.disabled = false; } };
+    const act = (a, extra = {}) => async (e) => { const ct = e.currentTarget; ct.disabled = true; try { await rpc("cc_push_setup", { p_action: a, ...extra }); if (a === "test") toast("Test gesendet – kommt in wenigen Sekunden an"); load(); } catch (er) { toastErr(er); ct.disabled = false; } };
     const topic = push.topic, on = push.enabled === true;
     const activeKeys = (keys || []).filter((k) => !k.revoked_at);
     const oldKeys = activeKeys.filter((k) => age(k.created_at) > 90).length + conns.filter((c) => age(c.created_at) > 90).length;
@@ -54,11 +54,11 @@ export default async function securityView() {
             check(on, on ? "Push ist aktiv" : "Push ist aus", "Bei Ausfällen und neuen Anmeldungen sofort informiert werden.")))),
 
         h("section.card", h("div.card-head", h("h3.row", icon("download"), "Datensicherung"),
-            h("button.btn.sm.primary", { onclick: async (e) => { e.currentTarget.disabled = true; try { await rpc("cc_backup_now"); toast("Sicherung erstellt"); load(); } catch (er) { toastErr(er); e.currentTarget.disabled = false; } } }, icon("plus"), "Jetzt sichern")),
+            h("button.btn.sm.primary", { onclick: async (e) => { const ct = e.currentTarget; ct.disabled = true; try { await rpc("cc_backup_now"); toast("Sicherung erstellt"); load(); } catch (er) { toastErr(er); ct.disabled = false; } } }, icon("plus"), "Jetzt sichern")),
           h("div.card-body", backups.length ? h("div.list", backups.map((b) => h("div.list-item",
             h("div.li-main", h("div.li-title", fmtDateTime(b.created_at), " ", h("span.tag", b.kind === "auto" ? "automatisch" : "manuell")),
               h("div.li-sub", `${fmtBytes(b.bytes)} · ${b.counts?.cc_projects ?? 0} Projekte · ${b.counts?.cc_events ?? 0} Events · ${b.counts?.cc_event_items ?? 0} Event-Einträge · ${b.counts?.cc_tasks ?? 0} Aufgaben`)),
-            h("button.btn.sm", { onclick: async (e) => { e.currentTarget.disabled = true; try { const r = await q(sb.from("cc_backups").select("data").eq("id", b.id).single()); download(`nexus-sicherung-${new Date(b.created_at).toLocaleDateString("sv-SE")}.json`, JSON.stringify(r.data, null, 1), "application/json"); } catch (er) { toastErr(er); } e.currentTarget.disabled = false; } }, icon("download"), "Herunterladen"))))
+            h("button.btn.sm", { onclick: async (e) => { const ct = e.currentTarget; ct.disabled = true; try { const r = await q(sb.from("cc_backups").select("data").eq("id", b.id).single()); download(`nexus-sicherung-${new Date(b.created_at).toLocaleDateString("sv-SE")}.json`, JSON.stringify(r.data, null, 1), "application/json"); } catch (er) { toastErr(er); } ct.disabled = false; } }, icon("download"), "Herunterladen"))))
             : h("div.faint", { style: { fontSize: "13px" } }, "Noch keine Sicherung – die erste entsteht heute Nacht oder sofort mit „Jetzt sichern“."),
             h("p.faint", { style: { fontSize: "12.5px", margin: "10px 0 0" } }, "Gesichert werden Projekte, Module, Events, Aufgaben, Links, Freigaben und Einstellungen. Hochgeladene Dateien und geheime Schlüssel sind nicht enthalten. Die Datei enthält Freigabe-Links – sicher aufbewahren."))),
 

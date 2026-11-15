@@ -196,15 +196,15 @@ export default async function projectView({ args: [id], query }) {
         h("dt", "Aktualisiert"), h("dd", fmtDateTime(project.updated_at)))),
       h("div.card.card-pad", h("div.row.between.wrap", { style: { gap: "10px" } },
         h("div", h("strong", "Aufräumen"), h("div.faint", { style: { fontSize: "13px" } }, "Vereint doppelte Link-Module, doppelte Notizen und doppelte Tabellen, Checklisten oder Kennzahlen in den Übersichten. Nichts geht verloren.")),
-        h("button.btn", { onclick: async (e) => {
-          e.currentTarget.disabled = true;
+        h("button.btn", { onclick: async (e) => { const ct = e.currentTarget;
+          ct.disabled = true;
           try {
             const pre = await rpc("cc_tidy_project", { p_project: id, p_apply: false });
-            if (!pre.modules && !pre.widgets) { toast("Alles schon aufgeräumt"); e.currentTarget.disabled = false; return; }
-            if (!(await confirmDialog("Aufräumen?", pre.changes.map((c) => `• ${c.action}: „${c.from}“ → „${c.into}“`).join("\n"), { ok: "Aufräumen", danger: false }))) { e.currentTarget.disabled = false; return; }
+            if (!pre.modules && !pre.widgets) { toast("Alles schon aufgeräumt"); ct.disabled = false; return; }
+            if (!(await confirmDialog("Aufräumen?", pre.changes.map((c) => `• ${c.action}: „${c.from}“ → „${c.into}“`).join("\n"), { ok: "Aufräumen", danger: false }))) { ct.disabled = false; return; }
             const r = await rpc("cc_tidy_project", { p_project: id, p_apply: true });
             toast(`Aufgeräumt: ${r.modules} Modul(e), ${r.widgets} Kachel(n)`); dispatchEvent(new Event("hashchange"));
-          } catch (er) { toastErr(er); e.currentTarget.disabled = false; }
+          } catch (er) { toastErr(er); ct.disabled = false; }
         } }, icon("sparkles"), "Jetzt aufräumen"))),
       project.metadata?.merged_from?.length ? h("div.card.card-pad", h("strong", "Zusammengeführt aus"), h("div.list", { style: { marginTop: "6px" } }, project.metadata.merged_from.map((x) => h("div.list-item",
         h("div.li-main", h("div.li-title", x.name || x.slug), h("div.li-sub", `${x.slug}${x.at ? ` · ${fmtDate(x.at)}` : ""}${x.auto ? " · automatisch" : ""}`)))))) : null,

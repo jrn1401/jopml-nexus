@@ -136,10 +136,11 @@ async function cleanupDialog() {
     list,
     h("div.row.between", h("span", "Wird frei: ", total),
       h("button.btn.danger", { onclick: async (e) => {
+        const btn = e.currentTarget;
         if (!pick.size) return toast("Nichts ausgewählt", "err");
         if (!(await confirmDialog("Endgültig löschen?", `${pick.size} Dateien werden dauerhaft gelöscht. Das lässt sich nicht rückgängig machen.`, { ok: "Endgültig löschen" }))) return;
-        e.currentTarget.disabled = true;
+        btn.disabled = true;
         try { const r = await api("delete", { names: [...pick] }, "nx-storage"); toast(`${r.deleted.length} Dateien gelöscht – ${fmtBytes(r.freed)} frei`); m.close(); location.reload(); }
-        catch (er) { toastErr(er); e.currentTarget.disabled = false; }
+        catch (er) { toastErr(er); btn.disabled = false; }
       } }, icon("trash"), "Ausgewählte löschen"))), { wide: true });
 }

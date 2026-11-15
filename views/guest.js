@@ -93,7 +93,7 @@ export function renderShared(p, ctx, reload) {
   const canTick = ["tasks", "edit"].includes(p.share?.permission) && p.type === "event";
   const fileList = (files) => files.length ? h("div.list", files.map((f) => h("div.list-item",
     h("div.li-icon", icon("file")), h("div.li-main", h("div.li-title", f.name), h("div.li-sub", `${f.path} · ${fmtBytes(f.size)}`)),
-    h("button.btn.sm", { onclick: async (e) => { e.currentTarget.disabled = true; try { window.open(await fileUrl(ctx, f.id), "_blank", "noopener"); } catch (er) { toastErr(er); } finally { e.currentTarget.disabled = false; } } }, icon("download"), "Laden"))))
+    h("button.btn.sm", { onclick: async (e) => { const ct = e.currentTarget; ct.disabled = true; try { window.open(await fileUrl(ctx, f.id), "_blank", "noopener"); } catch (er) { toastErr(er); } finally { ct.disabled = false; } } }, icon("download"), "Laden"))))
     : h("div.faint", "Keine Dateien.");
   if (p.type === "event") {
     const ev = p.event, items = p.items || [];
