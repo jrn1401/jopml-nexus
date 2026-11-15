@@ -55,14 +55,18 @@ async function saveExtras(b) {
   }
   if (b.event) {
     const { items, ...ev } = b.event;
-    const found = (await q(sb.from("nx_events").select("id,name").ilike("name", ev.name).limit(1)))[0];
+    const all = await q(sb.from("nx_events").select("id,name,event_date,status").neq("status", "cancelled"));
+    const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
+    const found = all.find((e) => e.name.toLowerCase() === ev.name.toLowerCase()) || (ev.event_date ? all.find((e) => day(e.event_date) === day(ev.event_date)) : null);
     const patch = Object.fromEntries(Object.entries(ev).filter(([, v]) => v !== null && v !== ""));
     const e = found ? await q(sb.from("nx_events").update(patch).eq("id", found.id).select("id").single()) : await q(sb.from("nx_events").insert(ev).select("id").single());
     out.event = e.id;
     if (items.length) {
       const cur = await q(sb.from("nx_event_items").select("id,kind,title").eq("event_id", e.id));
       for (const it of items) {
-        const hit = cur.find((c) => c.kind === it.kind && c.title.toLowerCase() === it.title.toLowerCase());
+        const n = (x) => x.toLowerCase().replace(/[^a-z0-9äöüß ]/g, " ").replace(/\s+/g, " ").trim();
+        const hit = cur.find((c) => c.kind === it.kind && n(c.title) === n(it.title))
+          || cur.find((c) => c.kind === it.kind && Math.min(n(c.title).length, n(it.title).length) >= 4 && (n(c.title).includes(n(it.title)) || n(it.title).includes(n(c.title))));
         if (hit) await q(sb.from("nx_event_items").update(Object.fromEntries(Object.entries(it).filter(([, v]) => v !== null && v !== ""))).eq("id", hit.id));
         else { await q(sb.from("nx_event_items").insert({ ...it, event_id: e.id })); out.items++; }
       }

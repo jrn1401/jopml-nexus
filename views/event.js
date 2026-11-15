@@ -4,6 +4,7 @@ import { donut, barChart, lineChart, PALETTE } from "../lib/charts.js";
 import { timeline, fileRow, lazy } from "../lib/modules.js";
 import { uploadDialog, download } from "../lib/actions.js";
 import { openShareDialog } from "../lib/share.js";
+import { aiCleanup } from "../lib/aidedupe.js";
 import { importDialog } from "../lib/eventfrog.js";
 
 const SECTIONS = {
@@ -86,7 +87,7 @@ export default async function eventView({ args: [id] }) {
       h("div.page-head", h("div", h("h1", ev.name), h("div.row.wrap", { style: { gap: "8px", marginTop: "8px" } }, badge(EVENT_STATUS, ev.status),
         h("span.faint", { style: { fontSize: "13px" } }, [ev.event_date ? `${fmtDateTime(ev.event_date)} (${fmtAgo(ev.event_date)})` : "ohne Datum", ev.location].filter(Boolean).join(" · ")),
         proj ? h("a.tag", { href: `#/projects/${proj.id}` }, icon("folder", ""), " ", proj.name) : null)),
-        h("div.actions", h("button.btn.primary", { onclick: () => openShareDialog("event", id, ev.name) }, icon("users"), "Teilen"), h("button.btn", { onclick: edit }, icon("edit"), "Bearbeiten"),
+        h("div.actions", h("button.btn.primary", { onclick: () => openShareDialog("event", id, ev.name) }, icon("users"), "Teilen"), h("button.btn", { onclick: () => aiCleanup({ items, table: "cc_event_items", context: `${ev.name}, ${ev.location || ""}`, onDone: reload }) }, icon("sparkles"), "KI-Aufräumen"), h("button.btn", { onclick: edit }, icon("edit"), "Bearbeiten"),
           h("a.btn", { href: `#/door/${id}`, title: "Barverkauf, Wechselgeld, Gästeliste und Auslastung am Abend" }, icon("ticket"), "Abendkasse"),
           h("button.btn", { onclick: () => importDialog(ev, () => dispatchEvent(new Event("hashchange"))), title: "Ticketverkäufe aus Eventfrog-Export übernehmen" }, icon("ticket"), "Eventfrog-Import"),
           h("button.btn.ghost", { onclick: exportCsv, title: "Alle Einträge als CSV (Excel)" }, icon("download"), "CSV"),

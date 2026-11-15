@@ -4,6 +4,7 @@
 import { sb, q, nx, local } from "../lib/api.js";
 import { h, icon, toast, toastErr, fmtDateTime, fmtEUR, empty, formModal, confirmDialog, errMsg, modal } from "../lib/ui.js";
 import { openShareDialog } from "../lib/share.js";
+import { aiCleanup } from "../lib/aidedupe.js";
 
 const STATUS = { idea: "Idee", planning: "In Planung", confirmed: "Fest", done: "Vorbei", cancelled: "Abgesagt" };
 const SECTIONS = [
@@ -183,6 +184,7 @@ export async function eventPage(id) {
           h("button.btn.primary", { onclick: () => openShareDialog("nx_event", id, ev.name, { admin: false }) }, icon("users"), "Teilen"),
           h("button.btn", { onclick: () => aiDialog(id, () => reload()) }, icon("bot"), "KI-Ideen"),
           h("button.btn", { onclick: () => aiCheck(ev, rows, ticketsOf(ev, linked)) }, icon("sparkles"), "KI-Check"),
+          h("button.btn", { onclick: () => aiCleanup({ items: rows, table: "nx_event_items", context: ev.name, onDone: reload }) }, icon("sparkles"), "KI-Aufräumen"),
           h("button.btn.ghost", { onclick: () => eventForm(ev, (e) => { ev = e; draw(); }) }, icon("edit"), "Bearbeiten"),
           h("button.btn.ghost", { "aria-label": "Event löschen", onclick: async () => {
             if (!(await confirmDialog("Event löschen?", `„${ev.name}“ mit allen Einträgen und Freigaben wird gelöscht.`, { ok: "Löschen" }))) return;
