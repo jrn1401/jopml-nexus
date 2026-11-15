@@ -21,8 +21,10 @@ const BOOK = [
       ["Im Event auf „Abendkasse“ tippen.", "„+1 Ticket“ bucht einen Barverkauf, „Wechselgeld“ rechnet das Rückgeld aus.", "Die Anzeige „Jetzt drin“ warnt, bevor die erlaubte Personenzahl erreicht ist.", "Für Helfer: im Event „Teilen“ › Link mit Recht „Abendkasse“ – läuft auf deren Handy ohne Konto."]],
     ["Teilen & Team", "#/shares", "users", "Gib Events, Projekte oder Dateien per Link oder E-Mail frei.",
       ["„Nur ansehen“, „Aufgaben abhaken“, „Mitarbeiten“ (Aufgaben, Schichten, Gäste anlegen) oder „Abendkasse“.", "Mitveranstalter können Kommentare schreiben – du bekommst eine Benachrichtigung.", "Freigaben lassen sich jederzeit widerrufen oder mit Ablaufdatum versehen."]],
-    ["Projekte und Dateien", "#/projects", "folder", "Jedes Projekt hat Module (Übersicht, Notizen, Links, Dateien).",
-      ["Aus jedem Claude-Chat kannst du mit „ins Nexus“ ein Projekt mit Diagrammen anlegen lassen.", "Doppelte Projekte erkennt die Sync-Zentrale und führt sie auf Knopfdruck zusammen."]],
+    ["Projekte und Dateien", "#/projects", "folder", "Ein Projekt bündelt alles zu einem Thema: Module, Dateien, das verknüpfte Event, die Website und (bei JOPML) die Launcher-Steuerung.",
+      ["Aus jedem Claude-Chat kannst du mit „ins Nexus“ ein Projekt mit Diagrammen anlegen lassen – gibt es schon ein ähnliches, wird es automatisch weiterverwendet.", "Projekt › Einstellungen › „Jetzt aufräumen“ vereint doppelte Link-Listen, Notizen und Tabellen."]],
+    ["Doppelte Projekte zusammenführen", "#/", "layers", "Gleiches doppelt? Die Sync-Zentrale auf dem Dashboard zeigt Vorschläge – auch wenn eine Website und ein Event-Projekt dasselbe sind.",
+      ["Auf dem Dashboard in der Sync-Zentrale „Alles zusammenführen“ oder einzeln „Zusammenführen“ tippen.", "Alles wird übernommen: Module, Dateien, Event, Website, Freigaben. Der entfernte Eintrag wird vorher gesichert.", "Der alte Name bleibt gültig: Netlify und Claude schreiben künftig automatisch ins zusammengeführte Projekt."]],
   ]],
   ["Betrieb", [
     ["Websites", "#/web", "globe", "Besucher live, Erreichbarkeit und Netlify-Daten deiner Websites.",
@@ -58,6 +60,7 @@ export default async function helpView() {
       : [h("div.card.card-pad", h("p", { style: { margin: "0 0 10px" } }, "Dazu steht nichts im Handbuch."), h("button.btn.primary", { onclick: () => openAssistant() }, icon("bot"), "Den KI-Assistenten fragen"))]));
   }
   inp.addEventListener("input", draw);
+  try { const pre = new URLSearchParams(location.hash.split("?")[1] || "").get("q"); if (pre) inp.value = pre; } catch { /* ohne Vorbelegung */ }
   draw();
   return h("div", h("div.page-head", h("div", h("h1", "Handbuch"), h("p", "Jede Funktion kurz erklärt. Antippen zum Aufklappen.")),
     h("div.actions", h("button.btn", { onclick: () => openAssistant() }, icon("bot"), "KI fragen"))), h("div", { style: { marginBottom: "16px" } }, inp), body);

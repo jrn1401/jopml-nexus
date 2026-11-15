@@ -26,6 +26,7 @@ function teamBlock(ctx, reload) {
   async function draw(action) {
     let t;
     try { t = await call(action); } catch (e) { if (action) toastErr(e); return; }
+    if (!t) return;
     const edit = t.permission === "edit";
     const add = (kind, label, it) => () => formModal(it ? "Bearbeiten" : label, [
       { name: "title", label: kind === "guest" ? "Name" : kind === "shift" ? "Aufgabe der Schicht" : "Titel", required: true, max: 200, value: it?.title, placeholder: kind === "shift" ? "z. B. Garderobe" : "" },

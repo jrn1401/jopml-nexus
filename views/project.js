@@ -7,13 +7,35 @@ import { openShareDialog } from "../lib/share.js";
 import { webCockpit, siteFor } from "../lib/web.js";
 import { viewToggle } from "../lib/viewmode.js";
 
+// Ein Projekt fasst alles zusammen: verknüpfte Events (Tickets, Abendkasse), Website, Launcher-Steuerung
+function linkedEvents(projectId) {
+  const box = h("div");
+  sb.from("cc_events").select("id,name,event_date,status,location,metadata").eq("project_id", projectId).neq("status", "cancelled").order("event_date").then(({ data }) => {
+    if (!data?.length) return;
+    box.replaceChildren(...data.map((e) => {
+      const t = e.metadata?.tickets || {}, cap = Number(t.capacity) || null, sold = Number(t.sold) || 0;
+      const days = e.event_date ? Math.ceil((new Date(e.event_date) - Date.now()) / 864e5) : null;
+      return h("section.card.card-pad.linked-event",
+        h("div.row.between.wrap", { style: { gap: "10px" } },
+          h("div.row", { style: { gap: "12px", minWidth: 0 } }, h("div.li-icon", icon("calendar")),
+            h("div", { style: { minWidth: 0 } }, h("div.li-title", e.name),
+              h("div.li-sub", [e.event_date ? fmtDateTime(e.event_date) : "ohne Datum", days !== null && days >= 0 ? `noch ${days} Tage` : null, e.location].filter(Boolean).join(" · ")))),
+          h("div.row.wrap", { style: { gap: "6px" } }, h("a.btn.sm", { href: `#/events/${e.id}` }, icon("calendar"), "Event"), h("a.btn.sm", { href: `#/door/${e.id}` }, icon("ticket"), "Abendkasse"))),
+        cap ? h("div", { style: { marginTop: "12px" } }, h("div.row.between", { style: { fontSize: "13px", marginBottom: "4px" } },
+          h("span", h("strong", `${fmtNum(sold)} / ${fmtNum(cap)} Tickets`), t.revenue ? ` · ${Number(t.revenue).toLocaleString("de-DE", { style: "currency", currency: "EUR" })}` : ""),
+          h("span.faint", e.metadata?.eventfrog_id ? "Eventfrog live" : "")), meter((sold / cap) * 100, [101, 101])) : null);
+    }));
+  });
+  return box;
+}
+
 export default async function projectView({ args: [id], query }) {
   const project = await q(sb.from("cc_projects").select("*").eq("id", id).maybeSingle());
   if (!project) return empty("folder", "Projekt nicht gefunden", "Es wurde vielleicht gelöscht.", h("a.btn", { href: "#/projects" }, "Zu den Projekten"));
   const modules = await q(sb.from("cc_modules").select("*").eq("project_id", id).order("position").order("created_at"));
   const ctx = { project };
 
-  const tabs = [["overview", "Übersicht"], ["files", "Dateien"], ["activity", "Aktivität"], ["ai", "KI-Nutzung"], ["servers", "Server"], ["settings", "Einstellungen"]];
+  const tabs = [["overview", "Übersicht"], ...(project.category === "jopml" ? [["launcher", "Launcher-Steuerung"]] : []), ["files", "Dateien"], ["activity", "Aktivität"], ["ai", "KI-Nutzung"], ["servers", "Server"], ["settings", "Einstellungen"]];
   let tab = query.get("tab") || "overview";
   const body = h("div");
   const tabBar = h("div.tabs", { role: "tablist" }, tabs.map(([k, t]) => h("button", { role: "tab", class: tab === k ? "on" : "", "aria-selected": tab === k, onclick: () => show(k) }, t)));
@@ -21,7 +43,11 @@ export default async function projectView({ args: [id], query }) {
     tab = k;
     tabBar.querySelectorAll("button").forEach((b, i) => { b.classList.toggle("on", tabs[i][0] === k); b.setAttribute("aria-selected", tabs[i][0] === k); });
     history.replaceState(null, "", `#/projects/${id}${k === "overview" ? "" : "?tab=" + k}`);
-    body.replaceChildren(({ overview, files: filesTab, activity: activityTab, ai: aiTab, servers: serversTab, settings: settingsTab })[k]());
+    body.replaceChildren(({ overview, launcher: launcherTab, files: filesTab, activity: activityTab, ai: aiTab, servers: serversTab, settings: settingsTab })[k]());
+  }
+  // JOPML: die Launcher-Steuerung (Nutzer, Fehler, Tickets, Releases) gehört direkt zum Projekt
+  function launcherTab() {
+    return lazy(async () => { const v = (await import("./jopml.js")).default; const el = await v({ args: [], query: new URLSearchParams(), embedded: true }); el.querySelector?.(".page-head")?.remove(); return el; });
   }
 
   // --- Übersicht: alle Module des Projekts
@@ -39,7 +65,10 @@ export default async function projectView({ args: [id], query }) {
   };
   function overview() {
     const enabled = modules.filter((m) => m.enabled && !(isWeb && ["metrics", "links"].includes(m.module_type) && ["Website", "Links"].includes(m.name)));
-    return h("div.stack", enabled.length ? h("div.row", { style: { justifyContent: "flex-end" } }, viewToggle()) : null, webSlot(),
+    return h("div.stack", enabled.length ? h("div.row", { style: { justifyContent: "flex-end" } }, viewToggle()) : null, linkedEvents(id),
+      project.category === "jopml" ? h("a.card.card-pad.row.clickable", { href: `#/projects/${id}?tab=launcher`, style: { gap: "12px", textDecoration: "none", color: "inherit" } },
+        h("div.li-icon", icon("layers")), h("div", { style: { flex: 1 } }, h("div.li-title", "Launcher-Steuerung"), h("div.li-sub", "Nutzer, Fehlercodes, Support-Tickets, KI-Verbrauch und Release-Checkliste")), icon("chevronR", "faint")) : null,
+      webSlot(),
       enabled.length ? enabled.map(moduleCard) : isWeb ? null : empty("layers", "Noch keine Module", "Module sind die Bausteine dieser Projektseite – z. B. Dateien, Roblox-Spiel, Server oder Notizen.",
         h("button.btn.primary", { onclick: () => newModule(id) }, icon("plus"), "Modul hinzufügen")),
       modules.length > enabled.length ? h("div.faint", { style: { fontSize: "12.5px" } }, `${modules.length - enabled.length} ausgeblendete(s) Modul(e) – unter „Einstellungen“ einblendbar.`) : null);
@@ -165,6 +194,20 @@ export default async function projectView({ args: [id], query }) {
           : h("div.faint", "Keine Module."), h("button.btn", { style: { marginTop: "12px" }, onclick: () => newModule(id) }, icon("plus"), "Modul hinzufügen")),
       h("div.card.card-pad", h("div.kv", h("dt", "Slug"), h("dd.mono", project.slug), h("dt", "ID"), h("dd.mono", project.id), h("dt", "Erstellt"), h("dd", fmtDateTime(project.created_at)),
         h("dt", "Aktualisiert"), h("dd", fmtDateTime(project.updated_at)))),
+      h("div.card.card-pad", h("div.row.between.wrap", { style: { gap: "10px" } },
+        h("div", h("strong", "Aufräumen"), h("div.faint", { style: { fontSize: "13px" } }, "Vereint doppelte Link-Module, doppelte Notizen und doppelte Tabellen, Checklisten oder Kennzahlen in den Übersichten. Nichts geht verloren.")),
+        h("button.btn", { onclick: async (e) => {
+          e.currentTarget.disabled = true;
+          try {
+            const pre = await rpc("cc_tidy_project", { p_project: id, p_apply: false });
+            if (!pre.modules && !pre.widgets) { toast("Alles schon aufgeräumt"); e.currentTarget.disabled = false; return; }
+            if (!(await confirmDialog("Aufräumen?", pre.changes.map((c) => `• ${c.action}: „${c.from}“ → „${c.into}“`).join("\n"), { ok: "Aufräumen", danger: false }))) { e.currentTarget.disabled = false; return; }
+            const r = await rpc("cc_tidy_project", { p_project: id, p_apply: true });
+            toast(`Aufgeräumt: ${r.modules} Modul(e), ${r.widgets} Kachel(n)`); dispatchEvent(new Event("hashchange"));
+          } catch (er) { toastErr(er); e.currentTarget.disabled = false; }
+        } }, icon("sparkles"), "Jetzt aufräumen"))),
+      project.metadata?.merged_from?.length ? h("div.card.card-pad", h("strong", "Zusammengeführt aus"), h("div.list", { style: { marginTop: "6px" } }, project.metadata.merged_from.map((x) => h("div.list-item",
+        h("div.li-main", h("div.li-title", x.name || x.slug), h("div.li-sub", `${x.slug}${x.at ? ` · ${fmtDate(x.at)}` : ""}${x.auto ? " · automatisch" : ""}`)))))) : null,
       h("div.card.card-pad", { style: { borderColor: "color-mix(in srgb, var(--bad) 30%, var(--line))" } },
         h("div.row.between.wrap", h("div", h("strong", "Projekt löschen"), h("div.faint", { style: { fontSize: "13px" } }, "Löscht Projekt, Module, Dateieinträge und nicht mehr genutzte Dateiinhalte dauerhaft.")),
           h("button.btn.danger", { onclick: delProject }, icon("trash"), "Löschen"))));
