@@ -177,7 +177,7 @@ export async function renderLink(root, token) {
       if (/restricted/.test(errMsg(e))) {
         const { data: { session } } = await sb.auth.getSession();
         clear(root, frame(null, empty("lock", "Nur für bestimmte Personen", session ? "Dein Google-Konto ist für diesen Link nicht freigegeben. Bitte die Person, die ihn geschickt hat, dich hinzuzufügen." : "Melde dich mit dem Google-Konto an, für das der Link freigegeben wurde.",
-          session ? h("button.btn", { onclick: async () => { await sb.auth.signOut(); location.reload(); } }, "Anderes Konto") : h("button.btn.primary", { onclick: async () => {
+          session ? h("button.btn", { onclick: async () => { await sb.auth.signOut({ scope: "local" }); location.reload(); } }, "Anderes Konto") : h("button.btn.primary", { onclick: async () => {
             localStorage.setItem("cc:after-login", location.hash);
             await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname, queryParams: { prompt: "select_account" } } });
           } }, "Mit Google anmelden"))));
@@ -191,7 +191,7 @@ export async function renderLink(root, token) {
 
 // Angemeldeter Gast (Google-Konto ohne Admin-Rechte)
 export async function renderGuest(root, who) {
-  const out = h("button.btn.sm.ghost", { onclick: async () => { await sb.auth.signOut(); location.hash = ""; location.reload(); } }, icon("logout"), "Abmelden");
+  const out = h("button.btn.sm.ghost", { onclick: async () => { await sb.auth.signOut({ scope: "local" }); location.hash = ""; location.reload(); } }, icon("logout"), "Abmelden");
   const body = h("div");
   const show = async () => {
     const m = location.hash.match(/^#\/g\/([0-9a-f-]{36})$/);

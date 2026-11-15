@@ -77,7 +77,7 @@ async function boot() {
   }
   if (!who?.admin) {
     if (location.search) history.replaceState(null, "", location.pathname + location.hash);
-    if (!who?.email && !who?.anonymous) { await sb.auth.signOut(); return renderLogin("Dieses Konto hat keine bestätigte E-Mail-Adresse."); }
+    if (!who?.email && !who?.anonymous) { await sb.auth.signOut({ scope: "local" }); return renderLogin("Dieses Konto hat keine bestätigte E-Mail-Adresse."); }
     sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") location.reload(); });
     const { renderWorkspace } = await import("./views/workspace.js");
     await renderWorkspace(root, who);
@@ -363,7 +363,7 @@ function openProfile() {
       h("div", h("div", { style: { fontWeight: 600 } }, meta.full_name || "Admin"), h("div.muted", user.email), h("span.badge.b-pri", { style: { marginTop: "6px" } }, "Administrator"))),
     h("div.field", h("label", "Darstellung"), h("div.seg", [["dark", "Dunkel"], ["light", "Hell"], ["system", "System"]].map(([k, t]) => h("button", { class: theme === k ? "on" : "", onclick: () => setTheme(k) }, t)))),
     h("div.row", h("a.btn", { href: "#/settings", onclick: () => m.close() }, icon("settings"), "Einstellungen"),
-      h("button.btn.danger", { onclick: async () => { await sb.auth.signOut(); location.reload(); } }, icon("logout"), "Abmelden"))));
+      h("button.btn.danger", { onclick: async () => { await sb.auth.signOut({ scope: "local" }); location.reload(); } }, icon("logout"), "Abmelden"))));
 }
 
 // ---------------- Globale Suche (⌘K) ----------------

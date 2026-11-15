@@ -233,7 +233,7 @@ export async function renderWorkspace(root, who) {
         h("section.card", h("div.card-head", h("h3", "Konto & Daten")), h("div.card-body", h("div.list",
           h("div.list-item", h("div.li-main", h("div.li-title", "KI-Wissen"), h("div.li-sub", "Was die KI gelernt hat – ansehen, ergänzen, vergessen")), h("button.btn.sm", { onclick: () => memoryDialog() }, icon("sparkles"), "Öffnen")),
           h("div.list-item", h("div.li-main", h("div.li-title", "Meine Daten exportieren"), h("div.li-sub", "Projekte und Verbindungen als JSON (ohne Schlüssel)")), h("button.btn.sm", { onclick: exportData }, icon("download"), "Export")),
-          h("div.list-item", h("div.li-main", h("div.li-title", "Abmelden")), h("button.btn.sm", { onclick: async () => { await sb.auth.signOut(); location.hash = ""; location.reload(); } }, icon("logout"), "Abmelden")),
+          h("div.list-item", h("div.li-main", h("div.li-title", "Abmelden")), h("button.btn.sm", { onclick: async () => { await sb.auth.signOut({ scope: "local" }); location.hash = ""; location.reload(); } }, icon("logout"), "Abmelden")),
           h("div.list-item", h("div.li-main", h("div.li-title", "Alle meine Daten löschen"), h("div.li-sub", "Entfernt sofort alle Projekte, Verbindungen und gespeicherten Schlüssel. Geteilte Inhalte anderer bleiben bei ihnen.")),
             h("button.btn.sm.danger", { onclick: async () => {
               if (!(await confirmDialog("Wirklich alles löschen?", "Alle deine Projekte, Verbindungen und Schlüssel werden endgültig gelöscht. Das lässt sich nicht rückgängig machen.", { ok: "Endgültig löschen" }))) return;
