@@ -111,6 +111,9 @@ export default async function dashboard({ user }) {
   drawGrid();
   return h("div",
     maintenanceBanner(cfg),
+    h("form.card.card-pad.row", { style: { gap: "8px", marginBottom: "14px" }, onsubmit: (e) => { e.preventDefault(); const v = e.target.elements.q.value.trim(); if (v) { openAssistant(null, v); e.target.reset(); } } },
+      h("input.input", { name: "q", placeholder: "Frag die KI oder sag, was zu tun ist – z. B. „Leg für Raveanation die Aufgabe Flyer drucken an“", "aria-label": "KI fragen", maxlength: 600 }),
+      h("button.btn.primary", { type: "submit" }, icon("bot"), "Los")),
     limitBanner(),
     h("div.page-head", h("div", h("h1", `${hello}${name ? ", " + name : ""}`), h("p", `${fmtNum(o.projects_total)} Projekte · ${o.servers_online}/${o.servers_total} Server online${o.events_upcoming ? ` · ${o.events_upcoming} Event(s) geplant` : ""} · ${fmtNum(o.notifications_unread)} ungelesene Hinweise`)),
       h("div.actions", modeSeg, viewToggle(), h("a.btn.ghost", { href: "#/settings?tab=dashboard" }, icon("dashboard"), "Anpassen"), h("button.btn.primary", { onclick: () => newProject() }, icon("plus"), "Neues Projekt"))),

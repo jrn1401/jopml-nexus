@@ -2,7 +2,7 @@
 // Verbinden-Assistent, KI-Assistent über die eigenen Daten, Geteiltes, Design und Datenschutz.
 // Alles läuft über RLS (owner_id = auth.uid()) bzw. die Edge Function nx-api – keine fremden Daten sichtbar.
 import { sb, q, rpc, nx, local } from "../lib/api.js";
-import { h, icon, clear, toast, toastErr, fmtAgo, fmtDateTime, fmtEUR, empty, errMsg, confirmDialog, formModal, debounce, stat } from "../lib/ui.js";
+import { h, icon, clear, toast, toastErr, fmtAgo, fmtDateTime, fmtEUR, empty, errMsg, confirmDialog, formModal, debounce, stat, modal } from "../lib/ui.js";
 import { connectDialog, connectionsList, PROVIDERS } from "../lib/connect.js";
 import { designPanel } from "../lib/design.js";
 import { legalLinks, legalPage, LEGAL_PAGES } from "./legal.js";
@@ -13,8 +13,8 @@ import { openShareDialog } from "../lib/share.js";
 import { openAiDrawer, memoryDialog } from "../lib/assistant.js";
 import { viewToggle, charts } from "../lib/viewmode.js";
 import { donut, PALETTE } from "../lib/charts.js";
-import { tasksPage, tasksCard, firstSteps, helpPage } from "./wsextra.js";
-import { eventsPage, eventPage } from "./wsevents.js";
+import { tasksPage, tasksCard, firstSteps, helpPage, interestsCard, aiCommand } from "./wsextra.js";
+import { eventsPage, eventPage, aiPlan } from "./wsevents.js";
 
 const KINDS = { all: ["Alle", "dashboard"], website: ["Websites", "globe"], repo: ["Repositories", "code"], event: ["Events", "calendar"], ai: ["KI", "sparkles"], database: ["Datenbanken", "server"], app: ["Apps", "box"], other: ["Sonstiges", "folder"] };
 const STATUS = { active: ["Aktiv", "b-ok"], error: ["Fehler", "b-bad"], building: ["Wird gebaut", "b-pri"], paused: ["Pausiert", "b-warn"], archived: ["Archiviert", "b-idle"] };
@@ -38,20 +38,34 @@ export async function renderWorkspace(root, who) {
       h("button.btn.sm.primary", { onclick: () => { local.set("asuser", false); location.hash = "#/users"; location.reload(); } }, "Zurück zur Admin-Ansicht")) : null,
     ann && !local.get(annKey, false) ? h(`div.banner${ann.level === "warn" ? ".warn" : ann.level === "ok" ? ".ok" : ""}`, { style: { margin: "0 0 12px" } }, icon(ann.level === "warn" ? "alert" : "bell"),
       h("div", { style: { flex: 1 } }, ann.text), h("button.btn.sm.ghost", { "aria-label": "Ankündigung schließen", onclick: (e) => { local.set(annKey, true); e.currentTarget.closest(".banner").remove(); } }, "OK")) : null);
+  // Bereiche – gefiltert nach Admin-Schaltern, Gastmodus und den gewählten Interessen („Wofür nutzt du Nexus?“)
+  const interests = local.get("ws:interests", null);
+  const NAV = [["#/", "Übersicht", null, "dashboard", null], ["#/events", "Events", "events", "calendar", "events"], ["#/aufgaben", "Aufgaben", "tasks", "check", "tasks"],
+    ["#/websites", "Websites", "websites", "globe", "web"], ["#/verbindungen", "Verbindungen", "connections", "link", "web"], ["#/geteilt", "Geteilt", "shares", "users", null],
+    ["#/hilfe", "Hilfe", "help", "info", null], ["#/einstellungen", "Einstellungen", null, "settings", null]]
+    .filter(([r, , f, , int]) => !(guest && ["#/verbindungen", "#/websites"].includes(r)) && (!f || feat(f)) && (!interests || !int || interests.includes(int)));
+  // Handy: Leiste unten mit den 4 wichtigsten Bereichen + „Mehr“
+  const MAIN = NAV.filter(([r]) => r !== "#/einstellungen").slice(0, 4);
+  const tabbar = h("nav.ws-tabbar", { "aria-label": "Bereiche" },
+    MAIN.map(([href, t, , ic]) => h("a", { href, dataset: { r: href } }, icon(ic), h("span", t))),
+    h("button", { type: "button", onclick: () => {
+      const m = modal("Alle Bereiche", h("div.list", NAV.map(([href, t, , ic]) => h("a.list-item", { href, onclick: () => m.close() }, icon(ic), h("div.li-main", h("div.li-title", t)))),
+        feat("ai") ? h("button.list-item", { onclick: () => { m.close(); aiDrawer(); } }, icon("bot"), h("div.li-main", h("div.li-title", "KI fragen"))) : null));
+    } }, icon("menu"), h("span", "Mehr")));
   const top = h("header.guest-top",
     h("a.brand", { href: "#/" }, h("div.brand-mark", icon("logo")), h("div.brand-text", CONFIG.appName, h("small", "Mein Bereich"))),
-    h("nav.ws-nav", [["#/", "Übersicht"], ["#/events", "Events", "events"], ["#/aufgaben", "Aufgaben", "tasks"], ["#/websites", "Websites", "websites"], ["#/verbindungen", "Verbindungen", "connections"], ["#/geteilt", "Geteilt", "shares"], ["#/hilfe", "Hilfe", "help"], ["#/einstellungen", "Einstellungen"]].filter(([r, , f]) => !(guest && ["#/verbindungen", "#/websites"].includes(r)) && (!f || feat(f))).map(([href, t]) => h("a", { href, dataset: { r: href } }, t))),
+    h("nav.ws-nav", { "aria-label": "Bereiche" }, NAV.map(([href, t]) => h("a", { href, dataset: { r: href } }, t))),
     h("div.spacer"),
     feat("ai") ? h("button.icon-btn", { title: "KI-Assistent", "aria-label": "KI-Assistent", onclick: () => aiDrawer() }, icon("bot")) : null,
     feat("connections") ? h("button.icon-btn", { title: "Verbinden", "aria-label": "Dienst verbinden", onclick: () => connect(show) }, icon("plus")) : null,
     h("button.icon-btn", { title: who.email, "aria-label": "Profil", style: { padding: 0 }, onclick: () => (location.hash = "#/einstellungen") }, avatar));
-  clear(root, h("a.skip-link", { href: "#content", onclick: (e) => { e.preventDefault(); body.focus(); } }, "Zum Inhalt springen"), h("div.guest-wrap", top, body));
+  clear(root, h("a.skip-link", { href: "#content", onclick: (e) => { e.preventDefault(); body.focus(); } }, "Zum Inhalt springen"), h("div.guest-wrap", top, body, tabbar));
 
   let seq = 0;
   async function show() {
     const hash = location.hash || "#/";
     const s = ++seq;
-    top.querySelectorAll(".ws-nav a").forEach((a) => { const on = a.dataset.r === hash || (a.dataset.r === "#/geteilt" && hash.startsWith("#/g/")) || (a.dataset.r === "#/websites" && hash.startsWith("#/web/")) || (a.dataset.r === "#/events" && hash.startsWith("#/events/")); a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    root.querySelectorAll(".ws-nav a, .ws-tabbar a").forEach((a) => { const on = a.dataset.r === hash || (a.dataset.r === "#/geteilt" && hash.startsWith("#/g/")) || (a.dataset.r === "#/websites" && hash.startsWith("#/web/")) || (a.dataset.r === "#/events" && hash.startsWith("#/events/")); a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
     body.replaceChildren(h("div.skel", { style: { height: "160px" } }));
     try {
       let node;
@@ -131,6 +145,8 @@ export async function renderWorkspace(root, who) {
       h("div.grid.g-4", { style: { marginBottom: "18px" } },
         statBox("Projekte", projects.length, "folder"), statBox("Verbindungen", conns.length, "link", err ? `${err} mit Fehler` : null),
         web.length ? statBox("Websites live", h("span.row", { style: { gap: "10px" } }, h("span.live-dot", { class: live ? "on" : "" }), String(live)), "globe", `${web.reduce((a, w) => a + (w.today_uv || 0), 0)} Besucher heute`) : statBox("Mit dir geteilt", shared.length, "users"), statBox("KI-Fragen heute", usage ? `${usage.requests_today}${usage.limit ? ` / ${usage.limit}` : ""}` : "–", "sparkles", usage?.limit ? "eigener KI-Schlüssel = ohne Limit" : null)),
+      feat("ai") ? aiCommand({ ask: (t) => aiDrawer(t), planEvent: async (t) => (await aiPlan(null, t)).id }) : null,
+      interestsCard(),
       firstSteps({ projects: projects.length, conns: conns.length, guest, shared: shared.length || 0 }),
       h("div.grid.g-2", { style: { marginBottom: "16px" } }, feat("tasks") ? await tasksCard() : null, h("section.card", h("div.card-head", h("h3", "Schnellzugriff")), h("div.card-body", h("div.list",
         h("a.list-item", { href: "#/aufgaben" }, icon("check"), h("div.li-main", h("div.li-title", "Aufgabe notieren"))),

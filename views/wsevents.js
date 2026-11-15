@@ -36,7 +36,7 @@ function eventForm(ev, onSaved) {
 }
 
 // KI erstellt einen Plan als JSON – wir legen daraus Event + Einträge an
-async function aiPlan(eventId, text) {
+export async function aiPlan(eventId, text) {
   const question = `Plane ein Event: ${text}
 Antworte NUR mit JSON ohne Erklärung, genau in dieser Form:
 {"name":"…","location":"…","capacity":0,"ticket_price":0,"tasks":["…"],"schedule":[{"time":"18:00","title":"…"}],"costs":[{"title":"…","amount":0}]}

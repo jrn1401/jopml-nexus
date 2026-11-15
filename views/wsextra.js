@@ -1,6 +1,6 @@
 // Zusatzfunktionen für alle Konten (nicht nur Admin): eigene Aufgaben, Erste-Schritte-Liste, kurzes Handbuch.
 // Daten liegen in nx_tasks (RLS: owner_id = auth.uid()), höchstens 500 Aufgaben pro Konto.
-import { sb, q, local } from "../lib/api.js";
+import { sb, q, local, nx } from "../lib/api.js";
 import { h, icon, toast, toastErr, fmtDateTime, empty, formModal, confirmDialog, debounce } from "../lib/ui.js";
 
 const PRIO = [["2", "Wichtig"], ["1", "Normal"], ["0", "Irgendwann"]];
@@ -129,5 +129,66 @@ export function helpPage(ask) {
     h("section.card", h("div.card-body",
       h("input.input", { type: "search", placeholder: "Wonach suchst du?", "aria-label": "Hilfe durchsuchen", style: { marginBottom: "10px" }, oninput: debounce((e) => draw(e.target.value.toLowerCase()), 120) }),
       box,
-      h("div.row", { style: { marginTop: "14px", gap: "8px" } }, h("button.btn", { onclick: () => ask("Wie funktioniert mein Bereich? Erkläre mir kurz die wichtigsten Funktionen.") }, icon("bot"), "KI fragen")))));
+      h("div.row.wrap", { style: { marginTop: "14px", gap: "8px" } }, h("button.btn.ghost", { onclick: () => { local.set("ws:interests", null); local.set("ws:interests-asked", false); location.hash = "#/"; location.reload(); } }, icon("settings"), "Bereiche anpassen"), h("button.btn", { onclick: () => ask("Wie funktioniert mein Bereich? Erkläre mir kurz die wichtigsten Funktionen.") }, icon("bot"), "KI fragen")))));
+}
+
+// ---------- Wofür nutzt du Nexus? (passt Menü und Übersicht an) ----------
+const INTERESTS = [["events", "calendar", "Events & Partys", "Planen, Tickets, Budget, Helfer"], ["tasks", "check", "Aufgaben & Lernen", "To-dos, Schule, Termine"], ["web", "globe", "Websites & Code", "Netlify, GitHub, Vercel, Besucher"]];
+export function interestsCard({ force = false } = {}) {
+  if (!force && (local.get("ws:interests", null) || local.get("ws:interests-asked", false))) return null;
+  const pick = new Set(local.get("ws:interests", null) || []);
+  const save = (list) => { local.set("ws:interests", list); local.set("ws:interests-asked", true); location.reload(); };
+  return h("section.card", { style: { marginBottom: "16px" } },
+    h("div.card-head", h("h3", "Wofür willst du Nexus nutzen?")),
+    h("div.card-body.stack", { style: { gap: "10px" } },
+      h("p.faint", { style: { margin: 0 } }, "Wähle aus – dann zeigt das Menü nur, was du brauchst. Ändern geht jederzeit unter Hilfe."),
+      h("div.share-choices", INTERESTS.map(([k, ic, t, d]) => {
+        const b = h("button.share-choice", { type: "button", role: "checkbox", "aria-checked": String(pick.has(k)), class: pick.has(k) ? "on" : "", onclick: () => {
+          pick.has(k) ? pick.delete(k) : pick.add(k); b.classList.toggle("on", pick.has(k)); b.setAttribute("aria-checked", String(pick.has(k)));
+        } }, h("div.li-icon", icon(ic)), h("div.li-main", h("div.li-title", t), h("div.li-sub", d)));
+        return b;
+      })),
+      h("div.row", { style: { gap: "8px", justifyContent: "flex-end" } },
+        h("button.btn.ghost", { onclick: () => { local.set("ws:interests", null); local.set("ws:interests-asked", true); location.reload(); } }, "Alles zeigen"),
+        h("button.btn.primary", { onclick: () => (pick.size ? save([...pick]) : toast("Mindestens eins auswählen – oder „Alles zeigen“", "err")) }, "Übernehmen"))));
+}
+
+// ---------- KI-Befehlszeile: „Sag einfach, was du willst“ ----------
+// Die KI (Groq/Gemini über nx-api) wählt eine Aktion: Aufgabe anlegen, Event planen, Bereich öffnen oder antworten.
+export function aiCommand({ ask, planEvent }) {
+  const input = h("input.input", { placeholder: "z. B. „Erinnere mich Freitag ans Flyer drucken“ oder „Plane eine Party für 80 Leute“", "aria-label": "Was möchtest du tun?", maxlength: 400 });
+  const btn = h("button.btn.primary", { type: "submit" }, icon("bot"), "Los");
+  const out = h("div.faint", { style: { fontSize: "13px", minHeight: "0" }, "aria-live": "polite" });
+  const run = async (text) => {
+    btn.disabled = true; out.textContent = "Die KI überlegt …";
+    try {
+      const today = new Date().toISOString().slice(0, 16);
+      const r = await nx("ai", { history: [], question: `Jetzt ist ${today} (Europe/Berlin). Nutzerwunsch: „${text}“
+Wähle GENAU EINE Aktion und antworte NUR mit JSON:
+{"action":"task","title":"…","due":"YYYY-MM-DDTHH:MM oder null"} – etwas merken/erledigen/erinnern
+{"action":"event","text":"…"} – Veranstaltung/Party/Treffen planen
+{"action":"go","page":"events|aufgaben|websites|verbindungen|geteilt|hilfe|einstellungen"} – Bereich öffnen
+{"action":"answer"} – Frage, Erklärung oder alles andere` });
+      const m = String(r.answer || "").match(/\{[\s\S]*?\}/);
+      const a = m ? JSON.parse(m[0]) : { action: "answer" };
+      if (a.action === "task" && a.title) {
+        await q(sb.from("nx_tasks").insert({ title: String(a.title).slice(0, 300), due: a.due && a.due !== "null" ? new Date(a.due).toISOString() : null }));
+        local.set("ws:did-task", true);
+        out.replaceChildren("✓ Aufgabe angelegt: ", h("strong", a.title), a.due && a.due !== "null" ? ` (fällig ${new Date(a.due).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })})` : "", " · ", h("a", { href: "#/aufgaben" }, "ansehen"));
+      } else if (a.action === "event") {
+        out.textContent = "Die KI plant dein Event …";
+        const id = await planEvent(a.text || text);
+        location.hash = `#/events/${id}`;
+      } else if (a.action === "go" && /^(events|aufgaben|websites|verbindungen|geteilt|hilfe|einstellungen)$/.test(a.page)) {
+        location.hash = `#/${a.page}`;
+      } else { out.textContent = ""; ask(text); }
+      input.value = "";
+    } catch (e) { out.textContent = ""; toastErr(e); }
+    finally { btn.disabled = false; }
+  };
+  return h("section.card.ai-cmd", { style: { marginBottom: "16px" } }, h("div.card-body",
+    h("form.row", { style: { gap: "8px" }, onsubmit: (e) => { e.preventDefault(); if (input.value.trim()) run(input.value.trim()); } }, input, btn),
+    h("div.row.wrap", { style: { gap: "6px", marginTop: "8px" } }, ["Was steht diese Woche an?", "Plane einen Geburtstag für 20 Leute", "Morgen 18 Uhr Training"].map((t) =>
+      h("button.chip", { type: "button", onclick: () => { input.value = t; run(t); } }, t))),
+    out));
 }

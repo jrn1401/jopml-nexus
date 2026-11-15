@@ -151,7 +151,7 @@ function renderShell() {
 
   const sidebar = h("aside.sidebar",
     h("a.brand", { href: "#/" }, h("div.brand-mark", icon("logo")), h("div.brand-text", CONFIG.appName, h("small", "Control Center"))),
-    nav, h("div.nav-label", "Angeheftet"), pinned,
+    h("div.sidebar-scroll", nav, h("div.nav-label", "Angeheftet"), pinned),
     h("div.sidebar-foot.nav",
       h("a", { href: "#/settings", dataset: { route: "settings" } }, icon("settings"), h("span.label", "Einstellungen")),
       h("a.collapse-toggle", { href: "#", onclick: (e) => { e.preventDefault(); app.classList.toggle("collapsed"); local.set("collapsed", app.classList.contains("collapsed")); } },
@@ -178,8 +178,15 @@ function renderShell() {
   clear(root, h("a.skip-link", { href: "#content", onclick: (e) => { e.preventDefault(); content.focus(); } }, "Zum Inhalt springen"), app);
   shell = { app, nav, pinned, content, bellBadge, statusPill };
 
+  // Gruppen lassen sich auf- und zuklappen (pro Gerät gemerkt) – hält die Seitenleiste kurz
+  const closedGroups = new Set(local.get("navclosed", []));
   for (const [group, items] of NAV_GROUPS) {
-    nav.append(h("div.nav-label", group), ...items.map(([href, ic, label]) => h("a", { href, dataset: { route: href.slice(2) || "dashboard" } }, icon(ic), h("span.label", label), h("span.nav-badge.hidden"))));
+    const box = h("div.nav-group", { class: closedGroups.has(group) ? "closed" : "" }, items.map(([href, ic, label]) => h("a", { href, dataset: { route: href.slice(2) || "dashboard" } }, icon(ic), h("span.label", label), h("span.nav-badge.hidden"))));
+    const head = h("button.nav-label.nav-toggle", { type: "button", "aria-expanded": String(!closedGroups.has(group)), onclick: () => {
+      const closed = box.classList.toggle("closed"); head.setAttribute("aria-expanded", String(!closed));
+      closed ? closedGroups.add(group) : closedGroups.delete(group); local.set("navclosed", [...closedGroups]);
+    } }, h("span", group), icon("chevronD"));
+    nav.append(head, box);
   }
   refreshPinned();
   window.addEventListener("cc:nav-refresh", refreshPinned);
@@ -231,6 +238,7 @@ function markActive() {
     const r = a.dataset.route;
     const on = r === "dashboard" ? cur === "" : cur === r || (cur.startsWith(r + "/") && !shell.pinned.querySelector(`[data-route="${cur}"]`));
     a.classList.toggle("active", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    if (on) { const g = a.closest(".nav-group.closed"); if (g) { g.classList.remove("closed"); g.previousElementSibling?.setAttribute("aria-expanded", "true"); } }
   });
 }
 
