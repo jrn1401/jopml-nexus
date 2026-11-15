@@ -669,3 +669,18 @@ details.list-item > summary { list-style: none; } details.list-item > summary::-
 .login-cube { display: block; width: 150px; height: auto; margin: -8px auto 6px; filter: drop-shadow(0 10px 30px rgba(125,126,255,.25)); }
 @media (prefers-reduced-motion: no-preference) { .login-cube { animation: cube-float 6s ease-in-out infinite; } }
 @keyframes cube-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.share-choices { display: grid; gap: 8px; }
+.share-choice { display: flex; gap: 12px; align-items: center; text-align: left; width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: inherit; font: inherit; cursor: pointer; }
+.share-choice:hover { border-color: var(--border-strong, var(--text-3)); }
+.share-choice.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--surface)); }
+.share-ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; }
+.tix-hero { text-align: center; padding: 28px 18px; }
+.tix-hero .big { font-size: clamp(56px, 16vw, 104px); font-weight: 800; letter-spacing: -3px; line-height: 1; }
+.tix-hero .of { color: var(--text-2); font-size: 18px; margin-top: 6px; }
+.tix-bar { height: 14px; border-radius: 999px; background: var(--surface-2, rgba(127,127,127,.15)); overflow: hidden; margin: 18px auto 6px; max-width: 520px; }
+.tix-bar > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primary), #46d3ee); transition: width .8s ease; }
+.tix-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); }
+.tix-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #3ecf8e; animation: pulse 2s infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.share-choice .li-sub, .share-choice .li-title { white-space: normal; overflow: visible; text-overflow: clip; }
+.share-ways .row { flex-wrap: wrap; } .share-ways .row .input { flex: 1 1 160px; min-width: 0; }

@@ -90,6 +90,7 @@ export function firstSteps({ projects, conns, guest, shared }) {
     [!guest, guest ? "Konto mit Google sichern" : "Mit Google angemeldet", "Damit bleiben deine Daten dauerhaft erhalten.", null],
     [conns > 0, "Einen Dienst verbinden", "Netlify, GitHub, Vercel, Supabase oder Eventfrog – Projekte erscheinen automatisch.", guest ? null : "#/verbindungen"],
     [projects > 0, "Erstes Projekt", "Wird beim Verbinden automatisch angelegt – oder von Hand über „Projekt anlegen“.", null],
+    [local.get("ws:did-event", false), "Ein Event planen", "Unter „Events“ – oder einfach die KI planen lassen.", "#/events"],
     [local.get("ws:did-task", false), "Eine Aufgabe notieren", "Unter „Aufgaben“: tippen, Enter, fertig.", "#/aufgaben"],
     [local.get("ws:did-ai", false), "Die KI etwas fragen", "Der Roboter oben rechts kennt deine Projekte.", null],
     [local.get("ws:did-design", false) || shared > 0, "Ansicht anpassen", "Hell/Dunkel, Schriftgröße, hoher Kontrast unter Einstellungen.", "#/einstellungen"],
@@ -108,6 +109,8 @@ export function firstSteps({ projects, conns, guest, shared }) {
 const HELP = [
   ["Übersicht", "dashboard", "Alle deine Projekte auf einen Blick. Oben die Zahlen, darunter Karten. Mit den Reitern filterst du nach Art (Websites, Repos, Events …), das Suchfeld findet alles nach Namen."],
   ["Dienst verbinden", "link", "Plus oben rechts → Dienst auswählen → API-Schlüssel einfügen. Der Schlüssel wird verschlüsselt gespeichert und nie wieder angezeigt. Danach wird stündlich aktualisiert."],
+  ["Events planen", "calendar", "Unter „Events“ legst du Partys oder Treffen an: Aufgaben, Ablauf, Kosten, Einnahmen, Gäste, Schichten und Tickets. „Mit KI planen“: einen Satz beschreiben – die KI legt Aufgaben, Ablauf und Kosten an. Das Budget rechnet den Break-even automatisch."],
+  ["Teilen", "users", "Teilen-Knopf → zuerst wählen, WAS du teilst (z. B. nur die Ticket-Live-Anzeige), dann WIE: als Link (ohne Konto) oder mit bestimmten Google-Konten. Ticket-Live aktualisiert sich bei den anderen von selbst. Freigaben kannst du jederzeit beenden."],
   ["Aufgaben", "check", "Deine eigene To-do-Liste. Tippen und Enter speichert sofort. Mit Frist und Wichtigkeit (rot = wichtig). Filter: Offen, Heute & überfällig, Erledigt."],
   ["Websites", "globe", "Live-Besucher, Erreichbarkeit und Netlify-Daten deiner verbundenen Websites. Ein grüner Punkt heißt: gerade ist jemand auf der Seite."],
   ["Geteilt", "users", "Was andere mit dir geteilt haben (Events, Projekte, Dateien). Du kannst auch eigene Projekte über das Personen-Symbol auf einer Karte teilen."],

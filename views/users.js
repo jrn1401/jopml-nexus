@@ -4,6 +4,7 @@ import { rpc, local } from "../lib/api.js";
 import { h, icon, toast, toastErr, fmtAgo, fmtDate, fmtBytes, fmtNum, empty, confirmDialog, meter, stat, debounce } from "../lib/ui.js";
 
 export const FEATURES = [
+  ["events", "Events", "Eigene Events planen, Tickets, Budget, mit KI"],
   ["tasks", "Aufgaben", "Eigene To-do-Liste"],
   ["websites", "Websites", "Besucher und Erreichbarkeit eigener Websites"],
   ["connections", "Verbindungen", "Netlify, GitHub, Vercel, Supabase, Eventfrog verbinden"],

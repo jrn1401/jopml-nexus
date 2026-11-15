@@ -52,8 +52,44 @@ function teamBlock(ctx, reload) {
   return box;
 }
 
+// Ticket-Live-Anzeige: große Zahl, Fortschritt, Kategorien, Verkauf pro Tag
+function ticketBlock(t, { compact = false } = {}) {
+  if (!t) return null;
+  const sold = t.sold || 0, cap = t.capacity || 0, pct = cap ? Math.min(100, Math.round((sold / cap) * 100)) : null;
+  const daily = (t.daily || []).slice(-14), max = Math.max(1, ...daily.map((d) => d.n || 0));
+  return h("div.stack", { style: { gap: "16px" } },
+    h("section.card.tix-hero",
+      h("div.tix-live", t.as_of ? `Live · Stand ${fmtAgo(t.as_of)}` : "Live"),
+      h("div.big", { "aria-label": `${sold} Tickets verkauft` }, String(sold)),
+      h("div.of", cap ? `von ${cap} Tickets verkauft · ${pct} %` : "Tickets verkauft"),
+      cap ? h("div.tix-bar", { role: "progressbar", "aria-valuemin": 0, "aria-valuemax": cap, "aria-valuenow": sold, "aria-label": "Verkaufsfortschritt" }, h("i", { style: { width: `${pct}%` } })) : null,
+      h("div.row.wrap", { style: { justifyContent: "center", gap: "18px", marginTop: "10px", fontSize: "13.5px" } },
+        cap ? h("span", h("strong", String(Math.max(0, cap - sold))), " noch frei") : null,
+        t.orders ? h("span", h("strong", String(t.orders)), " Bestellungen") : null,
+        t.revenue !== null && t.revenue !== undefined ? h("span", h("strong", fmtEUR(t.revenue)), " Umsatz") : null,
+        t.checked_in ? h("span", h("strong", String(t.checked_in)), " eingecheckt") : null)),
+    compact ? null : h("div.grid.g-2", { style: { alignItems: "start" } },
+      (t.tiers || []).length ? h("section.card", h("div.card-head", h("h3", "Ticketarten")), h("div.card-body.stack", { style: { gap: "12px" } }, t.tiers.map((x) =>
+        h("div", h("div.row.between", h("span", x.name), h("span.muted", x.capacity ? `${x.sold} / ${x.capacity}` : String(x.sold))),
+          x.capacity ? h("div.tix-bar", { style: { height: "8px", margin: "6px 0 0", maxWidth: "none" } }, h("i", { style: { width: `${Math.min(100, (x.sold / x.capacity) * 100)}%` } })) : null)))) : null,
+      daily.length ? h("section.card", h("div.card-head", h("h3", "Verkauf pro Tag")), h("div.card-body",
+        h("div.row", { style: { alignItems: "flex-end", gap: "6px", height: "120px" }, role: "img", "aria-label": daily.map((d) => `${d.d}: ${d.n}`).join(", ") },
+          daily.map((d) => h("div", { style: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", height: "100%", justifyContent: "flex-end" } },
+            h("span.faint", { style: { fontSize: "11px" } }, String(d.n)),
+            h("div", { style: { width: "100%", height: `${Math.max(3, ((d.n || 0) / max) * 90)}px`, borderRadius: "6px 6px 2px 2px", background: "var(--primary)" } }),
+            h("span.faint", { style: { fontSize: "10.5px" } }, new Date(d.d).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }))))))) : null));
+}
+
 // Inhalt einer Freigabe darstellen. ctx: { token } für Links oder { shareId } für angemeldete Gäste
 export function renderShared(p, ctx, reload) {
+  if (p.type === "tickets") {
+    const ev = p.event || {}, ms = ev.date ? new Date(ev.date) - Date.now() : null;
+    return h("div",
+      h("div.page-head", h("div", h("h1", ev.name || "Tickets"), h("p", [ev.date ? fmtDateTime(ev.date) : null, ev.location, ms > 0 ? `noch ${Math.ceil(ms / 864e5)} Tage` : null].filter(Boolean).join(" · ")))),
+      ticketBlock(p.tickets),
+      ev.ticket_link && /^https:\/\//.test(ev.ticket_link) ? h("div.row", { style: { justifyContent: "center", marginTop: "16px" } }, h("a.btn.primary", { href: ev.ticket_link, target: "_blank", rel: "noopener noreferrer" }, icon("ticket"), "Tickets kaufen")) : null,
+      h("p.faint", { style: { textAlign: "center", fontSize: "12.5px", marginTop: "18px" } }, `Aktualisiert sich automatisch · geteilt von ${p.from || "Nexus"}`));
+  }
   const canTick = ["tasks", "edit"].includes(p.share?.permission) && p.type === "event";
   const fileList = (files) => files.length ? h("div.list", files.map((f) => h("div.list-item",
     h("div.li-icon", icon("file")), h("div.li-main", h("div.li-title", f.name), h("div.li-sub", `${f.path} · ${fmtBytes(f.size)}`)),
@@ -80,6 +116,7 @@ export function renderShared(p, ctx, reload) {
       h("div.page-head", h("div", h("h1", ev.name), h("div.row.wrap", { style: { gap: "8px", marginTop: "8px" } }, badge(EVENT_STATUS, ev.status),
         h("span.faint", { style: { fontSize: "13px" } }, [ev.date ? fmtDateTime(ev.date) : "ohne Datum", ev.location].filter(Boolean).join(" · "))))),
       ms !== null && ms > 0 ? h("div.countdown", { style: { maxWidth: "360px" } }, h("div", h("strong", Math.floor(ms / 86400_000)), h("span", "Tage")), h("div", h("strong", Math.floor((ms % 86400_000) / 3600_000)), h("span", "Std."))) : null,
+      p.tickets && p.tickets.sold ? h("div", { style: { marginBottom: "16px" } }, ticketBlock(p.tickets, { compact: true })) : null,
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(ev.description)) : null,
       canTick ? h("div.na-note", { style: { marginBottom: "16px" } }, icon("check"), h("div", p.share.permission === "edit" ? "Du arbeitest mit: Aufgaben abhaken und neue Aufgaben, Schichten und Gäste anlegen." : "Du darfst Aufgaben abhaken.")) : null,
       h("div.grid.g-2", ["task", "schedule", "location", "tech", "guest", "cost", "income"].map(sec)),
@@ -120,6 +157,7 @@ export async function renderLink(root, token) {
       if (!p) throw new Error("not_shared");
       if (p.share?.permission === "door") { const { doorPanel } = await import("./door.js"); clear(root, frame(null, doorPanel({ token }))); document.title = `Abendkasse · ${CONFIG.appName}`; return; }
       clear(root, frame(null, renderShared(p, { token }, draw)));
+      if (p.type === "tickets" || p.type === "site") liveRefresh(root, () => rpc("cc_link_refresh", { p_token: token }), (np) => renderShared(np, { token }, draw));
       document.title = `${p.event?.name || p.project?.name || p.file?.name} · ${CONFIG.appName}`;
     } catch (e) {
       clear(root, frame(null, empty("lock", "Link ungültig oder abgelaufen", /not_shared/.test(errMsg(e)) ? "Bitte die Person, die dir den Link geschickt hat, um einen neuen Link." : errMsg(e))));
@@ -141,10 +179,11 @@ export async function renderGuest(root, who) {
         const p = await rpc("cc_guest_open", { p_share: m[1] });
         body.replaceChildren(h("div.crumb", h("a", { href: "#/" }, "Mit dir geteilt"), icon("chevronR"), h("span", p.event?.name || p.project?.name || p.file?.name)),
           renderShared(p, { shareId: m[1] }, null));
+        if (p.type === "tickets") liveRefresh(body, () => rpc("cc_guest_open", { p_share: m[1] }), (np) => [h("div.crumb", h("a", { href: "#/" }, "Mit dir geteilt"), icon("chevronR"), h("span", np.event?.name || "")), renderShared(np, { shareId: m[1] }, null)], 120_000);
         return;
       }
       const list = await rpc("cc_guest_list");
-      const KI = { event: "calendar", project: "folder", file: "file" };
+      const KI = { event: "calendar", project: "folder", file: "file", tickets: "ticket" };
       body.replaceChildren(h("div.page-head", h("div", h("h1", "Mit dir geteilt"), h("p", `Angemeldet als ${who.email}`))),
         list.length ? h("div.grid", { style: { gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))" } }, list.map((s) =>
           h("a.card.card-pad", { href: `#/g/${s.id}`, style: { display: "flex", gap: "12px", alignItems: "center" } }, h("div.li-icon", icon(KI[s.kind])),
@@ -154,4 +193,14 @@ export async function renderGuest(root, who) {
   };
   window.addEventListener("hashchange", show);
   await show();
+}
+
+// Live-Ansichten neu laden, solange der Tab sichtbar ist (Tickets jede Minute)
+function liveRefresh(host, load, render, every = 60_000) {
+  const main = host.querySelector?.("main.content") || host;
+  const t = setInterval(async () => {
+    if (!main.isConnected) return clearInterval(t);
+    if (document.visibilityState !== "visible") return;
+    try { const np = await load(); if (np) { const out = render(np); main.replaceChildren(...(Array.isArray(out) ? out : [out])); } } catch { /* nächster Versuch */ }
+  }, every);
 }

@@ -14,6 +14,7 @@ import { openAiDrawer, memoryDialog } from "../lib/assistant.js";
 import { viewToggle, charts } from "../lib/viewmode.js";
 import { donut, PALETTE } from "../lib/charts.js";
 import { tasksPage, tasksCard, firstSteps, helpPage } from "./wsextra.js";
+import { eventsPage, eventPage } from "./wsevents.js";
 
 const KINDS = { all: ["Alle", "dashboard"], website: ["Websites", "globe"], repo: ["Repositories", "code"], event: ["Events", "calendar"], ai: ["KI", "sparkles"], database: ["Datenbanken", "server"], app: ["Apps", "box"], other: ["Sonstiges", "folder"] };
 const STATUS = { active: ["Aktiv", "b-ok"], error: ["Fehler", "b-bad"], building: ["Wird gebaut", "b-pri"], paused: ["Pausiert", "b-warn"], archived: ["Archiviert", "b-idle"] };
@@ -39,7 +40,7 @@ export async function renderWorkspace(root, who) {
       h("div", { style: { flex: 1 } }, ann.text), h("button.btn.sm.ghost", { "aria-label": "Ankündigung schließen", onclick: (e) => { local.set(annKey, true); e.currentTarget.closest(".banner").remove(); } }, "OK")) : null);
   const top = h("header.guest-top",
     h("a.brand", { href: "#/" }, h("div.brand-mark", icon("logo")), h("div.brand-text", CONFIG.appName, h("small", "Mein Bereich"))),
-    h("nav.ws-nav", [["#/", "Übersicht"], ["#/aufgaben", "Aufgaben", "tasks"], ["#/websites", "Websites", "websites"], ["#/verbindungen", "Verbindungen", "connections"], ["#/geteilt", "Geteilt", "shares"], ["#/hilfe", "Hilfe", "help"], ["#/einstellungen", "Einstellungen"]].filter(([r, , f]) => !(guest && ["#/verbindungen", "#/websites"].includes(r)) && (!f || feat(f))).map(([href, t]) => h("a", { href, dataset: { r: href } }, t))),
+    h("nav.ws-nav", [["#/", "Übersicht"], ["#/events", "Events", "events"], ["#/aufgaben", "Aufgaben", "tasks"], ["#/websites", "Websites", "websites"], ["#/verbindungen", "Verbindungen", "connections"], ["#/geteilt", "Geteilt", "shares"], ["#/hilfe", "Hilfe", "help"], ["#/einstellungen", "Einstellungen"]].filter(([r, , f]) => !(guest && ["#/verbindungen", "#/websites"].includes(r)) && (!f || feat(f))).map(([href, t]) => h("a", { href, dataset: { r: href } }, t))),
     h("div.spacer"),
     feat("ai") ? h("button.icon-btn", { title: "KI-Assistent", "aria-label": "KI-Assistent", onclick: () => aiDrawer() }, icon("bot")) : null,
     feat("connections") ? h("button.icon-btn", { title: "Verbinden", "aria-label": "Dienst verbinden", onclick: () => connect(show) }, icon("plus")) : null,
@@ -50,7 +51,7 @@ export async function renderWorkspace(root, who) {
   async function show() {
     const hash = location.hash || "#/";
     const s = ++seq;
-    top.querySelectorAll(".ws-nav a").forEach((a) => { const on = a.dataset.r === hash || (a.dataset.r === "#/geteilt" && hash.startsWith("#/g/")) || (a.dataset.r === "#/websites" && hash.startsWith("#/web/")); a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    top.querySelectorAll(".ws-nav a").forEach((a) => { const on = a.dataset.r === hash || (a.dataset.r === "#/geteilt" && hash.startsWith("#/g/")) || (a.dataset.r === "#/websites" && hash.startsWith("#/web/")) || (a.dataset.r === "#/events" && hash.startsWith("#/events/")); a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
     body.replaceChildren(h("div.skel", { style: { height: "160px" } }));
     try {
       let node;
@@ -63,6 +64,8 @@ export async function renderWorkspace(root, who) {
       else if (/^#\/web\/[0-9a-f-]{36}$/.test(hash)) node = await sitePage(hash.slice(6));
       else if (hash === "#/geteilt" && feat("shares")) node = await sharedPage();
       else if (hash === "#/aufgaben" && feat("tasks")) node = await tasksPage();
+      else if (hash === "#/events" && feat("events")) node = await eventsPage();
+      else if (/^#\/events\/[0-9a-f-]{36}$/.test(hash) && feat("events")) node = await eventPage(hash.slice(9));
       else if (hash === "#/hilfe" && feat("help")) node = helpPage((t) => aiDrawer(t));
       else if (hash === "#/einstellungen") node = settingsPage();
       else node = await overview();
@@ -108,7 +111,7 @@ export async function renderWorkspace(root, who) {
           h("div.spacer"),
           p.kind === "website" && p.url && !guest ? h("button.btn.sm.primary", { onclick: async (e) => { e.currentTarget.disabled = true; try { const s2 = await siteFor("nx", p.id); location.hash = `#/web/${s2.id}`; } catch (er) { toastErr(er); e.currentTarget.disabled = false; } } }, icon("activity"), "Live") : null,
           p.url ? h("a.btn.sm", { href: p.url, target: "_blank", rel: "noopener noreferrer", title: "Öffnen", "aria-label": "Öffnen" }, icon("external")) : null,
-          !guest ? h("button.btn.sm.ghost", { "aria-label": "Teilen", title: "Teilen", onclick: () => openShareDialog("nx_project", p.id, p.name) }, icon("users")) : null,
+          !guest ? h("button.btn.sm.ghost", { "aria-label": "Teilen", title: "Teilen", onclick: () => openShareDialog("nx_project", p.id, p.name, { tickets: !!p.metadata?.tickets }) }, icon("users")) : null,
           h("button.btn.sm.ghost", { "aria-label": "KI fragen", title: "KI zu diesem Projekt fragen", onclick: () => aiDrawer(`Wie steht es um „${p.name}“ und was sollte ich als Nächstes tun?`) }, icon("sparkles")),
           h("button.btn.sm.ghost", { "aria-label": "Bearbeiten", title: "Bearbeiten", onclick: () => editProject(p) }, icon("edit"))));
     };
