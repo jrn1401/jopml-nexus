@@ -2,6 +2,7 @@
 import { sb, q, rpc } from "../lib/api.js";
 import { h, icon, clear, fmtAgo, fmtDateTime, fmtBytes, toast, toastErr, copyText, confirmDialog, naNote } from "../lib/ui.js";
 import { download } from "../lib/actions.js";
+import { enablePush, disablePush, currentSub, isIOS, isStandalone } from "../lib/webpush.js";
 
 const age = (d) => Math.floor((Date.now() - new Date(d)) / 864e5);
 const ageBadge = (d) => { const a = age(d); return h("span.badge", { class: a > 90 ? "b-bad" : a > 60 ? "b-warn" : "b-ok" }, a > 90 ? `${a} Tage – erneuern` : `${a} Tage alt`); };
@@ -9,13 +10,15 @@ const ageBadge = (d) => { const a = age(d); return h("span.badge", { class: a > 
 export default async function securityView() {
   const root = h("div");
   async function load() {
-    const [push, backups, logins, keys, conns, shares] = await Promise.all([
+    const [push, backups, logins, keys, conns, shares, devices, mySub] = await Promise.all([
       rpc("cc_push_setup", { p_action: "get" }),
       q(sb.from("cc_backups").select("id,created_at,kind,bytes,counts").order("created_at", { ascending: false })),
       q(sb.from("cc_login_log").select("*").order("ts", { ascending: false }).limit(30)),
       rpc("cc_list_api_keys").catch(() => []),
       q(sb.from("cc_connections").select("id,provider,account,created_at,status")).catch(() => []),
       q(sb.from("cc_shares").select("id,label,email,share_type,permission,expires_at,created_at").is("revoked_at", null)).catch(() => []),
+      q(sb.from("cc_push_subs").select("*").order("created_at")).catch(() => []),
+      currentSub().catch(() => null),
     ]);
     const act = (a, extra = {}) => async (e) => { const ct = e.currentTarget; ct.disabled = true; try { await rpc("cc_push_setup", { p_action: a, ...extra }); if (a === "test") toast("Test gesendet – kommt in wenigen Sekunden an"); load(); } catch (er) { toastErr(er); ct.disabled = false; } };
     const topic = push.topic, on = push.enabled === true;
@@ -28,10 +31,24 @@ export default async function securityView() {
     clear(root, 
       h("div.page-head", h("div", h("h1", "Sicherheit & Push"), h("p", "Benachrichtigungen aufs Handy, Datensicherung, Anmeldungen und Schlüssel im Blick."))),
       h("div.grid.g-2", { style: { alignItems: "start" } },
-        h("section.card", h("div.card-head", h("h3.row", icon("bell"), "Push aufs Handy"), h("span.badge", { class: on ? "b-ok" : "b-idle" }, on ? "Aktiv" : "Aus")),
+        h("section.card", h("div.card-head", h("h3.row", icon("bell"), "Push aufs Handy"), h("span.badge", { class: mySub || devices.length ? "b-ok" : "b-idle" }, mySub ? "Dieses Gerät aktiv" : devices.length ? `${devices.length} Gerät(e)` : "Aus")),
           h("div.card-body.stack",
-            h("p", { style: { margin: 0, fontSize: "13.5px" } }, "Ticketverkäufe, Website-Ausfälle, Hosting-Fehler, fällige Aufgaben und die Tagesübersicht (morgens) kommen als Push-Nachricht – auch wenn das Nexus geschlossen ist."),
-            on ? [
+            h("p", { style: { margin: 0, fontSize: "13.5px" } }, "Ticketverkäufe, Website-Ausfälle, Hosting-Fehler, fällige Aufgaben und die Tagesübersicht kommen als Benachrichtigung direkt vom Nexus – ohne Zusatz-App, auch wenn das Nexus geschlossen ist."),
+            isIOS() && !isStandalone() ? h("ol", { style: { fontSize: "13.5px", lineHeight: 1.65, margin: 0, paddingLeft: "20px" } },
+              h("li", "Diese Seite in Safari öffnen und unten auf „Teilen“ tippen."),
+              h("li", "„Zum Home-Bildschirm“ → „Hinzufügen“."),
+              h("li", "Nexus vom Home-Bildschirm öffnen, hierher (Sicherheit & Push) gehen und „Auf diesem Gerät aktivieren“ tippen.")) : null,
+            h("div.row.wrap",
+              mySub ? h("button.btn", { onclick: async (e) => { const ct = e.currentTarget; ct.disabled = true; try { await disablePush(); toast("Auf diesem Gerät ausgeschaltet"); load(); } catch (er) { toastErr(er); ct.disabled = false; } } }, "Auf diesem Gerät ausschalten")
+                : h("button.btn.primary", { onclick: async (e) => { const ct = e.currentTarget; ct.disabled = true; try { await enablePush(); toast("Push auf diesem Gerät aktiv"); load(); } catch (er) { toastErr(er); ct.disabled = false; } } }, icon("bell"), "Auf diesem Gerät aktivieren"),
+              devices.length || on ? h("button.btn", { onclick: act("test") }, icon("send"), "Test senden") : null),
+            devices.length ? h("div.list", devices.map((d) => h("div.list-item", h("div.li-icon", icon("bell")),
+              h("div.li-main", h("div.li-title", d.device || "Gerät", mySub && mySub.endpoint === d.endpoint ? " (dieses)" : ""), h("div.li-sub", `angemeldet ${fmtAgo(d.created_at)}${d.last_ok ? ` · zuletzt zugestellt ${fmtAgo(d.last_ok)}` : ""}`)),
+              h("button.btn.sm.ghost", { "aria-label": "Gerät entfernen", onclick: async () => { await q(sb.from("cc_push_subs").delete().eq("id", d.id)); load(); } }, icon("trash"))))) : null,
+            h("label.check", h("input", { type: "checkbox", checked: push.only_important === true, onchange: (e) => rpc("cc_push_setup", { p_action: "get", p_only_important: e.target.checked }).then(() => toast("Gespeichert"), toastErr) }),
+              "Nur Wichtiges senden (Fehler, Warnungen, Tickets, Erinnerungen, Tagesübersicht)"),
+            h("details", h("summary.faint", { style: { fontSize: "13px", cursor: "pointer" } }, "Zusätzlich über ntfy (optional, unzuverlässig wegen ntfy-Limit)"),
+              h("div.stack", { style: { marginTop: "10px" } }, on ? [
               h("ol", { style: { fontSize: "13.5px", lineHeight: 1.65, margin: 0, paddingLeft: "20px" } },
                 h("li", "Kostenlose App „ntfy“ installieren (App Store / Google Play)."),
                 h("li", "In der App auf „+“ tippen und dieses Thema abonnieren:"),
@@ -40,18 +57,17 @@ export default async function securityView() {
               h("div.row.wrap", h("a.btn", { href: `https://ntfy.sh/${topic}`, target: "_blank", rel: "noopener noreferrer" }, icon("external"), "Im Browser abonnieren"),
                 h("button.btn.primary", { onclick: act("test") }, icon("send"), "Test senden"),
                 h("button.btn.ghost", { onclick: act("disable") }, "Ausschalten")),
-              h("label.check", h("input", { type: "checkbox", checked: push.only_important === true, onchange: (e) => rpc("cc_push_setup", { p_action: "get", p_only_important: e.target.checked }).then(() => toast("Gespeichert"), toastErr) }),
-                "Nur Wichtiges senden (Fehler, Warnungen, Tickets, Erinnerungen, Tagesübersicht)"),
+              
               h("div.row.wrap", h("button.btn.sm.ghost", { onclick: async (e) => { if (await confirmDialog("Neues Thema erzeugen?", "Das alte Thema bekommt dann keine Nachrichten mehr – du musst das neue in der App abonnieren.", { ok: "Neu erzeugen" })) act("reset")(e); } }, icon("refresh"), "Thema erneuern")),
               naNote("Das Thema ist wie ein Passwort: Wer es kennt, kann deine Nachrichten mitlesen. Die Nachrichten laufen über den Dienst ntfy.sh und enthalten nur Titel und Kurztext (z. B. „3 neue Tickets“), keine Käuferdaten.", "lock"),
-            ] : h("button.btn.primary", { onclick: act("enable") }, icon("bell"), "Push einschalten"))),
+            ] : h("button.btn.primary", { onclick: act("enable") }, icon("bell"), "ntfy einschalten"))))),
 
         h("section.card", h("div.card-head", h("h3.row", icon("lock"), "Sicherheits-Check")),
           h("div.card-body", h("div.list",
             check(lastBackup && age(lastBackup.created_at) < 2, lastBackup ? `Letzte Sicherung ${fmtAgo(lastBackup.created_at)}` : "Noch keine Sicherung", "Automatisch jede Nacht, die letzten 10 bleiben erhalten."),
             check(!oldKeys, oldKeys ? `${oldKeys} Schlüssel älter als 90 Tage` : "Alle Schlüssel jünger als 90 Tage", "Schlüssel regelmäßig erneuern – besonders, wenn sie einmal in einem Chat standen."),
             check(!openLinks.length, openLinks.length ? `${openLinks.length} Gäste-Link(s) ohne Ablaufdatum` : "Keine Gäste-Links ohne Ablaufdatum", "Unter „Teilen & Team“ ein Ablaufdatum setzen oder Links widerrufen."),
-            check(on, on ? "Push ist aktiv" : "Push ist aus", "Bei Ausfällen und neuen Anmeldungen sofort informiert werden.")))),
+            check(on || devices.length > 0, on || devices.length ? "Push ist aktiv" : "Push ist aus", "Bei Ausfällen und neuen Anmeldungen sofort informiert werden.")))),
 
         h("section.card", h("div.card-head", h("h3.row", icon("download"), "Datensicherung"),
             h("button.btn.sm.primary", { onclick: async (e) => { const ct = e.currentTarget; ct.disabled = true; try { await rpc("cc_backup_now"); toast("Sicherung erstellt"); load(); } catch (er) { toastErr(er); ct.disabled = false; } } }, icon("plus"), "Jetzt sichern")),
