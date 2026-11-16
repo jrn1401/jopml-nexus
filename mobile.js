@@ -198,6 +198,7 @@ function chatView() {
 
 async function gearView() {
   const sub = await currentSub().catch(() => null);
+  const mine = sub ? (await q(sb.from("cc_push_subs").select("id,topics").eq("endpoint", sub.endpoint)).catch(() => []))[0] : null;
   const tiles = store.get("tiles", { events: true, tasks: true, sites: true, shares: true });
   const artBtn = (k) => h("button.m-art", { class: store.get("art", "nexus") === k ? "on" : "", "aria-label": `Titelbild ${ART[k].name}`,
     style: { backgroundImage: `url("${artSvg(k)}")` }, onclick: () => { store.set("art", k); applyLook(); draw(); } }, h("span", ART[k].name));
@@ -224,9 +225,51 @@ async function gearView() {
           data?.admin ? h("button.btn.sm", { onclick: async (e) => { const b = e.currentTarget; b.disabled = true; try { await rpc("cc_push_setup", { p_action: "test" }); toast("Test gesendet"); } catch (er) { toastErr(er); } b.disabled = false; } }, "Test") : null,
           h("button.btn.sm.ghost", { onclick: async () => { await disablePush(); draw(); } }, "Aus"))
         : h("button.btn.primary.m-wide", { onclick: async (e) => { const b = e.currentTarget; b.disabled = true; try { await enablePush(); toast("Benachrichtigungen aktiv"); draw(); } catch (er) { toastErr(er); b.disabled = false; } } }, "Benachrichtigungen aktivieren")),
+    sub && mine ? topicsCard(sub, mine) : null,
+    data?.admin ? await invitesCard() : null,
     h("section.m-card", h("a.m-li.m-link-row", { href: "./" }, h("span", "Vollversion öffnen"), ic("ext", 16)),
       h("button.m-li.m-link-row", { onclick: async () => { if (await confirmDialog("Abmelden?", "Du wirst nur auf diesem Gerät abgemeldet.", { ok: "Abmelden", danger: false })) { await sb.auth.signOut({ scope: "local" }); renderLogin(); } } }, h("span", "Abmelden"), ic("lock", 16))),
     h("div.m-row-s.m-center", "Nexus Mobil"));
+}
+
+// ---------- Was soll auf dieses Handy kommen? ----------
+const TOPICS = [["tickets", "Ticketverkäufe"], ["sites", "Website-Ausfälle"], ["hosting", "Hosting & Deploys"], ["tasks", "Fällige Aufgaben"], ["digest", "Tagesübersicht (morgens)"], ["security", "Anmeldungen & Sicherheit"], ["other", "Sonstiges (neue Module, Sync …)"]];
+function topicsCard(sub, mine) {
+  const set = new Set(mine.topics || []);
+  const save = async () => { try { await rpc("cc_push_topics_set", { p_endpoint: sub.endpoint, p_topics: [...set] }); toast("Gespeichert"); } catch (e) { toastErr(e); } };
+  return h("section.m-card", h("div.m-card-h", h("span", "Benachrichtigen bei")),
+    ...TOPICS.map(([k, l]) => h("label.m-switch", h("span", l), h("input", { type: "checkbox", checked: set.has(k), onchange: (e) => { e.target.checked ? set.add(k) : set.delete(k); save(); } }))));
+}
+
+// ---------- Leute einladen (ohne Konto) ----------
+const INV_TOPICS = [["tickets", "Ticketverkäufe"], ["sites", "Website-Ausfälle"], ["hosting", "Hosting & Deploys"], ["tasks", "Fällige Aufgaben"]];
+const inviteUrl = (c) => `${BASE}i.html?c=${c}`;
+async function invitesCard() {
+  const [inv, subs] = await Promise.all([q(sb.from("cc_push_invites").select("*").is("revoked_at", null).order("created_at", { ascending: false })).catch(() => []),
+    q(sb.from("cc_push_subs").select("id,invite_id,device,created_at").not("invite_id", "is", null)).catch(() => [])]);
+  const shareIt = (i) => navigator.share ? navigator.share({ title: i.label, text: `Hol dir die Benachrichtigungen „${i.label}“ aufs Handy (kein Konto nötig):`, url: inviteUrl(i.code) }).catch(() => {}) : copyText(inviteUrl(i.code));
+  const create = () => {
+    const pick = new Set(["tickets"]);
+    const label = h("input.input", { placeholder: "z. B. Tickets Raveanation", maxlength: 80, "aria-label": "Name der Einladung", value: data?.events?.[0] ? `Tickets ${data.events[0].name}` : "" });
+    const form = h("div.m-card", { style: { margin: "10px 0 0" } }, label,
+      ...INV_TOPICS.map(([k, l]) => h("label.m-switch", h("span", l), h("input", { type: "checkbox", checked: pick.has(k), onchange: (e) => (e.target.checked ? pick.add(k) : pick.delete(k)) }))),
+      h("p.m-row-s", "Eingeladene sehen nur Titel und Kurztext dieser Nachrichten – keine Käuferdaten, kein Zugang zum Nexus."),
+      h("button.btn.primary.m-wide", { onclick: async (e) => {
+        const b = e.currentTarget; if (!label.value.trim() || !pick.size) return toast("Name und mindestens ein Thema wählen", "err");
+        b.disabled = true;
+        try { const r = await q(sb.from("cc_push_invites").insert({ label: label.value.trim(), topics: [...pick] }).select().single()); await shareIt(r); draw(); }
+        catch (er) { toastErr(er); b.disabled = false; } } }, "Einladung erstellen & teilen"));
+    card.append(form); btn.remove();
+  };
+  const btn = h("button.btn.m-wide.m-mt", { onclick: create }, "+ Neue Einladung");
+  const card = h("section.m-card", h("div.m-card-h", ic("share", 18), h("span", "Leute einladen")),
+    h("p.m-row-s", { style: { marginTop: 0 } }, "Link schicken – die Person öffnet ihn, legt ihn auf den Home-Bildschirm und bekommt die gewählten Nachrichten. Kein Konto nötig."),
+    ...inv.map((i) => { const n = subs.filter((s) => s.invite_id === i.id).length; return h("div.m-li",
+      h("div", { style: { flex: 1 } }, h("b", i.label), h("div.m-row-s", `${(i.topics || []).map((t) => (INV_TOPICS.find((x) => x[0] === t) || [t, t])[1]).join(", ")} · ${n} Gerät(e) · Code ${i.code}`)),
+      h("button.btn.sm", { "aria-label": "Teilen", onclick: () => shareIt(i) }, ic("share", 16)),
+      h("button.btn.sm.ghost", { "aria-label": "Zurückziehen", onclick: async () => { if (await confirmDialog("Einladung zurückziehen?", `${n} Gerät(e) bekommen dann keine Nachrichten mehr. Der Link funktioniert nicht mehr.`, { ok: "Zurückziehen" })) { await q(sb.from("cc_push_invites").update({ revoked_at: new Date().toISOString() }).eq("id", i.id)); draw(); } } }, "✕")); }),
+    btn);
+  return card;
 }
 
 // Foto verkleinern (max. 900 px) und eine passende Akzentfarbe daraus ableiten

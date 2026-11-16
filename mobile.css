@@ -100,3 +100,4 @@
 .m-link { color: var(--text-3); font-size: 14px; text-align: center; }
 
 @media (min-width: 700px) { .m-app, .m-login { max-width: 480px; margin: 0 auto; } .m-tabbar { max-width: 480px; margin: 0 auto; } }
+.banner.ok { background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 40%, transparent); color: var(--text); }

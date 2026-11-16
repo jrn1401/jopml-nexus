@@ -45,6 +45,7 @@ export default async function securityView() {
             devices.length ? h("div.list", devices.map((d) => h("div.list-item", h("div.li-icon", icon("bell")),
               h("div.li-main", h("div.li-title", d.device || "Gerät", mySub && mySub.endpoint === d.endpoint ? " (dieses)" : ""), h("div.li-sub", `angemeldet ${fmtAgo(d.created_at)}${d.last_ok ? ` · zuletzt zugestellt ${fmtAgo(d.last_ok)}` : ""}`)),
               h("button.btn.sm.ghost", { "aria-label": "Gerät entfernen", onclick: async () => { await q(sb.from("cc_push_subs").delete().eq("id", d.id)); load(); } }, icon("trash"))))) : null,
+            h("div.na-note", h("div", "Welche Nachrichten auf welches Handy kommen und wen du ohne Konto einlädst, stellst du in ", h("a", { href: "m.html" }, "Nexus Mobil"), " unter Einstellungen ein.")),
             h("label.check", h("input", { type: "checkbox", checked: push.only_important === true, onchange: (e) => rpc("cc_push_setup", { p_action: "get", p_only_important: e.target.checked }).then(() => toast("Gespeichert"), toastErr) }),
               "Nur Wichtiges senden (Fehler, Warnungen, Tickets, Erinnerungen, Tagesübersicht)"),
             h("details", h("summary.faint", { style: { fontSize: "13px", cursor: "pointer" } }, "Zusätzlich über ntfy (optional, unzuverlässig wegen ntfy-Limit)"),
