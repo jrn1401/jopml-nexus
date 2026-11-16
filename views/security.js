@@ -35,9 +35,9 @@ export default async function securityView() {
           h("div.card-body.stack",
             h("p", { style: { margin: 0, fontSize: "13.5px" } }, "Ticketverkäufe, Website-Ausfälle, Hosting-Fehler, fällige Aufgaben und die Tagesübersicht kommen als Benachrichtigung direkt vom Nexus – ohne Zusatz-App, auch wenn das Nexus geschlossen ist."),
             isIOS() && !isStandalone() ? h("ol", { style: { fontSize: "13.5px", lineHeight: 1.65, margin: 0, paddingLeft: "20px" } },
-              h("li", "Diese Seite in Safari öffnen und unten auf „Teilen“ tippen."),
+              h("li", "Die Handy-App öffnen: ", h("a", { href: "m.html" }, "Nexus Mobil"), " – in Safari unten auf „Teilen“ tippen."),
               h("li", "„Zum Home-Bildschirm“ → „Hinzufügen“."),
-              h("li", "Nexus vom Home-Bildschirm öffnen, hierher (Sicherheit & Push) gehen und „Auf diesem Gerät aktivieren“ tippen.")) : null,
+              h("li", "Nexus vom Home-Bildschirm öffnen, „Einstellungen“ → „Benachrichtigungen aktivieren“.")) : null,
             h("div.row.wrap",
               mySub ? h("button.btn", { onclick: async (e) => { const ct = e.currentTarget; ct.disabled = true; try { await disablePush(); toast("Auf diesem Gerät ausgeschaltet"); load(); } catch (er) { toastErr(er); ct.disabled = false; } } }, "Auf diesem Gerät ausschalten")
                 : h("button.btn.primary", { onclick: async (e) => { const ct = e.currentTarget; ct.disabled = true; try { await enablePush(); toast("Push auf diesem Gerät aktiv"); load(); } catch (er) { toastErr(er); ct.disabled = false; } } }, icon("bell"), "Auf diesem Gerät aktivieren"),
