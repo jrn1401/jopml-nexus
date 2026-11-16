@@ -707,3 +707,8 @@ details.list-item > summary { list-style: none; } details.list-item > summary::-
 }
 .gsi-box { display: flex; justify-content: center; min-height: 44px; margin-bottom: 10px; }
 .gbtn.gbtn-alt { background: transparent; color: var(--text-2); border: 1px solid var(--line-2); font-size: 13px; min-height: 40px; }
+/* Knöpfe oben rechts (Launcher / Handy-App) */
+.top-pill { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line-2); background: var(--surface); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.top-pill:hover { border-color: var(--primary); }
+.top-pill svg { width: 16px; height: 16px; }
+@media (max-width: 760px) { .top-pill { padding: 0; width: 36px; justify-content: center; } .top-pill span { display: none; } }

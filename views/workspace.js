@@ -1,6 +1,7 @@
 // Eigener Bereich für jeden angemeldeten Nutzer: verknüpfte Projekte (Websites, Repos, Events, KI …),
 // Verbinden-Assistent, KI-Assistent über die eigenen Daten, Geteiltes, Design und Datenschutz.
 // Alles läuft über RLS (owner_id = auth.uid()) bzw. die Edge Function nx-api – keine fremden Daten sichtbar.
+import { launcherButton, appButton } from "../lib/topextras.js";
 import { sb, q, rpc, nx, local } from "../lib/api.js";
 import { h, icon, clear, toast, toastErr, fmtAgo, fmtDateTime, fmtEUR, empty, errMsg, confirmDialog, formModal, debounce, stat, modal } from "../lib/ui.js";
 import { connectDialog, connectionsList, PROVIDERS } from "../lib/connect.js";
@@ -56,7 +57,7 @@ export async function renderWorkspace(root, who) {
   const top = h("header.guest-top",
     h("a.brand", { href: "#/" }, h("div.brand-mark", icon("logo")), h("div.brand-text", CONFIG.appName, h("small", "Mein Bereich"))),
     h("nav.ws-nav", { "aria-label": "Bereiche" }, NAV.map(([href, t]) => h("a", { href, dataset: { r: href } }, t))),
-    h("div.spacer"),
+    h("div.spacer"), appButton(), launcherButton(),
     feat("ai") ? h("button.icon-btn", { title: "KI-Assistent", "aria-label": "KI-Assistent", onclick: () => aiDrawer() }, icon("bot")) : null,
     feat("connections") ? h("button.icon-btn", { title: "Verbinden", "aria-label": "Dienst verbinden", onclick: () => connect(show) }, icon("plus")) : null,
     h("button.icon-btn", { title: who.email, "aria-label": "Profil", style: { padding: 0 }, onclick: () => (location.hash = "#/einstellungen") }, avatar));
@@ -230,6 +231,9 @@ export async function renderWorkspace(root, who) {
       h("div.page-head", h("div", h("h1", "Einstellungen"), h("p", `Angemeldet als ${who.email}`))),
       h("div.grid.g-2",
         h("section.card", h("div.card-head", h("h3", "Design")), h("div.card-body", designPanel())),
+        h("section.card", h("div.card-head", h("h3", "Handy & Benachrichtigungen")), h("div.card-body.stack",
+          h("p", { style: { margin: 0, fontSize: "13.5px" } }, "Mit der Handy-App bekommst du Benachrichtigungen (fällige Aufgaben, Website-Ausfälle) und siehst das Wichtigste auf einen Blick. Dort kannst du auch Leute ohne Konto einladen."),
+          h("div.row.wrap", appButton(), h("a.btn", { href: "m.html" }, "Handy-App öffnen")))),
         h("section.card", h("div.card-head", h("h3", "Konto & Daten")), h("div.card-body", h("div.list",
           h("div.list-item", h("div.li-main", h("div.li-title", "KI-Wissen"), h("div.li-sub", "Was die KI gelernt hat – ansehen, ergänzen, vergessen")), h("button.btn.sm", { onclick: () => memoryDialog() }, icon("sparkles"), "Öffnen")),
           h("div.list-item", h("div.li-main", h("div.li-title", "Meine Daten exportieren"), h("div.li-sub", "Projekte und Verbindungen als JSON (ohne Schlüssel)")), h("button.btn.sm", { onclick: exportData }, icon("download"), "Export")),

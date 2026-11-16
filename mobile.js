@@ -84,7 +84,7 @@ const main = h("main.m-main");
 const bar = h("nav.m-tabbar", { "aria-label": "Bereiche" });
 
 function drawBar() {
-  bar.replaceChildren(...TABS.filter(([k]) => k !== "bell" || data?.admin).map(([k, i, label]) => h("button.m-tab", { class: tab === k ? "on" : "", "aria-label": label, "aria-current": tab === k ? "page" : null,
+  bar.replaceChildren(...TABS.map(([k, i, label]) => h("button.m-tab", { class: tab === k ? "on" : "", "aria-label": label, "aria-current": tab === k ? "page" : null,
     onclick: () => { tab = k; store.set("tab", k); drawBar(); draw(); } }, ic(i), h("span", label),
     k === "bell" && data?.unread ? h("b.m-dot", data.unread > 99 ? "99+" : String(data.unread)) : null)));
 }
@@ -142,10 +142,11 @@ async function homeView() {
 }
 
 async function bellView() {
-  const rows = await q(sb.from("cc_notifications").select("*").order("created_at", { ascending: false }).limit(50));
+  const tbl = data?.admin ? "cc_notifications" : "nx_notifications";
+  const rows = await q(sb.from(tbl).select("*").order("created_at", { ascending: false }).limit(50));
   const lv = { error: "bad", warning: "warn", success: "ok" };
   return h("div.m-pad",
-    h("div.m-head", h("h1", "Mitteilungen"), rows.some((n) => !n.read) ? h("button.btn.sm", { onclick: async () => { await sb.from("cc_notifications").update({ read: true }).eq("read", false); data.unread = 0; drawBar(); draw(); } }, "Alle gelesen") : null),
+    h("div.m-head", h("h1", "Mitteilungen"), rows.some((n) => !n.read) ? h("button.btn.sm", { onclick: async () => { await sb.from(tbl).update({ read: true }).eq("read", false); data.unread = 0; drawBar(); draw(); } }, "Alle gelesen") : null),
     rows.length ? h("div.m-list", rows.map((n) => h("div.m-note", { class: n.read ? "" : "new" }, h("i.m-lv", { class: lv[n.level] || "" }),
       h("div", h("div.m-task-t", n.title), n.body ? h("div.m-row-s", n.body) : null, h("div.m-row-s", fmtAgo(n.created_at))))))
       : h("div.m-empty", "Keine Mitteilungen."));
@@ -222,11 +223,11 @@ async function gearView() {
     h("section.m-card", h("div.m-card-h", ic("bell", 18), h("span", "Benachrichtigungen")),
       pushNote ? h("div.m-row-s", pushNote) : sub
         ? h("div.m-rowbtn", h("span.m-ok", "Auf diesem Handy aktiv"),
-          data?.admin ? h("button.btn.sm", { onclick: async (e) => { const b = e.currentTarget; b.disabled = true; try { await rpc("cc_push_setup", { p_action: "test" }); toast("Test gesendet"); } catch (er) { toastErr(er); } b.disabled = false; } }, "Test") : null,
+          h("button.btn.sm", { onclick: async (e) => { const b = e.currentTarget; b.disabled = true; try { await rpc("nx_push_test"); toast("Test gesendet"); } catch (er) { toastErr(er); } b.disabled = false; } }, "Test"),
           h("button.btn.sm.ghost", { onclick: async () => { await disablePush(); draw(); } }, "Aus"))
         : h("button.btn.primary.m-wide", { onclick: async (e) => { const b = e.currentTarget; b.disabled = true; try { await enablePush(); toast("Benachrichtigungen aktiv"); draw(); } catch (er) { toastErr(er); b.disabled = false; } } }, "Benachrichtigungen aktivieren")),
     sub && mine ? topicsCard(sub, mine) : null,
-    data?.admin ? await invitesCard() : null,
+    await invitesCard(),
     h("section.m-card", h("a.m-li.m-link-row", { href: "./" }, h("span", "Vollversion öffnen"), ic("ext", 16)),
       h("button.m-li.m-link-row", { onclick: async () => { if (await confirmDialog("Abmelden?", "Du wirst nur auf diesem Gerät abgemeldet.", { ok: "Abmelden", danger: false })) { await sb.auth.signOut({ scope: "local" }); renderLogin(); } } }, h("span", "Abmelden"), ic("lock", 16))),
     h("div.m-row-s.m-center", "Nexus Mobil"));
@@ -235,24 +236,26 @@ async function gearView() {
 // ---------- Was soll auf dieses Handy kommen? ----------
 const TOPICS = [["tickets", "Ticketverkäufe"], ["sites", "Website-Ausfälle"], ["hosting", "Hosting & Deploys"], ["tasks", "Fällige Aufgaben"], ["digest", "Tagesübersicht (morgens)"], ["security", "Anmeldungen & Sicherheit"], ["other", "Sonstiges (neue Module, Sync …)"]];
 function topicsCard(sub, mine) {
+  const list = data?.admin ? TOPICS : TOPICS.filter(([k]) => ["sites", "tasks", "other"].includes(k));
   const set = new Set(mine.topics || []);
   const save = async () => { try { await rpc("cc_push_topics_set", { p_endpoint: sub.endpoint, p_topics: [...set] }); toast("Gespeichert"); } catch (e) { toastErr(e); } };
   return h("section.m-card", h("div.m-card-h", h("span", "Benachrichtigen bei")),
-    ...TOPICS.map(([k, l]) => h("label.m-switch", h("span", l), h("input", { type: "checkbox", checked: set.has(k), onchange: (e) => { e.target.checked ? set.add(k) : set.delete(k); save(); } }))));
+    ...list.map(([k, l]) => h("label.m-switch", h("span", l), h("input", { type: "checkbox", checked: set.has(k), onchange: (e) => { e.target.checked ? set.add(k) : set.delete(k); save(); } }))));
 }
 
 // ---------- Leute einladen (ohne Konto) ----------
 const INV_TOPICS = [["tickets", "Ticketverkäufe"], ["sites", "Website-Ausfälle"], ["hosting", "Hosting & Deploys"], ["tasks", "Fällige Aufgaben"]];
 const inviteUrl = (c) => `${BASE}i.html?c=${c}`;
 async function invitesCard() {
+  const invTopics = data?.admin ? INV_TOPICS : INV_TOPICS.filter(([k]) => ["sites", "tasks"].includes(k));
   const [inv, subs] = await Promise.all([q(sb.from("cc_push_invites").select("*").is("revoked_at", null).order("created_at", { ascending: false })).catch(() => []),
     q(sb.from("cc_push_subs").select("id,invite_id,device,created_at").not("invite_id", "is", null)).catch(() => [])]);
   const shareIt = (i) => navigator.share ? navigator.share({ title: i.label, text: `Hol dir die Benachrichtigungen „${i.label}“ aufs Handy (kein Konto nötig):`, url: inviteUrl(i.code) }).catch(() => {}) : copyText(inviteUrl(i.code));
   const create = () => {
-    const pick = new Set(["tickets"]);
-    const label = h("input.input", { placeholder: "z. B. Tickets Raveanation", maxlength: 80, "aria-label": "Name der Einladung", value: data?.events?.[0] ? `Tickets ${data.events[0].name}` : "" });
+    const pick = new Set([invTopics[0][0]]);
+    const label = h("input.input", { placeholder: "z. B. Team Website", maxlength: 80, "aria-label": "Name der Einladung", value: data?.admin && data?.events?.[0] ? `Tickets ${data.events[0].name}` : "" });
     const form = h("div.m-card", { style: { margin: "10px 0 0" } }, label,
-      ...INV_TOPICS.map(([k, l]) => h("label.m-switch", h("span", l), h("input", { type: "checkbox", checked: pick.has(k), onchange: (e) => (e.target.checked ? pick.add(k) : pick.delete(k)) }))),
+      ...invTopics.map(([k, l]) => h("label.m-switch", h("span", l), h("input", { type: "checkbox", checked: pick.has(k), onchange: (e) => (e.target.checked ? pick.add(k) : pick.delete(k)) }))),
       h("p.m-row-s", "Eingeladene sehen nur Titel und Kurztext dieser Nachrichten – keine Käuferdaten, kein Zugang zum Nexus."),
       h("button.btn.primary.m-wide", { onclick: async (e) => {
         const b = e.currentTarget; if (!label.value.trim() || !pick.size) return toast("Name und mindestens ein Thema wählen", "err");
@@ -296,7 +299,6 @@ async function start() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) return renderLogin();
   try { await load(); } catch (e) { return renderLogin(errMsg(e)); }
-  if (tab === "bell" && !data.admin) tab = "home";
   clear(root, h("div.m-app", main, bar));
   drawBar(); draw();
   // Beim Zurückkehren in die App aktualisieren

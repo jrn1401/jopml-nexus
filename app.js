@@ -1,4 +1,5 @@
 // JOPML Nexus – App-Shell: Anmeldung, Navigation, Router, Suche, Benachrichtigungen, Schnellaktionen.
+import { launcherButton, appButton } from "./lib/topextras.js";
 import { sb, rpc, projects, local } from "./lib/api.js";
 import { h, icon, clear, toast, toastErr, fmtAgo, modal, debounce, errMsg } from "./lib/ui.js";
 import { newProject, newModule, connectServer, newEvent, uploadDialog, openAssistant, syncHelp } from "./lib/actions.js";
@@ -135,7 +136,7 @@ function renderLogin(error) {
     error ? h("div.login-err", error) : null,
     h("div.login-foot", icon("lock"), "Jeder sieht nur seine eigenen Daten · Schlüssel verschlüsselt gespeichert"),
     h("div.login-sub", { style: { marginTop: "10px" } }, h("a", { href: "#/skills", onclick: (e) => { e.preventDefault(); location.hash = "#/skills"; location.reload(); } }, "Claude-Skills für Nexus"), " · ",
-      h("a", { href: "#/download", onclick: (e) => { e.preventDefault(); location.hash = "#/download"; location.reload(); } }, "JOPML Launcher herunterladen")),
+      h("a", { href: "#/download", onclick: (e) => { e.preventDefault(); location.hash = "#/download"; location.reload(); } }, "JOPML Launcher herunterladen"), " · ", h("a", { href: "m.html" }, "Handy-App")),
     h("div.footer-links", h("a", { href: "#/impressum" }, "Impressum"), h("a", { href: "#/datenschutz" }, "Datenschutz"), h("a", { href: "#/nutzung" }, "Nutzungsbedingungen")))));
 }
 function svgGoogle() {
@@ -173,7 +174,7 @@ function renderShell() {
   const topbar = h("header.topbar",
     h("button.icon-btn.menu-toggle", { "aria-label": "Menü", onclick: () => app.classList.toggle("nav-open") }, icon("menu")),
     h("div.search", { role: "button", tabindex: 0, onclick: openSearch, onkeydown: (e) => e.key === "Enter" && openSearch() }, icon("search"), h("span", "Suchen …"), h("span.kbd", navigator.platform.includes("Mac") ? "⌘K" : "Strg K")),
-    h("div.spacer"), statusPill,
+    h("div.spacer"), statusPill, appButton(), launcherButton(),
     h("button.icon-btn", { "aria-label": "Schnellaktionen", title: "Schnellaktionen", onclick: openQuick }, icon("zap")),
     h("button.icon-btn", { "aria-label": "KI-Assistent", title: "KI-Assistent", onclick: () => openAssistant() }, icon("bot")),
     h("button.icon-btn", { "aria-label": "Benachrichtigungen", title: "Benachrichtigungen", onclick: openNotifications }, icon("bell"), bellBadge),
