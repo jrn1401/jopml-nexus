@@ -111,6 +111,8 @@ export function firstSteps({ projects, conns, guest, shared }) {
 
 // ---------- Hilfe ----------
 const HELP = [
+  ["Website-Baukasten", "globe", "Eigene Seite …/bau.html (auch zum Weitergeben an Freunde): Formular ausfüllen, Design und Animation wählen, Impressum & Datenschutz kommen automatisch dazu. Herunterladen und z. B. bei Netlify Drop kostenlos hochladen – oder mit Konto „Online stellen“ und später ändern, ohne dass sich der Link ändert."],
+  ["Recht & Formulare", "book", "Rechtsfragen an die KI mit aktuellen Gesetzestexten, Event prüfen lassen, Muttizettel und andere Formulare direkt ausfüllen und drucken. Keine Rechtsberatung."],
   ["Event mit KI anlegen", "calendar", "Events › „Neues Event“: Fragebogen mit KI (4 kurze Schritte mit Vorlagen), Importieren (Nachricht, E-Mail, Tabelle oder Kalender-Datei) oder in einem Satz beschreiben. Rechts siehst du sofort Break-even, Personal-Faustregeln und den Rechts-Check. Dann baut die KI den kompletten Plan: Aufgaben mit Fristen, Ablauf, Kosten, Einnahmen, Schichten und Werbeplan – du wählst aus, was übernommen wird."],
   ["KI-Copilot", "sparkles", "Auf jeder Event- und Projektseite: zeigt, was gerade wichtig ist, ergänzt Fehlendes, plant Ablauf und Schichten, schätzt Kosten, schreibt Nachrichten für WhatsApp, E-Mail oder Instagram, gleicht das Event mit einem Projekt ab und beantwortet Fragen zum Event. Unter Textfeldern hilft die KI beim Schreiben, Verbessern und Korrigieren."],
   ["Aufgaben schneller", "check", "Die Eingabe versteht Datum und Wichtigkeit: „morgen 18 Uhr Getränke kaufen !“. Das ✨ an einer Aufgabe zerlegt sie in kleine Schritte, „KI: Was zuerst?“ sortiert nach Dringlichkeit."],

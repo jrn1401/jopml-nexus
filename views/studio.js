@@ -2,7 +2,7 @@
 // Marketing & Druck (QR, Visitenkarten, Merch, Posts), Zusammenfassungen, KI-Einstellungen.
 // Sparsam: Regeln, QR-Codes, Designs und Seiten entstehen im Browser; die KI wird nur auf Knopfdruck gefragt.
 import { sb, q, nx, aiModel } from "../lib/api.js";
-import { h, icon, clear, toast, toastErr, errMsg, md, copyText, fmtDate, fmtAgo, empty, confirmDialog } from "../lib/ui.js";
+import { h, icon, clear, toast, toastErr, errMsg, md, copyText, fmtDate, fmtAgo, empty, confirmDialog, modal } from "../lib/ui.js";
 import { aiGen } from "../lib/aigen.js";
 import { TYPES, PRESETS, questionsFor, checkRules, marketingIdeas } from "../lib/rules.js";
 import { TEMPLATES, THEMES, buildSite, slugify } from "../lib/sitegen.js";
@@ -239,12 +239,14 @@ async function webBuilder(ctx) {
   const wrap = h("div.stack");
   const listView = () => clear(wrap,
     tableOk ? null : h("div.banner.warn", "Veröffentlichen ist ab der nächsten Freischaltung aktiv. Bis dahin kannst du Seiten bauen, ansehen und als HTML herunterladen (z. B. für Netlify)."),
+    h("a.card.studio-tile", { href: "bau.html", style: { display: "block", textDecoration: "none", color: "inherit", marginBottom: "12px", borderColor: "var(--primary)" } }, h("div.card-body", h("h3.row", { style: { gap: "8px" } }, icon("sparkles"), "Profi-Baukasten (neu)"),
+      h("p.faint", "Komplette Website zum Runterscrollen per Formular: 6 Designs mit Animationen, Line-up, Termine, Galerie, echte Bewertungen mit Sternen, FAQ, Kontakt, Impressum & Datenschutz. Herunterladen, bei Netlify & Co. veröffentlichen oder hier online stellen – eigener Link zum Weitergeben: …/bau.html"))),
     h("div.grid.g-2", Object.entries(TEMPLATES).map(([k, t]) => h("button.card.studio-tile", { onclick: () => editor({ template: k, data: {}, theme: k === "event" ? "rave" : "nacht" }) },
       h("div.card-body", h("h3", t.name), h("p.faint", t.desc))))),
     sites.length ? h("section.card", h("div.card-head", h("h3", "Meine Seiten")), h("div.list", sites.map((s) => h("div.list-item",
       h("div.li-main", h("div.li-title", s.title), h("div.li-sub", `${TEMPLATES[s.template]?.name || s.template} · ${s.published ? `online · ${s.views} Aufrufe` : "Entwurf"} · ${fmtAgo(s.updated_at)}`)),
       s.published ? h("a.btn.sm", { href: `${BASE}w.html?s=${s.slug}`, target: "_blank", rel: "noopener" }, icon("external")) : null,
-      h("button.btn.sm", { onclick: () => editor({ id: s.id, slug: s.slug, template: s.template, data: s.data?.fields || {}, theme: s.data?.theme || "nacht", invite: s.data?.invite_code, published: s.published }) }, icon("edit"), "Bearbeiten"))))) : null);
+      s.data?.pro ? h("a.btn.sm", { href: `bau.html?id=${s.id}`, title: "Im Profi-Baukasten bearbeiten (Link bleibt gleich)" }, icon("edit")) : h("button.btn.sm", { onclick: () => editor({ id: s.id, slug: s.slug, template: s.template, data: s.data?.fields || {}, theme: s.data?.theme || "nacht", invite: s.data?.invite_code, published: s.published }) }, icon("edit"), "Bearbeiten"))))) : null);
 
   function editor(s) {
     const tpl = TEMPLATES[s.template];
@@ -277,6 +279,20 @@ async function webBuilder(ctx) {
         editor({ ...s, data: vals, theme, slug, invite }); toast("Texte eingesetzt – prüfen und anpassen");
       } catch (er) { toastErr(er); b.disabled = false; }
     } }, icon("sparkles"), "Texte mit KI schreiben");
+    const aiEdit = h("button.btn", { onclick: () => {
+      const ta = h("textarea.input", { rows: 3, maxlength: 800, "aria-label": "Änderung", placeholder: "z. B. „Füge hinzu: Einlass ab 19 Uhr, Ausweis mitbringen“ oder „Text kürzer und lockerer“" });
+      const m = modal("Mit KI ändern", h("div.stack", h("p.muted", { style: { margin: 0 } }, "Sag, was anders sein soll. Danach „Speichern“ bzw. „Veröffentlichen“ – der Link bleibt gleich."), ta,
+        h("div.row", { style: { justifyContent: "flex-end" } }, h("button.btn.primary", { onclick: async (e) => {
+          const b = e.currentTarget; b.disabled = true;
+          try {
+            const keys = tpl.fields.map((f) => f[0]);
+            const r = await aiGen({ task: "website-aendern", json: true, maxTokens: 3000, instructions: `Ändere die Felder einer ${tpl.name} genau nach dem Wunsch. Gib NUR geänderte Felder als JSON zurück (Feldnamen: ${keys.join(", ")}). Nichts erfinden, Unbekanntes als [Platzhalter].`, input: `AKTUELL: ${JSON.stringify(vals)}\nWUNSCH: ${ta.value.trim()}` });
+            let n = 0; for (const k of keys) if (typeof r.json?.[k] === "string") { vals[k] = r.json[k].slice(0, 3000); n++; }
+            m.close(); editor({ ...s, data: vals, theme, slug, invite }); toast(n ? `${n} Feld(er) geändert – jetzt speichern` : "Nichts geändert");
+          } catch (er) { toastErr(er); b.disabled = false; }
+        } }, icon("sparkles"), "Ändern"))));
+      ta.focus();
+    } }, icon("sparkles"), "Mit KI ändern");
     const save = async (publish) => {
       if (!vals.title) throw new Error("Bitte einen Titel eingeben.");
       if ((s.template === "notify" || vals.alarm) && !invite) {
@@ -298,7 +314,7 @@ async function webBuilder(ctx) {
           s.template === "event" ? h("label.check", h("input", { type: "checkbox", checked: !!vals.alarm || !!invite, onchange: (e) => { vals.alarm = e.target.checked; } }), "„Ticket-Alarm aufs Handy“-Knopf (Besucher bekommen deine Ticket-Nachrichten ohne Konto)") : null,
           field("Farben", h("div.row.wrap", Object.entries(THEMES).map(([k, t]) => h("button.chip", { type: "button", class: theme === k ? "on" : "", onclick: (e) => { theme = k; e.currentTarget.parentNode.querySelectorAll(".chip").forEach((c) => c.classList.remove("on")); e.currentTarget.classList.add("on"); refresh(); } },
             h("span", { style: { display: "inline-block", width: "12px", height: "12px", borderRadius: "50%", background: `linear-gradient(135deg,${t.a},${t.b})`, marginRight: "6px" } }), t.name)))),
-          h("div.row.wrap", { style: { gap: "8px" } }, aiBtn,
+          h("div.row.wrap", { style: { gap: "8px" } }, aiBtn, aiEdit,
             h("button.btn", { onclick: () => download(`${slugify(vals.title)}.html`, html()) }, icon("download"), "HTML herunterladen")),
           tableOk ? h("div.row.wrap", { style: { gap: "8px" } },
             h("button.btn.primary", { onclick: async (e) => { const b = e.currentTarget; b.disabled = true; try { await save(true); toast("Online!"); copyText(url()); editor({ ...s, data: vals, theme, slug, invite }); } catch (er) { toastErr(er); b.disabled = false; } } }, icon("external"), s.published ? "Aktualisieren" : "Veröffentlichen"),

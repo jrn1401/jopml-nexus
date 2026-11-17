@@ -45,7 +45,7 @@ export async function renderWorkspace(root, who) {
   const interests = local.get("ws:interests", null);
   const NAV = [["#/", "Übersicht", null, "dashboard", null], ["#/events", "Events", "events", "calendar", "events"], ["#/aufgaben", "Aufgaben", "tasks", "check", "tasks"],
     ["#/websites", "Websites", "websites", "globe", "web"], ["#/verbindungen", "Verbindungen", "connections", "link", "web"], ["#/geteilt", "Geteilt", "shares", "users", null],
-    ["#/studio", "KI-Studio", "ai", "sparkles", null], ["#/hilfe", "Hilfe", "help", "info", null], ["#/einstellungen", "Einstellungen", null, "settings", null]]
+    ["#/studio", "KI-Studio", "ai", "sparkles", null], ["#/recht", "Recht & Formulare", null, "book", null], ["#/hilfe", "Hilfe", "help", "info", null], ["#/einstellungen", "Einstellungen", null, "settings", null]]
     .filter(([r, , f, , int]) => !(guest && ["#/verbindungen", "#/websites"].includes(r)) && (!f || feat(f)) && (!interests || !int || interests.includes(int)));
   // Handy: Leiste unten mit den 4 wichtigsten Bereichen + „Mehr“
   const MAIN = NAV.filter(([r]) => r !== "#/einstellungen").slice(0, 4);
@@ -89,6 +89,7 @@ export async function renderWorkspace(root, who) {
       else if (/^#\/events\/[0-9a-f-]{36}$/.test(hash) && feat("events")) node = await eventPage(hash.slice(9));
       else if (hash === "#/hilfe" && feat("help")) node = helpPage((t) => aiDrawer(t));
       else if (hash === "#/einstellungen") node = settingsPage();
+      else if (/^#\/recht(\/\w+)?$/.test(hash)) { const { rechtPage } = await import("./recht.js"); node = await rechtPage(hash.split("/")[2] || "", { admin: !!who.admin }); }
       else if (/^#\/studio(\/\w+)?$/.test(hash)) { const { studioPage } = await import("./studio.js"); node = await studioPage(hash.split("/")[2] || "", { admin: !!who.admin, uid: who.id }); }
       else node = await overview();
       if (s !== seq) return;

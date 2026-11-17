@@ -12,10 +12,10 @@ const ROUTES = [
   [/^\/events$/, "events"], [/^\/events\/([\w-]+)$/, "event"], [/^\/jopml$/, "jopml"],
   [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"], [/^\/shares$/, "shares"], [/^\/web(?:\/([0-9a-f-]{36}))?$/, "web"],
   [/^\/(impressum|datenschutz|nutzung)$/, "legal"], [/^\/connections$/, "connections"], [/^\/hosting$/, "hosting"],
-  [/^\/tasks$/, "tasks"], [/^\/door\/([\w-]+)$/, "door"], [/^\/links$/, "links"], [/^\/security$/, "security"], [/^\/help$/, "help"], [/^\/users$/, "users"], [/^\/studio(?:\/(\w+))?$/, "studio"],
+  [/^\/tasks$/, "tasks"], [/^\/door\/([\w-]+)$/, "door"], [/^\/links$/, "links"], [/^\/security$/, "security"], [/^\/help$/, "help"], [/^\/users$/, "users"], [/^\/studio(?:\/(\w+))?$/, "studio"], [/^\/recht(?:\/(\w+))?$/, "recht"],
 ];
 const NAV_GROUPS = [
-  ["Übersicht", [["#/", "dashboard", "Dashboard"], ["#/studio", "sparkles", "KI-Studio"]]],
+  ["Übersicht", [["#/", "dashboard", "Dashboard"], ["#/studio", "sparkles", "KI-Studio"], ["#/recht", "book", "Recht & Formulare"]]],
   ["Planung", [["#/tasks", "check", "Aufgaben"], ["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"], ["#/shares", "users", "Teilen & Team"]]],
   ["Online", [["#/web", "globe", "Websites"], ["#/links", "link", "Marketing-Links"], ["#/jopml", "layers", "JOPML"]]],
   ["Geräte", [["#/servers", "server", "Geräte & Server"], ["#/hosting", "rocket", "Hosting"]]],
@@ -351,7 +351,7 @@ function openQuick() {
     ["folder", "Neues Projekt erstellen", () => newProject()], ["layers", "Neues Modul hinzufügen", () => newModule()],
     ["upload", "Datei hochladen", () => uploadDialog()], ["server", "Server verbinden", () => connectServer()],
     ["check", "Neue Aufgabe", () => { location.hash = "#/tasks"; }], ["link", "Marketing-Link anlegen", () => { location.hash = "#/links"; }],
-    ["calendar", "Event erstellen", () => newEvent()], ["sparkles", "Projekt-Assistent (Rechts-Check)", () => { location.hash = "#/studio/bogen"; }], ["external", "Website bauen", () => { location.hash = "#/studio/web"; }], ["zap", "QR / Visitenkarte / Merch", () => { location.hash = "#/studio/marketing"; }], ["refresh", "Projekt synchronisieren", () => syncHelp()], ["book", "Handbuch öffnen", () => { location.hash = "#/help"; }],
+    ["calendar", "Event erstellen", () => newEvent()], ["sparkles", "Projekt-Assistent (Rechts-Check)", () => { location.hash = "#/studio/bogen"; }], ["external", "Website bauen (Profi-Baukasten)", () => { location.href = "bau.html"; }], ["book", "Rechtsfrage an die KI", () => { location.hash = "#/recht"; }], ["edit", "Muttizettel ausfüllen", () => { location.hash = "#/recht/formulare"; }], ["zap", "QR / Visitenkarte / Merch", () => { location.hash = "#/studio/marketing"; }], ["refresh", "Projekt synchronisieren", () => syncHelp()], ["book", "Handbuch öffnen", () => { location.hash = "#/help"; }],
     ["sparkles", "KI-Wochenbericht", () => import("./lib/nextup.js").then((m) => m.weeklyReport())],
     ["bot", "KI-Assistent öffnen", () => openAssistant()],
   ];
