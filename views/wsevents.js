@@ -8,6 +8,7 @@ import { aiCleanup } from "../lib/aidedupe.js";
 import { eventWizard } from "../lib/eventwizard.js";
 import { eventCopilot } from "../lib/aiassist.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
+import { calcCard, compute } from "../lib/eventcalc.js";
 
 const STATUS = { idea: "Idee", planning: "In Planung", confirmed: "Fest", done: "Vorbei", cancelled: "Abgesagt" };
 const SECTIONS = [
@@ -112,6 +113,9 @@ export async function eventPage(id) {
   let rows = items;
   const tixProjects = projs.filter((p) => p.metadata?.tickets);
   const linked = projs.find((p) => p.id === ev.nx_project_id);
+  let snaps = []; if (linked) { try { snaps = await q(sb.from("nx_ticket_snaps").select("at,sold").eq("ref_id", linked.id).order("at").limit(3000)); } catch { snaps = []; } }
+  const calcKey = `cc:calc:${id}`;
+  let localCalc = null; try { localCalc = JSON.parse(localStorage.getItem(calcKey)); } catch { /* */ }
   const root = h("div");
   const reload = async () => { rows = await q(sb.from("nx_event_items").select("*").eq("event_id", id).order("at", { ascending: true, nullsFirst: false }).order("created_at")); draw(); };
 
@@ -202,6 +206,10 @@ export async function eventPage(id) {
         onSync: () => projectSyncDialog({ admin: false, ev, items: rows, projects: projs, onDone: () => location.reload() }),
         info: [String(ev.description || "").slice(0, 5000), linked?.url ? `Link: ${linked.url}` : "", ev.ticket_price ? `Ticketpreis: ${ev.ticket_price} €` : ""].filter(Boolean).join("\n"),
         addTask: async (t) => { await q(sb.from("nx_event_items").insert({ event_id: id, kind: "task", title: t.title, note: t.note, at: t.due })); await reload(); } })),
+      calcCard({ name: ev.name, calc: ev.calc || localCalc, tickets: ticketsOf(ev, linked), eventDate: ev.event_date, capacity: ev.capacity, snaps,
+        note: ev.calc === undefined && localCalc ? "Kalkulation ist nur auf diesem Gerät gespeichert (Server-Speicher wird mit der nächsten Freischaltung aktiv)." : "",
+        onSave: async (c) => { const R = compute(c); try { await q(sb.from("nx_events").update({ calc: c, budget: R.costs, capacity: Number(c.guests) || ev.capacity }).eq("id", id)); ev.calc = c; }
+          catch { localStorage.setItem(calcKey, JSON.stringify(c)); await q(sb.from("nx_events").update({ budget: R.costs }).eq("id", id)).catch(() => {}); } } }),
       h("div.grid.g-2", { style: { marginBottom: "16px", alignItems: "start" } }, ticketsCard(), money()),
       h("div.grid.g-2", { style: { alignItems: "start" } }, SECTIONS.map(section)));
   }

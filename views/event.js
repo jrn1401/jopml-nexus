@@ -7,6 +7,7 @@ import { openShareDialog } from "../lib/share.js";
 import { aiCleanup } from "../lib/aidedupe.js";
 import { importDialog } from "../lib/eventfrog.js";
 import { eventCopilot } from "../lib/aiassist.js";
+import { calcCard } from "../lib/eventcalc.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
 
 const SECTIONS = {
@@ -21,6 +22,7 @@ export default async function eventView({ args: [id] }) {
   const ev = await q(sb.from("cc_events").select("*").eq("id", id).maybeSingle());
   if (!ev) return empty("calendar", "Event nicht gefunden", null, h("a.btn", { href: "#/events" }, "Zu den Events"));
   let items = await q(sb.from("cc_event_items").select("*").eq("event_id", id).order("at", { ascending: true, nullsFirst: false }).order("created_at"));
+  let snaps = []; try { snaps = await q(sb.from("nx_ticket_snaps").select("at,sold").eq("ref_id", id).order("at").limit(3000)); } catch { snaps = []; }
   const projects = await loadProjects();
   const proj = projects.find((p) => p.id === ev.project_id);
   const root = h("div");
@@ -110,6 +112,8 @@ export default async function eventView({ args: [id] }) {
         onSync: () => projectSyncDialog({ admin: true, ev, items, projects, onDone: () => location.reload() }),
         info: [String(ev.description || "").slice(0, 5000), ...Object.entries(ev.metadata || {}).filter(([k, v]) => typeof v === "string" && /url|website|link|dj|age|insta|tiktok|whatsapp|music|genre/i.test(k)).map(([k, v]) => `${k}: ${v}`)].join("\n"),
         addTask: async (t) => { await q(sb.from("cc_event_items").insert({ event_id: id, kind: "task", title: t.title, note: t.note, at: t.due })); await reload(); } })),
+      calcCard({ name: ev.name, calc: ev.metadata?.calc || null, tickets: ev.metadata?.tickets || {}, eventDate: ev.event_date, capacity: ev.metadata?.tickets?.capacity || ev.expected_guests, snaps,
+        onSave: async (c) => { const { compute } = await import("../lib/eventcalc.js"); const R = compute(c); ev.metadata = { ...(ev.metadata || {}), calc: c }; await q(sb.from("cc_events").update({ metadata: ev.metadata, budget: R.costs, expected_guests: Number(c.guests) || ev.expected_guests }).eq("id", id)); } }),
       ticketCard(),
       settleCard(costs, income),
       h("div.grid.g-2", section("task"), section("location"), section("schedule"), section("shift"), section("tech"), section("cost"), section("income"), section("post"), commentsCard(),
