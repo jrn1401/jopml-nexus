@@ -2,6 +2,8 @@
 import { sb, q, rpc, projects, local } from "../lib/api.js";
 import { h, icon, clear, fmtDateTime, empty, formModal, confirmDialog, toast, toastErr, copyText, modal } from "../lib/ui.js";
 import { CONFIG } from "../config.js";
+import { parseQuickTask, breakDownDialog, prioritize } from "../lib/aiassist.js";
+import { md } from "../lib/ui.js";
 
 const PRIO = { 0: ["Niedrig", "b-idle"], 1: ["Normal", "b-pri"], 2: ["Wichtig", "b-bad"] };
 const toLocal = (iso) => { const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
@@ -55,6 +57,8 @@ export default async function tasksView() {
         h("div.li-sub", [t.context, t.due ? `fällig ${fmtDateTime(t.due)}` : null, t.assignee ? `zuständig: ${t.assignee}` : null, t.note].filter(Boolean).join(" · "))),
       over ? h("span.badge.b-bad", "überfällig") : null,
       t.src === "task" && t.priority !== 1 ? h("span.badge", { class: PRIO[t.priority][1] }, PRIO[t.priority][0]) : null,
+      !t.done ? h("button.icon-btn", { title: "KI: in Schritte zerlegen", "aria-label": `„${t.title}“ in Schritte zerlegen`, onclick: () => breakDownDialog(t, async (steps) => {
+        await q(sb.from("cc_tasks").insert(steps.map((x, i) => ({ title: `${t.title.slice(0, 80)} › ${x}`.slice(0, 200), project_id: t.project_id || null, due: t.due || null, priority: t.priority ?? 1, note: `Schritt ${i + 1}` })))); load(); }) }, icon("sparkles")) : null,
       t.src === "task" ? h("button.icon-btn", { "aria-label": "Bearbeiten", onclick: () => edit(t) }, icon("edit")) : t.route ? h("a.icon-btn", { href: t.route, title: "Zum Ursprung", "aria-label": "Öffnen" }, icon("external")) : null,
       t.src === "task" ? h("button.icon-btn", { "aria-label": "Löschen", onclick: async () => { if (await confirmDialog("Aufgabe löschen?", `„${t.title}“ wird entfernt.`, { ok: "Löschen" })) { await q(sb.from("cc_tasks").delete().eq("id", t.id)); load(); } } }, icon("trash")) : null);
   }
@@ -88,14 +92,15 @@ export default async function tasksView() {
     const seg = (cur, set, opts) => h("div.seg", opts.map(([k, t]) => h("button", { class: cur === k ? "on" : "", onclick: () => set(k) }, t)));
     clear(root, 
       h("div.page-head", h("div", h("h1", "Aufgaben"), h("p", `${open.length} offen · ${over.length} überfällig · ${week.length} in den nächsten 7 Tagen · ${all.length - open.length} erledigt`)),
-        h("div.actions", h("button.btn.primary", { onclick: () => edit() }, icon("plus"), "Neue Aufgabe"), h("button.btn", { onclick: abo }, icon("calendar"), "Kalender-Abo"))),
+        h("div.actions", h("button.btn.primary", { onclick: () => edit() }, icon("plus"), "Neue Aufgabe"), h("button.btn", { onclick: async (e) => { const b = e.currentTarget; b.disabled = true; try { const txt = await prioritize(open.map((t) => ({ title: t.title, due: t.due, context: t.context }))); modal("KI: Was zuerst?", h("div.md", md(txt)), { wide: true }); } catch (er) { toastErr(er); } b.disabled = false; } }, icon("sparkles"), "KI: Was zuerst?"), h("button.btn", { onclick: abo }, icon("calendar"), "Kalender-Abo"))),
       h("div.row.wrap.between", { style: { marginBottom: "14px", gap: "10px" } },
         seg(filter, (k) => { filter = k; local.set("taskFilter", k); draw(); }, [["open", `Offen (${open.length})`], ["over", `Überfällig (${over.length})`], ["week", "Diese Woche"], ["done", "Erledigt"], ["all", "Alle"]]),
         seg(view, (k) => { view = k; local.set("taskView", k); draw(); }, [["list", "Liste"], ["cal", "Kalender"]])),
       h("form.row", { style: { gap: "8px", marginBottom: "14px" }, onsubmit: async (e) => {
         e.preventDefault(); const inp = e.target.querySelector("input"), t = inp.value.trim(); if (!t) return;
-        try { await q(sb.from("cc_tasks").insert({ title: t.slice(0, 200) })); inp.value = ""; toast("Aufgabe angelegt"); load(); } catch (er) { toastErr(er); } } },
-        h("input.input", { placeholder: "Schnell notieren: Aufgabe eintippen und Enter drücken …", "aria-label": "Neue Aufgabe", maxlength: 200 }), h("button.btn", { type: "submit" }, icon("plus"), "Hinzufügen")),
+        const p = parseQuickTask(t);
+        try { await q(sb.from("cc_tasks").insert({ title: p.title.slice(0, 200), due: p.due, priority: p.priority })); inp.value = ""; toast(p.due ? `Aufgabe angelegt – fällig ${fmtDateTime(p.due)}` : "Aufgabe angelegt"); load(); } catch (er) { toastErr(er); } } },
+        h("input.input", { placeholder: "Schnell notieren – versteht z. B. „morgen 18 Uhr Getränke kaufen !“ oder „Fr Flyer drucken“", "aria-label": "Neue Aufgabe", maxlength: 200 }), h("button.btn", { type: "submit" }, icon("plus"), "Hinzufügen")),
       view === "cal" ? calendar(all)
         : list.length ? h("div.stack", { style: { gap: "14px" } }, Object.entries(groups).map(([g, items]) => h("section.card",
           h("div.card-head", h("h3", g), h("span.sub", `${items.filter((t) => !t.done).length} offen`)), h("div.card-body", h("div.list", items.map(row))))))

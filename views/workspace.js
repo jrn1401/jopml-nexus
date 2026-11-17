@@ -1,6 +1,7 @@
 // Eigener Bereich für jeden angemeldeten Nutzer: verknüpfte Projekte (Websites, Repos, Events, KI …),
 // Verbinden-Assistent, KI-Assistent über die eigenen Daten, Geteiltes, Design und Datenschutz.
 // Alles läuft über RLS (owner_id = auth.uid()) bzw. die Edge Function nx-api – keine fremden Daten sichtbar.
+import { dailyBriefing } from "../lib/aiassist.js";
 import { launcherButton, appButton } from "../lib/topextras.js";
 import { sb, q, rpc, nx, local } from "../lib/api.js";
 import { h, icon, clear, toast, toastErr, fmtAgo, fmtDateTime, fmtEUR, empty, errMsg, confirmDialog, formModal, debounce, stat, modal } from "../lib/ui.js";
@@ -143,7 +144,7 @@ export async function renderWorkspace(root, who) {
     // Startseite anpassen: Bereiche ein-/ausblenden (pro Gerät)
     const hide = local.get("ws:hide", {});
     const customize = () => {
-      const opts = [["stats", "Kennzahlen"], ["ai", "KI-Eingabe"], ["quick", "„Was möchtest du tun?“"], ["steps", "Erste Schritte"], ["tasks", "Aufgaben & Schnellzugriff"]];
+      const opts = [["stats", "Kennzahlen"], ["ai", "KI-Eingabe"], ["brief", "KI-Briefing"], ["quick", "„Was möchtest du tun?“"], ["steps", "Erste Schritte"], ["tasks", "Aufgaben & Schnellzugriff"]];
       const m = modal("Startseite anpassen", h("div.stack", h("p.faint", { style: { margin: 0 } }, "Was soll auf deiner Startseite stehen?"),
         ...opts.map(([k, t]) => h("label.check", h("input", { type: "checkbox", checked: !hide[k], onchange: (e) => { hide[k] = !e.target.checked; local.set("ws:hide", hide); } }), t)),
         h("button.btn.primary", { onclick: () => { m.close(); show(); } }, "Fertig")));
@@ -160,6 +161,7 @@ export async function renderWorkspace(root, who) {
         statBox("Projekte", projects.length, "folder"), statBox("Verbindungen", conns.length, "link", err ? `${err} mit Fehler` : null),
         web.length ? statBox("Websites live", h("span.row", { style: { gap: "10px" } }, h("span.live-dot", { class: live ? "on" : "" }), String(live)), "globe", `${web.reduce((a, w) => a + (w.today_uv || 0), 0)} Besucher heute`) : statBox("Mit dir geteilt", shared.length, "users"), statBox("KI-Fragen heute", usage ? `${usage.requests_today}${usage.limit ? ` / ${usage.limit}` : ""}` : "–", "sparkles", usage?.limit ? "eigener KI-Schlüssel = ohne Limit" : null)),
       feat("ai") && !hide.ai ? aiCommand({ ask: (t) => aiDrawer(t), planEvent: async (t) => (await aiPlan(null, t)).id }) : null,
+      feat("ai") && !hide.brief && projects.length ? h("div", { style: { marginBottom: "16px" } }, dailyBriefing({ key: "brief-ws", onOpen: () => aiDrawer("Was soll ich heute als Erstes tun – und warum?") })) : null,
       hide.quick ? null : h("section.card.quick-studio", h("div.card-head", h("h3", "Was möchtest du tun?"), h("a.faint", { href: "#/studio", style: { fontSize: "13px" } }, "KI-Studio →")),
         h("div.card-body.qs-grid", [["bogen", "check", "Projekt planen", "Bogen ausfüllen – Plan + Rechts-Check"], ["web", "external", "Website bauen", "Event-, Link- oder Push-Seite"],
           ["marketing", "zap", "Werbung machen", "QR, Visitenkarten, Shirts, Posts"], ["summary", "book", "Zusammenfassen", "Stand aller Projekte"]].map(([k, ic, t, d]) =>

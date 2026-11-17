@@ -6,6 +6,7 @@ import { uploadDialog, download } from "../lib/actions.js";
 import { openShareDialog } from "../lib/share.js";
 import { aiCleanup } from "../lib/aidedupe.js";
 import { importDialog } from "../lib/eventfrog.js";
+import { eventCopilot } from "../lib/aiassist.js";
 
 const SECTIONS = {
   task: ["Aufgaben", "check", "Neue Aufgabe"], tech: ["Technik", "zap", "Technik hinzufügen"], cost: ["Kosten", "wallet", "Kostenposten"],
@@ -102,6 +103,9 @@ export default async function eventView({ args: [id] }) {
         h("div.card.stat", h("div.k", icon("chart"), "Ergebnis"), h("div.v", { style: { color: income - spent < 0 ? "var(--bad)" : income ? "var(--ok)" : "" } }, fmtEUR(income - spent)),
           h("div.d", [`${fmtEUR(income)} Einnahmen`, income && ev.expected_guests ? `Break-even bei ca. ${fmtNum(Math.ceil(spent / (income / ev.expected_guests)))} Gästen (alle Einnahmen pro Gast)` : price ? `Break-even bei ${fmtNum(Math.ceil(spent / price))} Tickets à ${fmtEUR(price)}` : "Ticketpreis unter „Bearbeiten“ setzen"].join(" · ")))),
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(ev.description)) : null,
+      h("div", { style: { marginBottom: "16px" } }, eventCopilot({ ev: { name: ev.name, event_date: ev.event_date, location: ev.location, capacity: ev.expected_guests, ticket_price: price, budget },
+        rows: items, tickets: ev.metadata?.tickets || {}, kinds: ["task", "schedule", "cost", "income", "shift", "tech", "post", "guest"],
+        insert: async (list) => { await q(sb.from("cc_event_items").insert(list.map((x) => ({ ...x, event_id: id })))); await reload(); } })),
       ticketCard(),
       settleCard(costs, income),
       h("div.grid.g-2", section("task"), section("location"), section("schedule"), section("shift"), section("tech"), section("cost"), section("income"), section("post"), commentsCard(),

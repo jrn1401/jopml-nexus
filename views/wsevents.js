@@ -5,6 +5,8 @@ import { sb, q, nx, local } from "../lib/api.js";
 import { h, icon, toast, toastErr, fmtDateTime, fmtEUR, empty, formModal, confirmDialog, errMsg, modal } from "../lib/ui.js";
 import { openShareDialog } from "../lib/share.js";
 import { aiCleanup } from "../lib/aidedupe.js";
+import { eventWizard } from "../lib/eventwizard.js";
+import { eventCopilot } from "../lib/aiassist.js";
 
 const STATUS = { idea: "Idee", planning: "In Planung", confirmed: "Fest", done: "Vorbei", cancelled: "Abgesagt" };
 const SECTIONS = [
@@ -77,6 +79,7 @@ export async function eventsPage() {
     q(sb.from("nx_event_items").select("event_id,kind,done")),
   ]);
   const open = (id) => { location.hash = `#/events/${id}`; };
+  const wizard = () => eventWizard({ admin: false, quick: () => eventForm(null, (e) => open(e.id)) });
   const card = (e) => {
     const its = items.filter((i) => i.event_id === e.id && i.kind === "task"), done = its.filter((i) => i.done).length;
     const days = e.event_date ? Math.ceil((new Date(e.event_date) - Date.now()) / 864e5) : null;
@@ -90,12 +93,12 @@ export async function eventsPage() {
   };
   return h("div",
     h("div.page-head", h("div", h("h1", "Events"), h("p", "Plane Partys, Treffen und Veranstaltungen – mit Aufgaben, Ablauf, Budget und Tickets.")),
-      h("div.actions", h("button.btn", { onclick: () => aiDialog(null, open) }, icon("bot"), "Mit KI planen"),
-        h("button.btn.primary", { onclick: () => eventForm(null, (e) => open(e.id)) }, icon("plus"), "Neues Event"))),
+      h("div.actions", h("button.btn", { onclick: () => aiDialog(null, open) }, icon("bot"), "In einem Satz"),
+        h("button.btn.primary", { onclick: () => wizard() }, icon("plus"), "Neues Event"))),
     evs.length ? h("div.grid", { style: { gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))" } }, evs.map(card))
       : h("section.card", empty("calendar", "Noch kein Event", "Lege eins an – oder beschreib es der KI in einem Satz, sie erstellt Aufgaben, Ablauf und Kosten.",
-        h("div.row", { style: { gap: "8px", justifyContent: "center" } }, h("button.btn.primary", { onclick: () => aiDialog(null, open) }, icon("bot"), "Mit KI planen"),
-          h("button.btn", { onclick: () => eventForm(null, (e) => open(e.id)) }, "Von Hand anlegen")))));
+        h("div.row", { style: { gap: "8px", justifyContent: "center" } }, h("button.btn.primary", { onclick: () => wizard() }, icon("sparkles"), "Event mit KI-Bogen anlegen"),
+          h("button.btn", { onclick: () => wizard() }, icon("upload"), "Importieren")))));
 }
 
 export async function eventPage(id) {
@@ -193,6 +196,8 @@ export async function eventPage(id) {
             try { await q(sb.from("cc_shares").delete().in("item_kind", ["nx_event", "tickets"]).eq("item_id", id)).catch(() => {}); await q(sb.from("nx_events").delete().eq("id", id)); toast("Gelöscht"); location.hash = "#/events"; } catch (e) { toastErr(e); }
           } }, icon("trash")))),
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px", whiteSpace: "pre-wrap" } }, ev.description) : null,
+      h("div", { style: { marginBottom: "16px" } }, eventCopilot({ ev, rows, tickets: ticketsOf(ev, linked), kinds: ["task", "schedule", "cost", "income", "shift", "guest"],
+        insert: async (list) => { await q(sb.from("nx_event_items").insert(list.map((x) => ({ ...x, event_id: id })))); await reload(); } })),
       h("div.grid.g-2", { style: { marginBottom: "16px", alignItems: "start" } }, ticketsCard(), money()),
       h("div.grid.g-2", { style: { alignItems: "start" } }, SECTIONS.map(section)));
   }

@@ -2,6 +2,7 @@
 // Daten liegen in nx_tasks (RLS: owner_id = auth.uid()), höchstens 500 Aufgaben pro Konto.
 import { sb, q, local, nx } from "../lib/api.js";
 import { h, icon, toast, toastErr, fmtDateTime, empty, formModal, confirmDialog, debounce, errMsg } from "../lib/ui.js";
+import { parseQuickTask, breakDownDialog } from "../lib/aiassist.js";
 
 const PRIO = [["2", "Wichtig"], ["1", "Normal"], ["0", "Irgendwann"]];
 
@@ -17,8 +18,8 @@ export async function tasksPage() {
       tabs.querySelectorAll("button").forEach((b) => { b.classList.toggle("on", b === e.currentTarget); b.setAttribute("aria-selected", String(b === e.currentTarget)); });
       draw();
     } }, t)));
-  const quick = h("input.input", { placeholder: "Neue Aufgabe – Enter zum Speichern", "aria-label": "Neue Aufgabe", maxlength: 300,
-    onkeydown: async (e) => { if (e.key !== "Enter" || !e.target.value.trim()) return; const title = e.target.value.trim(); e.target.value = ""; await save({ title }); } });
+  const quick = h("input.input", { placeholder: "Neue Aufgabe – versteht „morgen 18 Uhr …“, „Fr …“, „14.2. …“, „!“ = wichtig", "aria-label": "Neue Aufgabe", maxlength: 300,
+    onkeydown: async (e) => { if (e.key !== "Enter" || !e.target.value.trim()) return; const p = parseQuickTask(e.target.value.trim()); e.target.value = ""; await save({ title: p.title, due: p.due, priority: p.priority }); if (p.due) toast(`Fällig ${fmtDateTime(p.due)}`); } });
   const search = h("input.input", { type: "search", placeholder: "Suchen …", "aria-label": "Aufgaben durchsuchen", style: { maxWidth: "220px" }, oninput: debounce((e) => { term = e.target.value.toLowerCase(); draw(); }, 120) });
 
   async function reload() { rows = await q(sb.from("nx_tasks").select("*").order("done").order("due", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false }).limit(500)); draw(); }
@@ -61,6 +62,8 @@ export async function tasksPage() {
         h("div.li-main", h("div.li-title", t.title),
           h("div.li-sub", [t.due ? (late ? "Überfällig · " : "Fällig ") + fmtDateTime(t.due) : null, t.note ? t.note.slice(0, 80) : null].filter(Boolean).join(" · ") || "Keine Frist")),
         late ? h("span.badge.b-bad", "überfällig") : null,
+        !t.done ? h("button.btn.sm.ghost", { "aria-label": `„${t.title}“ in Schritte zerlegen`, title: "KI: in Schritte zerlegen", onclick: () => breakDownDialog(t, async (steps) => {
+          await q(sb.from("nx_tasks").insert(steps.map((x, i) => ({ title: `${t.title.slice(0, 100)} › ${x}`.slice(0, 300), due: t.due, priority: t.priority, note: `Schritt ${i + 1}` })))); rows = await q(sb.from("nx_tasks").select("*").order("done").order("due", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false }).limit(500)); draw(); }) }, icon("sparkles")) : null,
         h("button.btn.sm.ghost", { "aria-label": `„${t.title}“ bearbeiten`, title: "Bearbeiten", onclick: () => edit(t) }, icon("edit")));
     }) : [empty("check", filter === "done" ? "Noch nichts erledigt" : "Alles erledigt", rows.length ? "In diesem Filter gibt es nichts." : "Tippe oben eine Aufgabe ein und drücke Enter – fertig.")]));
   }
