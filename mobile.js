@@ -1,7 +1,8 @@
 // Nexus Mobil – eigene, schlanke Handy-App: Übersicht, Mitteilungen, geteilte Links, KI-Chat, Einstellungen.
 // Alles Wichtige mit einem Aufruf (cc_mobile_home), einstellbar (Titelbild, Farbe, Kacheln), Web-Push direkt aufs Handy.
-import { sb, rpc, nx, q } from "./lib/api.js";
-import { h, clear, toast, toastErr, errMsg, md, fmtEUR, fmtNum, fmtAgo, copyText, confirmDialog } from "./lib/ui.js";
+import { sb, rpc, nx, q, aiModel } from "./lib/api.js";
+import { h, clear, toast, toastErr, errMsg, md, fmtEUR, fmtNum, fmtAgo, copyText, confirmDialog, modal } from "./lib/ui.js";
+import { qrSvg } from "./lib/qr.js";
 import { enablePush, disablePush, currentSub, isIOS, isStandalone, supported as pushSupported } from "./lib/webpush.js";
 
 const root = document.getElementById("root");
@@ -138,6 +139,8 @@ async function homeView() {
     h("div.m-row-s", `${data.shares.length} Link(s) · zusammen ${fmtNum(data.shares.reduce((a, s) => a + (s.opens || 0), 0))}× geöffnet`),
     h("button.btn.sm.m-mt", { onclick: () => { tab = "share"; store.set("tab", tab); drawBar(); draw(); } }, "Ansehen")));
   parts.push(h("button.m-ask", { onclick: () => { tab = "chat"; store.set("tab", tab); drawBar(); draw(); } }, ic("spark", 18), "KI fragen: „Was ist heute wichtig?“"));
+  parts.push(h("section.m-card", h("div.m-card-h", ic("spark", 18), h("span", "KI-Studio")),
+    h("div.m-tools", [["bogen", "Projekt planen"], ["web", "Website bauen"], ["marketing", "QR & Werbung"], ["summary", "Zusammenfassen"]].map(([k, t]) => h("a.m-toolbtn", { href: `./#/studio/${k}` }, t)))));
   return h("div", ...parts);
 }
 
@@ -162,6 +165,7 @@ async function shareView() {
       h("div", h("b", x.label), h("div.m-row-s", `${fmtNum(x.opens || 0)}× geöffnet${x.last ? ` · zuletzt ${fmtAgo(x.last)}` : ""}${x.restricted ? " · nur bestimmte Personen" : ""}`)),
       h("div.m-share-b",
         h("button.btn.sm", { "aria-label": "Link kopieren", onclick: () => copyText(`${BASE}#/s/${x.token}`) }, ic("copy", 16)),
+        h("button.btn.sm", { "aria-label": "QR-Code zeigen", onclick: () => showQr(x.label, `${BASE}#/s/${x.token}`) }, "QR"),
         navigator.share ? h("button.btn.sm", { "aria-label": "Teilen", onclick: () => navigator.share({ title: x.label, url: `${BASE}#/s/${x.token}` }).catch(() => {}) }, ic("share", 16)) : null,
         h("a.btn.sm", { href: `${BASE}#/s/${x.token}`, "aria-label": "Öffnen" }, ic("ext", 16))))))
       : h("div.m-empty", "Noch nichts geteilt."),
@@ -193,7 +197,10 @@ function chatView() {
   }
   drawLog();
   return h("div.m-chat",
-    h("div.m-head.m-pad-x", h("h1", "KI"), hist.length ? h("button.btn.sm", { onclick: () => { hist = []; store.set("chat", hist); drawLog(); } }, "Neu") : null),
+    h("div.m-head.m-pad-x", h("h1", "KI"), h("div", { style: { display: "flex", gap: "6px" } },
+      h("select.input", { "aria-label": "KI-Modell", style: { height: "34px", width: "auto", fontSize: "13px", padding: "0 8px" }, onchange: (e) => { try { localStorage.setItem("cc:ai:model", JSON.stringify(e.target.value)); } catch { /* privat */ } } },
+        [["auto", "Auto"], ["gemini:gemini-flash-lite-latest", "Gemini Lite"], ["gemini:gemini-flash-latest", "Gemini Flash"], ["groq:llama-3.3-70b-versatile", "Llama 70B"], ["groq:openai/gpt-oss-120b", "GPT-OSS"]].map(([v, t]) => h("option", { value: v, selected: aiModel() === v }, t))),
+      hist.length ? h("button.btn.sm", { onclick: () => { hist = []; store.set("chat", hist); drawLog(); } }, "Neu") : null)),
     log, h("div.m-chat-bar", inp, h("button.m-send", { "aria-label": "Senden", onclick: send }, ic("send", 18))));
 }
 
@@ -273,6 +280,14 @@ async function invitesCard() {
       h("button.btn.sm.ghost", { "aria-label": "Zurückziehen", onclick: async () => { if (await confirmDialog("Einladung zurückziehen?", `${n} Gerät(e) bekommen dann keine Nachrichten mehr. Der Link funktioniert nicht mehr.`, { ok: "Zurückziehen" })) { await q(sb.from("cc_push_invites").update({ revoked_at: new Date().toISOString() }).eq("id", i.id)); draw(); } } }, "✕")); }),
     btn);
   return card;
+}
+
+// QR-Code groß anzeigen (z. B. am Einlass zum Abscannen)
+function showQr(title, url) {
+  const box = h("div", { style: { display: "grid", placeItems: "center", gap: "12px" } });
+  box.innerHTML = qrSvg(url, { size: 280 });
+  box.append(h("div.m-row-s", { style: { wordBreak: "break-all", textAlign: "center" } }, url));
+  modal(title, box);
 }
 
 // Foto verkleinern (max. 900 px) und eine passende Akzentfarbe daraus ableiten

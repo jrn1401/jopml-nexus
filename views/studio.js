@@ -50,6 +50,9 @@ function hub() {
 }
 
 // ---------- gemeinsame Datenquelle: eigene Projekte & Events ----------
+// Vorauswahl aus Projekt-/Event-Seiten („Rechts-Check“, „Marketing“, „Website bauen“)
+export function openStudio(tool, key) { LS.set("studio:preset", key); location.hash = `#/studio/${tool}`; }
+const takePreset = () => { const k = LS.get("studio:preset", ""); if (k) LS.set("studio:preset", ""); return k; };
 async function targets(ctx) {
   const [np, ne, ce] = await Promise.all([
     q(sb.from("nx_projects").select("id,name,kind,url,description,metadata").order("updated_at", { ascending: false }).limit(80)).catch(() => []),
@@ -163,7 +166,7 @@ Höchstens 8 tasks, 4 risks, 5 marketing.`,
       h("a.btn", { href: "#/studio/marketing" }, "Weiter zu Marketing")));
     resBox.scrollIntoView({ behavior: "smooth", block: "start" });
   }
-  pickTarget("");
+  pickTarget(takePreset());
   return box;
 }
 
@@ -288,6 +291,8 @@ async function webBuilder(ctx) {
     refresh();
   }
   listView();
+  const pre = takePreset();
+  if (pre) { const t = list.find((x) => x.key === pre); if (t) { editor({ template: t.type === "event" ? "event" : "project", data: {}, theme: t.type === "event" ? "rave" : "nacht" }); const sel = wrap.querySelector("select"); if (sel) { sel.value = pre; sel.dispatchEvent(new Event("change")); } } }
   return wrap;
 }
 
@@ -422,9 +427,11 @@ async function marketing(ctx) {
       } }, icon("sparkles"), "KI-Marketingplan erstellen"), res)));
   }
 
-  tools(); run();
+  const pre = takePreset();
+  const sel = targetSelect(list, pre, pick);
+  if (pre) pick(pre); else { tools(); run(); }
   return h("div.stack",
-    h("section.card", h("div.card-body.grid.g-2", targetSelect(list, st.target, pick), field("Link (für QR-Codes & Texte)", urlIn))),
+    h("section.card", h("div.card-body.grid.g-2", sel, field("Link (für QR-Codes & Texte)", urlIn))),
     toolsBox, out);
 }
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -434,7 +441,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 // =====================================================================
 async function summaries(ctx) {
   const list = await targets(ctx);
-  let key = "all";
+  let key = takePreset() || "all";
   const res = h("div.stack");
   const show = (s) => res.replaceChildren(h("section.card", h("div.card-body.stack", md(s.text), h("div.faint", { style: { fontSize: "12px" } }, `Erstellt ${fmtAgo(s.at)} · ${s.model || ""}`),
     h("div.row.wrap", { style: { gap: "8px" } }, h("button.btn.sm", { onclick: () => copyText(s.text) }, "Kopieren"),
@@ -464,7 +471,7 @@ async function summaries(ctx) {
   };
   return h("div.stack",
     h("section.card", h("div.card-body.stack",
-      field("Was zusammenfassen?", h("select.input", { onchange: (e) => { key = e.target.value; res.replaceChildren(); } }, h("option", { value: "all" }, "Alles (Wochenüberblick)"), list.map((t) => h("option", { value: t.key }, t.label)))),
+      field("Was zusammenfassen?", h("select.input", { onchange: (e) => { key = e.target.value; res.replaceChildren(); } }, h("option", { value: "all" }, "Alles (Wochenüberblick)"), list.map((t) => h("option", { value: t.key, selected: t.key === key }, t.label)))),
       h("div.row.wrap", { style: { gap: "8px" } }, h("button.btn.primary", { onclick: () => gen(false) }, icon("sparkles"), "Zusammenfassen"), h("button.btn", { onclick: () => gen(true) }, icon("refresh"), "Neu erstellen")),
       h("div.faint", { style: { fontSize: "12.5px" } }, "Zusammenfassungen werden 6 Stunden auf diesem Gerät gemerkt – das spart KI-Anfragen."))),
     res);

@@ -735,3 +735,13 @@ html.simple .faint, html.simple .li-sub { font-size: 14px; }
 html.simple .btn { min-height: 44px; font-size: 15px; }
 html.simple .badge.plain, html.simple .kbd, html.simple .status-pill, html.simple [data-advanced] { display: none !important; }
 html.simple .card { border-radius: 18px; }
+.qs-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.qs-item { display: flex; gap: 10px; align-items: center; padding: 12px; border-radius: 14px; border: 1px solid var(--line); text-decoration: none; color: var(--text); background: var(--surface-2); }
+.qs-item:hover { border-color: var(--primary); }
+.qs-item b { display: block; font-size: 14px; } .qs-item small { color: var(--text-3); font-size: 12px; line-height: 1.35; display: block; }
+.quick-studio { margin-bottom: 16px; }
+@media (max-width: 900px) { .qs-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 460px) { .qs-grid { grid-template-columns: 1fr; } }
+.model-pick { height: 30px; width: auto; max-width: 130px; padding: 0 8px; font-size: 12.5px; }
+.conn-fix { flex-basis: 100%; font-size: 12.5px; color: var(--warn); padding: 4px 0 0 22px; }
+.linklike { background: none; border: 0; padding: 0; color: var(--primary); font: inherit; cursor: pointer; text-decoration: underline; }

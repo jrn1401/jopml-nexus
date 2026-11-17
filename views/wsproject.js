@@ -137,6 +137,8 @@ export async function projectPage(id, { ask } = {}) {
       h("div.actions",
         h("button.btn.primary", { onclick: () => openShareDialog("nx_project", p.id, p.name, { tickets: !!t }) }, icon("users"), "Teilen"),
         h("button.btn", { onclick: () => aiSummary(p) }, icon("sparkles"), "KI-Zusammenfassung"),
+        h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("bogen", `np:${p.id}`)) }, icon("check"), "Rechts-Check & Plan"),
+        h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("marketing", `np:${p.id}`)) }, icon("zap"), "Marketing"),
         ask ? h("button.btn", { onclick: () => ask(`Zu meinem Projekt „${p.name}“: `) }, icon("bot"), "KI fragen") : null,
         p.url ? h("a.btn.ghost", { href: p.url, target: "_blank", rel: "noopener noreferrer" }, icon("external"), "Öffnen") : null,
         ["claude", "manual"].includes(p.provider) ? h("button.btn.ghost", { "aria-label": "Projekt löschen", onclick: async () => {

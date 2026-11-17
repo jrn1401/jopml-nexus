@@ -150,6 +150,10 @@ export async function renderWorkspace(root, who) {
         statBox("Projekte", projects.length, "folder"), statBox("Verbindungen", conns.length, "link", err ? `${err} mit Fehler` : null),
         web.length ? statBox("Websites live", h("span.row", { style: { gap: "10px" } }, h("span.live-dot", { class: live ? "on" : "" }), String(live)), "globe", `${web.reduce((a, w) => a + (w.today_uv || 0), 0)} Besucher heute`) : statBox("Mit dir geteilt", shared.length, "users"), statBox("KI-Fragen heute", usage ? `${usage.requests_today}${usage.limit ? ` / ${usage.limit}` : ""}` : "–", "sparkles", usage?.limit ? "eigener KI-Schlüssel = ohne Limit" : null)),
       feat("ai") ? aiCommand({ ask: (t) => aiDrawer(t), planEvent: async (t) => (await aiPlan(null, t)).id }) : null,
+      h("section.card.quick-studio", h("div.card-head", h("h3", "Was möchtest du tun?"), h("a.faint", { href: "#/studio", style: { fontSize: "13px" } }, "KI-Studio →")),
+        h("div.card-body.qs-grid", [["bogen", "check", "Projekt planen", "Bogen ausfüllen – Plan + Rechts-Check"], ["web", "external", "Website bauen", "Event-, Link- oder Push-Seite"],
+          ["marketing", "zap", "Werbung machen", "QR, Visitenkarten, Shirts, Posts"], ["summary", "book", "Zusammenfassen", "Stand aller Projekte"]].map(([k, ic, t, d]) =>
+          h("a.qs-item", { href: `#/studio/${k}` }, h("span.studio-ic", icon(ic)), h("span", h("b", t), h("small", d)))))),
       interestsCard(),
       firstSteps({ projects: projects.length, conns: conns.length, guest, shared: shared.length || 0 }),
       h("div.grid.g-2", { style: { marginBottom: "16px" } }, feat("tasks") ? await tasksCard() : null, h("section.card", h("div.card-head", h("h3", "Schnellzugriff")), h("div.card-body", h("div.list",

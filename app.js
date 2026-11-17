@@ -346,7 +346,7 @@ function openQuick() {
     ["folder", "Neues Projekt erstellen", () => newProject()], ["layers", "Neues Modul hinzufügen", () => newModule()],
     ["upload", "Datei hochladen", () => uploadDialog()], ["server", "Server verbinden", () => connectServer()],
     ["check", "Neue Aufgabe", () => { location.hash = "#/tasks"; }], ["link", "Marketing-Link anlegen", () => { location.hash = "#/links"; }],
-    ["calendar", "Event erstellen", () => newEvent()], ["refresh", "Projekt synchronisieren", () => syncHelp()], ["book", "Handbuch öffnen", () => { location.hash = "#/help"; }],
+    ["calendar", "Event erstellen", () => newEvent()], ["sparkles", "Projekt-Assistent (Rechts-Check)", () => { location.hash = "#/studio/bogen"; }], ["external", "Website bauen", () => { location.hash = "#/studio/web"; }], ["zap", "QR / Visitenkarte / Merch", () => { location.hash = "#/studio/marketing"; }], ["refresh", "Projekt synchronisieren", () => syncHelp()], ["book", "Handbuch öffnen", () => { location.hash = "#/help"; }],
     ["sparkles", "KI-Wochenbericht", () => import("./lib/nextup.js").then((m) => m.weeklyReport())],
     ["bot", "KI-Assistent öffnen", () => openAssistant()],
   ];
@@ -372,7 +372,7 @@ function openSearch() {
   if (document.querySelector(".palette")) return;
   const KIND = { project: ["folder", "Projekte"], module: ["layers", "Module"], server: ["server", "Server"], file: ["file", "Dateien"], event: ["calendar", "Events"], event_item: ["check", "Event-Einträge"], activity: ["activity", "Aktivitäten"], task: ["check", "Aufgaben"], link: ["link", "Marketing-Links"], app: ["rocket", "Gehostete Apps"], comment: ["users", "Kommentare"], page: ["chevronR", "Seiten"] };
   const pages = [...NAV.map(([href, , t]) => ({ kind: "page", title: t, route: href })), { kind: "page", title: "Einstellungen", route: "#/settings" }];
-  const acts = [["Teilen & Gäste", () => { location.hash = "#/shares"; }], ["Neues Event", () => newEvent()], ["Neues Projekt", () => newProject()], ["KI-Assistent", () => openAssistant()], ["Server verbinden", () => connectServer()], ["Datei hochladen", () => uploadDialog()]]
+  const acts = [["KI-Studio", () => { location.hash = "#/studio"; }], ["Teilen & Gäste", () => { location.hash = "#/shares"; }], ["Neues Event", () => newEvent()], ["Neues Projekt", () => newProject()], ["KI-Assistent", () => openAssistant()], ["Server verbinden", () => connectServer()], ["Datei hochladen", () => uploadDialog()]]
     .map(([t, run]) => ({ kind: "page", title: `Aktion: ${t}`, run }));
   const inp = h("input.input", { placeholder: "Projekte, Aufgaben, Dateien, Events, Links … durchsuchen", "aria-label": "Suche", autocomplete: "off" });
   const res = h("div.results");

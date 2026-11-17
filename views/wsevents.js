@@ -184,6 +184,8 @@ export async function eventPage(id) {
           h("button.btn.primary", { onclick: () => openShareDialog("nx_event", id, ev.name, { admin: false }) }, icon("users"), "Teilen"),
           h("button.btn", { onclick: () => aiDialog(id, () => reload()) }, icon("bot"), "KI-Ideen"),
           h("button.btn", { onclick: () => aiCheck(ev, rows, ticketsOf(ev, linked)) }, icon("sparkles"), "KI-Check"),
+          h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("bogen", `ne:${ev.id}`)) }, icon("check"), "Rechts-Check"),
+          h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("web", `ne:${ev.id}`)) }, icon("external"), "Event-Website"),
           h("button.btn", { onclick: () => aiCleanup({ items: rows, table: "nx_event_items", context: ev.name, onDone: reload }) }, icon("sparkles"), "KI-Aufräumen"),
           h("button.btn.ghost", { onclick: () => eventForm(ev, (e) => { ev = e; draw(); }) }, icon("edit"), "Bearbeiten"),
           h("button.btn.ghost", { "aria-label": "Event löschen", onclick: async () => {

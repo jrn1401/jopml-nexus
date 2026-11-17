@@ -101,3 +101,6 @@
 
 @media (min-width: 700px) { .m-app, .m-login { max-width: 480px; margin: 0 auto; } .m-tabbar { max-width: 480px; margin: 0 auto; } }
 .banner.ok { background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 40%, transparent); color: var(--text); }
+.m-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.m-toolbtn { display: block; text-align: center; padding: 12px 8px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); text-decoration: none; font-size: 14px; }
+.m-toolbtn:active { border-color: var(--m-accent); }

@@ -4,6 +4,14 @@ import { openAssistant } from "../lib/actions.js";
 
 // [Titel, Link, Symbol, Kurz, Schritte[]]
 const BOOK = [
+  ["KI-Studio (neu)", [
+    ["Projekt-Assistent mit Rechts-Check", "#/studio/bogen", "check", "Fragebogen je Projektart – für neue und bestehende Projekte/Events.",
+      ["Prüft u. a. Jugendschutz (§§ 4, 5, 9, 10 JuSchG), Verträge Minderjähriger (§§ 107, 110 BGB), Gestattung (§ 12 GastG), Versammlungsstätten ab 200 Gästen, GEMA, Gewerbe (§ 14 GewO), Kleinunternehmer (§ 19 UStG), Impressum (§ 5 DDG), Datenschutz (Art. 13 DSGVO), Cookies (§ 25 TDDDG), Online-Verkauf (§§ 312g, 312j BGB), Fotos (§ 22 KunstUrhG).", "Ausgewählte Punkte werden als Aufgaben ins Event/Projekt übernommen (ohne Doppelungen), die KI-Analyse ergänzt Aufgaben mit Termin vor dem Datum.", "Im Event: Knopf „Rechts-Check“."]],
+    ["Website-Baukasten", "#/studio/web", "external", "Event-, Link-, Benachrichtigungs- und Projektseiten mit QR-Code.",
+      ["Veröffentlichte Seiten laufen unter …/w.html?s=adresse in einer Sandbox ohne Skripte.", "„Ticket-Alarm“ legt automatisch eine Push-Einladung an – Besucher bekommen deine Ticket-Nachrichten ohne Konto.", "Im Event: Knopf „Event-Website“ übernimmt Name, Datum, Ort und Ticket-Link."]],
+    ["Marketing & Druck", "#/studio/marketing", "zap", "QR-Codes, Visitenkarten (A4-Druckbogen), T-Shirt-Druckdateien mit KI-Slogans, Social-Posts, Marketingplan.", []],
+    ["KI-Einstellungen", "#/studio/ki", "sparkles", "Modell, Antwort-Stil, persönliches KI-Gedächtnis und Einfach-Modus.", ["Schnellwahl des Modells auch oben im KI-Assistenten."]],
+  ]],
   ["Erste Schritte", [
     ["Dashboard", "#/", "dashboard", "Die Startseite zeigt alles Wichtige auf einen Blick.",
       ["Oben steht „Als Nächstes wichtig“: überfällige Aufgaben, Fehler und das nächste Event.", "Mit dem Umschalter „Zahlen / Diagramme“ wählst du die Darstellung.", "Die Sync-Zentrale holt mit „Alles jetzt abrufen“ sofort frische Daten."]],
