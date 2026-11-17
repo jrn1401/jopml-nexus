@@ -857,3 +857,4 @@ button.ov-tile { cursor: pointer; } button.ov-tile:hover { border-color: var(--p
 @media (max-width: 700px) { .ov-strip { display: flex; overflow-x: auto; scrollbar-width: none; margin: 0 -2px 14px; } .ov-tile { flex: 0 0 auto; min-width: 118px; } .ov-tile b { font-size: 14.5px; } }
 .ov-gear { flex: 0 0 auto; align-items: center; justify-content: center; color: var(--text-3); min-width: 44px !important; }
 .ov-strip { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
+.dv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; margin-top: 6px; } .dv-row { display: flex; flex-direction: column; font-size: 14px; min-width: 0; } .dv-row small { color: var(--text-3); font-size: 11.5px; }

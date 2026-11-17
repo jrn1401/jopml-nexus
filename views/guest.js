@@ -2,7 +2,7 @@
 import { sb, rpc } from "../lib/api.js";
 import { h, icon, clear, badge, EVENT_STATUS, fmtDateTime, fmtEUR, fmtBytes, fmtAgo, md, toast, toastErr, empty, errMsg, formModal } from "../lib/ui.js";
 import { LOC_STATUS } from "./event.js";
-import { overviewStrip } from "../lib/eventcalc.js";
+import { overviewStrip, calcCard, detailsView } from "../lib/eventcalc.js";
 import { CONFIG } from "../config.js";
 import { webSharedBlock } from "../lib/web.js";
 import { staticWidgets } from "../lib/modules.js";
@@ -142,7 +142,9 @@ export function renderShared(p, ctx, reload) {
       p.note || p.share?.note ? h("div.na-note", { style: { marginBottom: "16px" } }, icon("info"), h("div", { style: { whiteSpace: "pre-wrap" } }, p.note || p.share.note)) : null,
       sharedOverview(p, ctx, reload, items),
       p.tickets && (p.tickets.sold !== undefined || p.tickets.revenue !== undefined) ? h("div", { style: { marginBottom: "16px" } }, ticketBlock(p.tickets, { compact: !board })) : null,
-      p.finance ? financeCard(p.finance) : null,
+      p.overview?.calc ? h("div", { style: { marginBottom: "16px" } }, calcCard({ name: ev.name, calc: p.overview.calc, tickets: p.tickets || {}, eventDate: ev.date, capacity: p.tickets?.capacity, readOnly: true })) : null,
+      p.finance && !p.overview?.calc ? financeCard(p.finance) : null,
+      p.overview?.details && detailsView(p.overview.details) ? h("section.card", { style: { marginBottom: "16px" } }, h("div.card-head", h("h3.row", icon("info"), "Steckbrief")), h("div.card-body", detailsView(p.overview.details))) : null,
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(ev.description)) : null,
       canTick ? h("div.na-note", { style: { marginBottom: "16px" } }, icon("check"), h("div", p.share.permission === "edit" ? "Du arbeitest mit: Aufgaben abhaken und neue Aufgaben, Schichten und Gäste anlegen." : "Du darfst Aufgaben abhaken.")) : null,
       h("div.grid.g-2", ["task", "schedule", "location", "tech", "guest", "cost", "income"].map(sec)),
