@@ -52,7 +52,9 @@ export async function renderWorkspace(root, who) {
     MAIN.map(([href, t, , ic]) => h("a", { href, dataset: { r: href } }, icon(ic), h("span", t))),
     h("button", { type: "button", onclick: () => {
       const m = modal("Alle Bereiche", h("div.list", NAV.map(([href, t, , ic]) => h("a.list-item", { href, onclick: () => m.close() }, icon(ic), h("div.li-main", h("div.li-title", t)))),
-        feat("ai") ? h("button.list-item", { onclick: () => { m.close(); aiDrawer(); } }, icon("bot"), h("div.li-main", h("div.li-title", "KI fragen"))) : null));
+        feat("ai") ? h("button.list-item", { onclick: () => { m.close(); aiDrawer(); } }, icon("bot"), h("div.li-main", h("div.li-title", "KI fragen"))) : null,
+        h("a.list-item", { href: "m.html" }, icon("bell"), h("div.li-main", h("div.li-title", "Handy-App & Benachrichtigungen"))),
+        h("a.list-item", { href: "#/download", onclick: (e) => { e.preventDefault(); m.close(); location.hash = "#/download"; location.reload(); } }, icon("download"), h("div.li-main", h("div.li-title", "JOPML Launcher herunterladen")))));
     } }, icon("menu"), h("span", "Mehr")));
   const top = h("header.guest-top",
     h("a.brand", { href: "#/" }, h("div.brand-mark", icon("logo")), h("div.brand-text", CONFIG.appName, h("small", "Mein Bereich"))),
@@ -138,6 +140,14 @@ export async function renderWorkspace(root, who) {
     const hour = new Date().getHours();
     const web = guest ? [] : await rpc("cc_web_overview").catch(() => []);
     const live = web.reduce((a, w) => a + (w.live || 0), 0);
+    // Startseite anpassen: Bereiche ein-/ausblenden (pro Gerät)
+    const hide = local.get("ws:hide", {});
+    const customize = () => {
+      const opts = [["stats", "Kennzahlen"], ["ai", "KI-Eingabe"], ["quick", "„Was möchtest du tun?“"], ["steps", "Erste Schritte"], ["tasks", "Aufgaben & Schnellzugriff"]];
+      const m = modal("Startseite anpassen", h("div.stack", h("p.faint", { style: { margin: 0 } }, "Was soll auf deiner Startseite stehen?"),
+        ...opts.map(([k, t]) => h("label.check", h("input", { type: "checkbox", checked: !hide[k], onchange: (e) => { hide[k] = !e.target.checked; local.set("ws:hide", hide); } }), t)),
+        h("button.btn.primary", { onclick: () => { m.close(); show(); } }, "Fertig")));
+    };
     return h("div",
       guest ? h("div.banner", { style: { marginBottom: "14px", alignItems: "center" } }, icon("info"),
         h("div", { style: { flex: 1 } }, "Du bist als Gast angemeldet – alles wird nach 7 Tagen gelöscht. Sichere dein Konto mit Google: deine Projekte und das KI-Wissen bleiben erhalten, und du kannst Dienste verbinden, Websites live sehen und teilen."),
@@ -145,18 +155,18 @@ export async function renderWorkspace(root, who) {
       h("section.hero",
         h("div", h("h1", `${hour < 11 ? "Guten Morgen" : hour < 18 ? "Hallo" : "Guten Abend"}${first ? `, ${first}` : ""}`),
           h("p", conns.length ? `${projects.length} Projekte aus ${conns.length} Verbindung${conns.length === 1 ? "" : "en"} · stündlich aktualisiert` : "Füge einen API-Schlüssel ein – dein Bereich füllt sich automatisch.")),
-        h("div.row.wrap", { style: { gap: "8px" } }, guest ? h("button.btn.primary", { onclick: () => editProject() }, icon("plus"), "Projekt anlegen") : h("button.btn.primary", { onclick: () => connect(show) }, icon("link"), "Verbinden"), h("button.btn", { onclick: () => aiDrawer() }, icon("bot"), "KI fragen"))),
-      h("div.grid.g-4", { style: { marginBottom: "18px" } },
+        h("div.row.wrap", { style: { gap: "8px" } }, h("button.btn.ghost", { title: "Startseite anpassen", "aria-label": "Startseite anpassen", onclick: customize }, icon("settings")), guest ? h("button.btn.primary", { onclick: () => editProject() }, icon("plus"), "Projekt anlegen") : h("button.btn.primary", { onclick: () => connect(show) }, icon("link"), "Verbinden"), h("button.btn", { onclick: () => aiDrawer() }, icon("bot"), "KI fragen"))),
+      hide.stats ? null : h("div.grid.g-4", { style: { marginBottom: "18px" } },
         statBox("Projekte", projects.length, "folder"), statBox("Verbindungen", conns.length, "link", err ? `${err} mit Fehler` : null),
         web.length ? statBox("Websites live", h("span.row", { style: { gap: "10px" } }, h("span.live-dot", { class: live ? "on" : "" }), String(live)), "globe", `${web.reduce((a, w) => a + (w.today_uv || 0), 0)} Besucher heute`) : statBox("Mit dir geteilt", shared.length, "users"), statBox("KI-Fragen heute", usage ? `${usage.requests_today}${usage.limit ? ` / ${usage.limit}` : ""}` : "–", "sparkles", usage?.limit ? "eigener KI-Schlüssel = ohne Limit" : null)),
-      feat("ai") ? aiCommand({ ask: (t) => aiDrawer(t), planEvent: async (t) => (await aiPlan(null, t)).id }) : null,
-      h("section.card.quick-studio", h("div.card-head", h("h3", "Was möchtest du tun?"), h("a.faint", { href: "#/studio", style: { fontSize: "13px" } }, "KI-Studio →")),
+      feat("ai") && !hide.ai ? aiCommand({ ask: (t) => aiDrawer(t), planEvent: async (t) => (await aiPlan(null, t)).id }) : null,
+      hide.quick ? null : h("section.card.quick-studio", h("div.card-head", h("h3", "Was möchtest du tun?"), h("a.faint", { href: "#/studio", style: { fontSize: "13px" } }, "KI-Studio →")),
         h("div.card-body.qs-grid", [["bogen", "check", "Projekt planen", "Bogen ausfüllen – Plan + Rechts-Check"], ["web", "external", "Website bauen", "Event-, Link- oder Push-Seite"],
           ["marketing", "zap", "Werbung machen", "QR, Visitenkarten, Shirts, Posts"], ["summary", "book", "Zusammenfassen", "Stand aller Projekte"]].map(([k, ic, t, d]) =>
           h("a.qs-item", { href: `#/studio/${k}` }, h("span.studio-ic", icon(ic)), h("span", h("b", t), h("small", d)))))),
       interestsCard(),
-      firstSteps({ projects: projects.length, conns: conns.length, guest, shared: shared.length || 0 }),
-      h("div.grid.g-2", { style: { marginBottom: "16px" } }, feat("tasks") ? await tasksCard() : null, h("section.card", h("div.card-head", h("h3", "Schnellzugriff")), h("div.card-body", h("div.list",
+      hide.steps ? null : firstSteps({ projects: projects.length, conns: conns.length, guest, shared: shared.length || 0 }),
+      hide.tasks ? null : h("div.grid.g-2", { style: { marginBottom: "16px" } }, feat("tasks") ? await tasksCard() : null, h("section.card", h("div.card-head", h("h3", "Schnellzugriff")), h("div.card-body", h("div.list",
         h("a.list-item", { href: "#/aufgaben" }, icon("check"), h("div.li-main", h("div.li-title", "Aufgabe notieren"))),
         h("button.list-item", { onclick: () => importDialog() }, icon("sparkles"), h("div.li-main", h("div.li-title", "Aus Claude oder Text einfügen"), h("div.li-sub", "Notizen, Zahlen, Tabellen → übersichtliche Kacheln"))),
         h("a.list-item", { href: "#/skills", onclick: (e) => { e.preventDefault(); location.hash = "#/skills"; location.reload(); } }, icon("bot"), h("div.li-main", h("div.li-title", "Claude-Skills für Nexus"), h("div.li-sub", "Anleitung, Download und Prompt"))),
