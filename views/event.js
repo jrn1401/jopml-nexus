@@ -7,7 +7,7 @@ import { openShareDialog } from "../lib/share.js";
 import { aiCleanup } from "../lib/aidedupe.js";
 import { importDialog } from "../lib/eventfrog.js";
 import { eventCopilot } from "../lib/aiassist.js";
-import { calcCard, compute as calcCompute, detailsText, eventSheet, emptyCalc, overviewStrip, OV_HINT } from "../lib/eventcalc.js";
+import { calcCard, compute as calcCompute, detailsText, eventSheet, emptyCalc, overviewStrip, OV_HINT, deriveCalc } from "../lib/eventcalc.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
 import { docsCard } from "../lib/eventdocs.js";
 
@@ -106,14 +106,14 @@ export default async function eventView({ args: [id] }) {
         h("span.faint", { style: { fontSize: "13px" } }, [ev.event_date ? `${fmtDateTime(ev.event_date)} (${fmtAgo(ev.event_date)})` : "ohne Datum", ev.location].filter(Boolean).join(" · ")),
         proj ? h("a.tag", { href: `#/projects/${proj.id}` }, icon("folder", ""), " ", proj.name) : null)),
         h("div.actions", h("button.btn.primary", { onclick: () => openShareDialog("event", id, ev.name) }, icon("users"), "Teilen"), h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("bogen", `ce:${id}`)) }, icon("check"), "Rechts-Check"), h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("web", `ce:${id}`)) }, icon("external"), "Event-Website"), h("button.btn", { onclick: () => aiCleanup({ items, table: "cc_event_items", context: `${ev.name}, ${ev.location || ""}`, onDone: reload }) }, icon("sparkles"), "KI-Aufräumen"), h("button.btn", { onclick: edit }, icon("edit"), "Bearbeiten"),
-          h("button.btn.primary", { title: "Ein Formular für alles: Infos, Tickets, Kosten, Bar, Garderobe, Notfall, Links, eigene Felder", onclick: () => eventSheet({ name: ev.name, tiers: ev.metadata?.tickets?.tiers || [], calc: ev.metadata?.calc || emptyCalc({ capacity: ev.expected_guests }), details: ev.metadata?.details || {}, onSave: saveAll }) }, icon("edit"), "Event-Formular"),
+          h("button.btn.primary", { title: "Ein Formular für alles: Infos, Tickets, Kosten, Bar, Garderobe, Notfall, Links, eigene Felder", onclick: () => eventSheet({ name: ev.name, tiers: ev.metadata?.tickets?.tiers || [], calc: ev.metadata?.calc || deriveCalc({ guests: ev.expected_guests, price: ev.metadata?.ticket_price, tiers: ev.metadata?.tickets?.tiers || [], costs: items.filter((i) => ["cost", "tech"].includes(i.kind)).map((i) => ({ name: i.title, amount: i.actual ?? i.amount })) }), details: ev.metadata?.details || {}, onSave: saveAll }) }, icon("edit"), "Event-Formular"),
           h("a.btn", { href: `#/door/${id}`, title: "Barverkauf, Wechselgeld, Gästeliste und Auslastung am Abend" }, icon("ticket"), "Abendkasse"),
           h("button.btn", { onclick: () => importDialog(ev, () => dispatchEvent(new Event("hashchange"))), title: "Ticketverkäufe aus Eventfrog-Export übernehmen" }, icon("ticket"), "Eventfrog-Import"),
           h("button.btn.ghost", { onclick: exportCsv, title: "Alle Einträge als CSV (Excel)" }, icon("download"), "CSV"),
           ev.event_date ? h("button.btn.ghost", { onclick: exportIcs, title: "Event + Termine in den Kalender" }, icon("calendar"), "Kalender") : null,
           h("button.btn.ghost", { onclick: duplicate, title: "Als Vorlage kopieren" }, icon("copy"), "Duplizieren"),
           h("button.btn.danger", { onclick: del }, icon("trash"), "Löschen"))),
-      overviewStrip({ name: ev.name, calc: ev.metadata?.calc || null, tickets: ev.metadata?.tickets || {}, eventDate: ev.event_date, capacity: ev.metadata?.tickets?.capacity || ev.expected_guests, snaps,
+      overviewStrip({ name: ev.name, calc: ev.metadata?.calc || (items.some((i) => ["cost", "tech"].includes(i.kind)) && ev.expected_guests ? deriveCalc({ guests: ev.expected_guests, price: ev.metadata?.ticket_price, tiers: ev.metadata?.tickets?.tiers || [], costs: items.filter((i) => ["cost", "tech"].includes(i.kind)).map((i) => ({ name: i.title, amount: i.actual ?? i.amount })) }) : null), tickets: ev.metadata?.tickets || {}, eventDate: ev.event_date, capacity: ev.metadata?.tickets?.capacity || ev.expected_guests, snaps,
         tiles: ev.metadata?.overview, configHint: OV_HINT,
         onConfig: async (tiles) => { const meta = { ...(ev.metadata || {}) }; if (tiles) meta.overview = tiles; else delete meta.overview; await q(sb.from("cc_events").update({ metadata: meta }).eq("id", id)); ev.metadata = meta; draw(); },
         tasks, guests, spent, budget, onTasks: () => document.getElementById("sec-task")?.scrollIntoView({ behavior: "smooth" }) }),
@@ -124,7 +124,7 @@ export default async function eventView({ args: [id] }) {
         onSync: () => projectSyncDialog({ admin: true, ev, items, projects, onDone: () => location.reload() }),
         info: [detailsText(ev.metadata?.details || {}), String(ev.description || "").slice(0, 5000), ...Object.entries(ev.metadata || {}).filter(([k, v]) => typeof v === "string" && /url|website|link|dj|age|insta|tiktok|whatsapp|music|genre/i.test(k)).map(([k, v]) => `${k}: ${v}`)].join("\n"),
         addTask: async (t) => { await q(sb.from("cc_event_items").insert({ event_id: id, kind: "task", title: t.title, note: t.note, at: t.due })); await reload(); } })),
-      calcCard({ name: ev.name, calc: ev.metadata?.calc || null, tickets: ev.metadata?.tickets || {}, eventDate: ev.event_date, capacity: ev.metadata?.tickets?.capacity || ev.expected_guests, snaps,
+      calcCard({ name: ev.name, calc: ev.metadata?.calc || deriveCalc({ guests: ev.expected_guests, price: ev.metadata?.ticket_price, tiers: ev.metadata?.tickets?.tiers || [], costs: items.filter((i) => ["cost", "tech"].includes(i.kind) || (i.kind === "location" && i.status === "gebucht")).map((i) => ({ name: i.title, amount: i.actual ?? i.amount })), incomes: items.filter((i) => i.kind === "income").map((i) => ({ name: i.title, amount: i.amount })) }), tickets: ev.metadata?.tickets || {}, eventDate: ev.event_date, capacity: ev.metadata?.tickets?.capacity || ev.expected_guests, snaps,
         onSync: () => projectSyncDialog({ admin: true, ev, items, projects, onDone: () => location.reload() }),
         details: ev.metadata?.details || {}, onSaveAll: saveAll,
         onSave: async (c) => { const { compute } = await import("../lib/eventcalc.js"); const R = compute(c); ev.metadata = { ...(ev.metadata || {}), calc: c }; await q(sb.from("cc_events").update({ metadata: ev.metadata, budget: R.costs, expected_guests: Number(c.guests) || ev.expected_guests }).eq("id", id)); } }),

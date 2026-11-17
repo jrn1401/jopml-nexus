@@ -2,14 +2,16 @@
 // Planen, Aufgaben, Ablauf, Kosten & Einnahmen, Gäste, Schichten, Tickets (von Hand oder live über Eventfrog-Verbindung),
 // teilen (Ticket-Live oder Planung) und mit der KI planen lassen.
 import { sb, q, nx, local } from "../lib/api.js";
-import { h, icon, toast, toastErr, fmtDateTime, fmtEUR, empty, formModal, confirmDialog, errMsg, modal } from "../lib/ui.js";
+import { h, icon, toast, toastErr, fmtDateTime, fmtEUR, fmtNum, empty, formModal, confirmDialog, errMsg, modal, meter } from "../lib/ui.js";
+import { donut } from "../lib/charts.js";
+import { download } from "../lib/actions.js";
 import { openShareDialog } from "../lib/share.js";
 import { aiCleanup } from "../lib/aidedupe.js";
 import { eventWizard } from "../lib/eventwizard.js";
 import { eventCopilot } from "../lib/aiassist.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
 import { docsCard } from "../lib/eventdocs.js";
-import { calcCard, compute, detailsText, eventSheet, emptyCalc, overviewStrip, OV_HINT } from "../lib/eventcalc.js";
+import { calcCard, compute, detailsText, eventSheet, emptyCalc, overviewStrip, OV_HINT, deriveCalc } from "../lib/eventcalc.js";
 
 const STATUS = { idea: "Idee", planning: "In Planung", confirmed: "Fest", done: "Vorbei", cancelled: "Abgesagt" };
 const SECTIONS = [
@@ -19,7 +21,11 @@ const SECTIONS = [
   ["income", "Einnahmen", "wallet", "Außer Tickets: Sponsoren, Bar …"],
   ["guest", "Gästeliste", "users", "Namen auf der Liste"],
   ["shift", "Schichten", "clock", "Wer hilft wann?"],
+  ["location", "Locations", "pin", "Angefragte und gebuchte Orte"],
+  ["tech", "Technik", "zap", "Ton, Licht, Material"],
+  ["post", "Posting-Plan", "send", "Wann wird was gepostet?"],
 ];
+const LOCS = { anfrage: "Angefragt", angebot: "Angebot da", besichtigung: "Besichtigung", favorit: "Favorit", gebucht: "Gebucht", abgesagt: "Abgesagt" };
 const toLocal = (d) => (d ? new Date(new Date(d).getTime() - new Date(d).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "");
 const iso = (v) => (v ? new Date(v).toISOString() : null);
 const ticketsOf = (ev, proj) => (proj?.metadata?.tickets ? { ...proj.metadata.tickets, live: true } : { ...(ev.tickets || {}), live: false });
@@ -120,9 +126,10 @@ export async function eventPage(id) {
     const base = calc ? { ...calc } : { ...(ev.calc || localCalc || {}) };
     base.details = details || (ev.calc || localCalc)?.details; base.overview = ev.calc?.overview; base.docs = docs || ev.calc?.docs;
     const upd = { calc: base }; if (calc) { const R = compute(base); upd.budget = R.costs; upd.capacity = Number(base.guests) || ev.capacity; }
-    try { await q(sb.from("nx_events").update(upd).eq("id", id)); ev.calc = base; } catch { localStorage.setItem(calcKey, JSON.stringify(base)); }
+    try { await q(sb.from("nx_events").update(upd).eq("id", id)); ev.calc = base; } catch { localStorage.setItem(calcKey, JSON.stringify(base)); localCalc = base; }
     if (tasks?.length) await q(sb.from("nx_event_items").insert(tasks.map((t) => ({ event_id: id, kind: "task", title: t.title, at: t.due ? new Date(`${t.due}T12:00:00`).toISOString() : null })))).catch(() => {});
-    location.reload();
+    if (upd.budget !== undefined) { ev.budget = upd.budget; ev.capacity = upd.capacity; }
+    await reload();
   };
   const saveAllU = async ({ calc, details }) => { const c = { ...calc, details, overview: ev.calc?.overview, docs: ev.calc?.docs }; const R = compute(c); try { await q(sb.from("nx_events").update({ calc: c, budget: R.costs, capacity: Number(c.guests) || ev.capacity }).eq("id", id)); ev.calc = c; } catch { localStorage.setItem(calcKey, JSON.stringify(c)); } location.reload(); };
   const realCalc = (c) => (c && Object.keys(c).some((k) => !['overview', 'details', 'docs'].includes(k)) ? c : null);
@@ -131,33 +138,48 @@ export async function eventPage(id) {
   const reload = async () => { rows = await q(sb.from("nx_event_items").select("*").eq("event_id", id).order("at", { ascending: true, nullsFirst: false }).order("created_at")); draw(); };
 
   const itemForm = (kind, it) => {
-    const money = kind === "cost" || kind === "income";
+    const money = ["cost", "income", "tech", "location"].includes(kind);
     formModal(it ? "Bearbeiten" : `Neu: ${SECTIONS.find((s) => s[0] === kind)[1]}`, [
       { name: "title", label: kind === "guest" ? "Name" : "Titel", value: it?.title, required: true, max: 200 },
-      ...(money ? [{ name: "amount", label: "Betrag (€)", type: "number", half: true, value: it?.amount ?? "" }] : []),
-      ...(kind !== "guest" ? [{ name: "at", label: kind === "task" ? "Fällig am" : "Beginn", type: "datetime-local", half: true, value: toLocal(it?.at) }] : []),
+      ...(money ? [{ name: "amount", label: kind === "location" ? "Miete/Angebot (€)" : kind === "income" ? "Betrag (€, erwartet)" : "Betrag (€, geplant)", type: "number", half: true, value: it?.amount ?? "" }] : []),
+      ...(["cost", "tech", "income"].includes(kind) ? [{ name: "actual", label: "Tatsächlich (€) – nach der Rechnung", type: "number", half: true, value: it?.actual ?? "" }] : []),
+      ...(["cost", "tech"].includes(kind) ? [{ name: "paid", label: "Schon bezahlt", type: "checkbox", value: !!it?.paid }] : []),
+      ...(kind === "location" ? [{ name: "status", label: "Status", type: "select", half: true, value: it?.status || "anfrage", options: Object.entries(LOCS) }] : []),
+      ...(["location", "tech", "cost", "post"].includes(kind) ? [{ name: "contact", label: kind === "post" ? "Kanal" : "Kontakt", half: true, value: it?.contact, max: 200 }] : []),
+      ...(["location", "tech"].includes(kind) ? [{ name: "url", label: "Link", half: true, value: it?.url, max: 500, placeholder: "https://…" }] : []),
+      ...(!["guest", "location", "cost", "income"].includes(kind) ? [{ name: "at", label: kind === "task" ? "Fällig am" : kind === "post" ? "Posten am" : "Beginn", type: "datetime-local", half: true, value: toLocal(it?.at) }] : []),
       ...(kind === "shift" ? [{ name: "ends_at", label: "Ende", type: "datetime-local", half: true, value: toLocal(it?.ends_at) }] : []),
-      ...(["task", "shift"].includes(kind) ? [{ name: "assignee", label: "Wer?", half: true, value: it?.assignee, max: 120 }] : []),
+      ...(["task", "shift", "tech", "post"].includes(kind) ? [{ name: "assignee", label: "Wer?", half: true, value: it?.assignee, max: 120 }] : []),
       { name: "note", label: "Notiz", value: it?.note, max: 2000 },
     ], async (v) => {
-      const row = { kind, title: v.title, note: v.note || "", at: iso(v.at), ends_at: iso(v.ends_at), amount: money && v.amount !== "" ? Number(v.amount) : null, assignee: v.assignee || null };
+      if (v.url && !/^https?:\/\//i.test(v.url)) throw new Error("Link muss mit https:// beginnen.");
+      const row = { kind, title: v.title, note: v.note || "", at: iso(v.at), ends_at: iso(v.ends_at), amount: money && v.amount !== "" && v.amount !== undefined ? Number(v.amount) : null, assignee: v.assignee || null };
+      if (v.actual !== undefined) row.actual = v.actual === "" ? null : Number(v.actual);
+      if (v.paid !== undefined) row.paid = !!v.paid;
+      if (v.status !== undefined) row.status = v.status;
+      if (v.contact !== undefined) row.contact = v.contact || null;
+      if (v.url !== undefined) row.url = v.url || null;
       if (it) await q(sb.from("nx_event_items").update(row).eq("id", it.id)); else await q(sb.from("nx_event_items").insert({ ...row, event_id: id }));
       await reload();
     }, { submit: it ? "Speichern" : "Hinzufügen" });
   };
   const section = ([kind, title, ic, hint]) => {
     const list = rows.filter((r) => r.kind === kind);
-    const sum = list.reduce((a, r) => a + (+r.amount || 0), 0);
+    const sum = list.reduce((a, r) => a + (+(r.actual ?? r.amount) || 0), 0);
     return h("section.card", { id: `sec-${kind}` }, h("div.card-head", h("h3.row", icon(ic), title,
       kind === "task" && list.length ? h("span.faint", { style: { fontWeight: 400 } }, ` ${list.filter((r) => r.done).length}/${list.length}`) : null,
       (kind === "cost" || kind === "income") && list.length ? h("span.faint", { style: { fontWeight: 400 } }, ` ${fmtEUR(sum)}`) : null),
       h("button.btn.sm.ghost", { onclick: () => itemForm(kind), "aria-label": `${title}: hinzufügen` }, icon("plus"), "Neu")),
       h("div.card-body", list.length ? h("div.list", list.map((r) => h("div.list-item",
-        kind === "task" ? h("input", { type: "checkbox", checked: r.done, "aria-label": `${r.title} erledigt`, style: { width: "18px", height: "18px", accentColor: "var(--primary)" },
+        ["task", "tech", "post", "guest"].includes(kind) ? h("input", { type: "checkbox", checked: r.done, "aria-label": `${r.title} ${kind === "guest" ? "bestätigt" : kind === "post" ? "gepostet" : "erledigt"}`, style: { width: "18px", height: "18px", accentColor: "var(--primary)" },
           onchange: async (e) => { try { await q(sb.from("nx_event_items").update({ done: e.target.checked }).eq("id", r.id)); r.done = e.target.checked; draw(); } catch (er) { toastErr(er); } } }) : null,
         h("div.li-main", h("div.li-title", { style: r.done ? { textDecoration: "line-through", color: "var(--text-3)" } : null }, r.title),
-          h("div.li-sub", [r.at ? fmtDateTime(r.at) : null, r.ends_at ? `bis ${new Date(r.ends_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}` : null, r.assignee, r.note].filter(Boolean).join(" · "))),
-        r.amount !== null && r.amount !== undefined ? h("span.nowrap", fmtEUR(r.amount)) : null,
+          h("div.li-sub", [r.at ? fmtDateTime(r.at) : null, r.ends_at ? `bis ${new Date(r.ends_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}` : null, r.assignee, r.contact, r.note].filter(Boolean).join(" · ")),
+          r.url ? h("a.li-sub", { href: r.url, target: "_blank", rel: "noopener noreferrer", style: { color: "var(--primary)" } }, icon("external"), " ", r.url.replace(/^https?:\/\//, "").slice(0, 50)) : null),
+        kind === "task" && !r.done && r.at && new Date(r.at) < Date.now() ? h("span.badge.b-bad", "überfällig") : null,
+        kind === "location" ? h("span.badge", { class: r.status === "gebucht" ? "b-ok" : r.status === "abgesagt" ? "b-bad" : "b-pri" }, LOCS[r.status || "anfrage"] || r.status) : null,
+        r.paid ? h("span.badge.b-ok", "bezahlt") : null,
+        r.amount !== null && r.amount !== undefined || r.actual !== null && r.actual !== undefined ? h("span.nowrap", { title: r.actual != null ? `geplant ${fmtEUR(r.amount)}` : "geplant" }, fmtEUR(r.actual ?? r.amount)) : null,
         h("button.icon-btn", { "aria-label": `${r.title} bearbeiten`, onclick: () => itemForm(kind, r) }, icon("edit")),
         h("button.icon-btn", { "aria-label": `${r.title} löschen`, onclick: async () => { try { await q(sb.from("nx_event_items").delete().eq("id", r.id)); await reload(); } catch (er) { toastErr(er); } } }, icon("x")))))
         : h("p.faint", { style: { margin: 0, fontSize: "13px" } }, hint)));
@@ -194,6 +216,63 @@ export async function eventPage(id) {
       h("div.row.between", { style: { borderTop: "1px solid var(--border)", paddingTop: "6px" } }, h("span", "Ergebnis"), h("strong", { style: { color: result >= 0 ? "var(--ok)" : "var(--bad)" } }, fmtEUR(result))),
       need !== null ? h("div.li-sub", `Break-even ab ${need} verkauften Tickets${(t.sold || 0) >= need ? " – erreicht ✓" : ` – noch ${need - (t.sold || 0)} fehlen`}.`) : h("div.li-sub", "Ticketpreis eintragen, dann rechne ich den Break-even aus.")));
   };
+  const derivedU = () => deriveCalc({ guests: ev.capacity, price: ev.ticket_price, tiers: ticketsOf(ev, linked).tiers || [], costs: rows.filter((r) => ["cost", "tech"].includes(r.kind)).map((r) => ({ name: r.title, amount: r.actual ?? r.amount })), incomes: rows.filter((r) => r.kind === "income").map((r) => ({ name: r.title, amount: r.amount })) });
+  const fname = () => ev.name.replace(/[^\wäöüÄÖÜß-]+/g, "_");
+  function exportCsvU() {
+    const esc = (v) => { const t = v === null || v === undefined ? "" : String(v); return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+    const lines = [["Bereich", "Titel", "Erledigt", "Status", "Datum/Uhrzeit", "Betrag geplant (€)", "Betrag Ist (€)", "Bezahlt", "Wer", "Kontakt", "Link", "Notiz"].join(";"),
+      ...rows.map((i) => [SECTIONS.find((x) => x[0] === i.kind)?.[1] || i.kind, i.title, i.done ? "ja" : "nein", i.kind === "location" ? LOCS[i.status] || "" : "", i.at ? fmtDateTime(i.at) : "",
+        i.amount != null ? String(i.amount).replace(".", ",") : "", i.actual != null ? String(i.actual).replace(".", ",") : "", i.paid ? "ja" : "", i.assignee, i.contact, i.url, i.note].map(esc).join(";"))];
+    download(`${fname()}.csv`, "\ufeff" + lines.join("\r\n"), "text/csv");
+  }
+  function exportIcsU() {
+    if (!ev.event_date) return toast("Erst ein Datum eintragen (Bearbeiten).", "info");
+    const dt = (d) => new Date(d).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const txt = (t) => String(t || "").replace(/\\/g, "\\\\").replace(/[,;]/g, (m) => "\\" + m).replace(/\n/g, "\\n");
+    const vev = (uid, start, mins, title, loc, desc) => ["BEGIN:VEVENT", `UID:${uid}@jopml-nexus`, `DTSTAMP:${dt(Date.now())}`, `DTSTART:${dt(start)}`,
+      `DTEND:${dt(new Date(start).getTime() + mins * 60000)}`, `SUMMARY:${txt(title)}`, loc ? `LOCATION:${txt(loc)}` : null, desc ? `DESCRIPTION:${txt(desc)}` : null, "END:VEVENT"].filter(Boolean);
+    const out = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//JOPML Nexus//DE", vev(ev.id, ev.event_date, 360, ev.name, ev.location, ev.description),
+      ...rows.filter((i) => i.at && ["task", "schedule", "shift", "post"].includes(i.kind)).map((i) => vev(i.id, i.at, i.ends_at ? Math.max(15, (new Date(i.ends_at) - new Date(i.at)) / 60000) : 30, `${{ task: "Aufgabe", schedule: "Programm", shift: "Schicht", post: "Posting" }[i.kind]}: ${i.title} (${ev.name})`, ev.location, i.note)), "END:VCALENDAR"].flat();
+    download(`${fname()}.ics`, out.join("\r\n"), "text/calendar");
+  }
+  async function duplicateU() {
+    try {
+      const copy = await q(sb.from("nx_events").insert({ name: `${ev.name} (Kopie)`.slice(0, 160), description: ev.description, location: ev.location, event_date: null, status: "idea",
+        capacity: ev.capacity, ticket_price: ev.ticket_price, budget: ev.budget, calc: ev.calc ? { ...ev.calc, docs: undefined } : null }).select("id").single());
+      const list = rows.filter((i) => i.kind !== "guest").map((i) => ({ event_id: copy.id, kind: i.kind, title: i.title, note: i.note, amount: i.amount, assignee: i.assignee, status: i.kind === "location" ? "anfrage" : null, contact: i.contact, url: i.url, done: false }));
+      if (list.length) await q(sb.from("nx_event_items").insert(list));
+      toast("Event dupliziert (ohne Gäste und Termine)"); location.hash = `#/events/${copy.id}`;
+    } catch (e) { toastErr(e); }
+  }
+  function settleU() {
+    const costs = rows.filter((r) => ["cost", "tech"].includes(r.kind) && (r.amount != null || r.actual != null) || (r.kind === "location" && r.status === "gebucht" && r.amount != null));
+    const t = ticketsOf(ev, linked);
+    const plan = costs.reduce((a, i) => a + (Number(i.amount) || 0), 0), ist = costs.reduce((a, i) => a + (Number(i.actual ?? i.amount) || 0), 0);
+    const open = costs.filter((i) => !i.paid).reduce((a, i) => a + (Number(i.actual ?? i.amount) || 0), 0);
+    const other = rows.filter((i) => i.kind === "income").reduce((a, i) => a + (Number(i.actual ?? 0) || 0), 0);
+    const incPlan = rows.filter((i) => i.kind === "income").reduce((a, i) => a + (Number(i.amount) || 0), 0);
+    const tix = t.revenue ?? ((t.sold || 0) * (+ev.ticket_price || 0)), sold = t.sold || 0;
+    const C = realCalc(ev.calc) || localCalc, R = C ? compute(C) : null;
+    const be = R?.beAll ?? (ev.ticket_price ? Math.ceil(ist / ev.ticket_price) : null);
+    if (!costs.length && !sold && !incPlan && !R) return null;
+    const k = (label, value, sub, color) => h("div", h("div.faint", { style: { fontSize: "12px" } }, label), h("div", { style: { fontSize: "20px", fontWeight: 650, color: color || "" } }, value), sub ? h("div.faint", { style: { fontSize: "12px" } }, sub) : null);
+    const result = tix + other - ist - (R && !costs.length ? R.costs : 0);
+    return h("section.card", { style: { marginBottom: "16px" } }, h("div.card-head", h("h3.row", icon("wallet"), "Abrechnung"), h("span.sub", "Plan gegen Ist")),
+      h("div.card-body", h("div.grid.g-4", { style: { gap: "14px" } },
+        k("Kosten: Plan → Ist", `${fmtEUR(plan)} → ${fmtEUR(ist)}`, ist > plan ? `${fmtEUR(ist - plan)} über Plan` : ist < plan ? `${fmtEUR(plan - ist)} unter Plan` : costs.length ? "im Plan" : "Kosten als Einträge erfassen", ist > plan ? "var(--bad)" : ""),
+        k("Noch zu bezahlen", fmtEUR(open), `${costs.filter((i) => !i.paid).length} offene Posten`),
+        k("Einnahmen bisher", fmtEUR(tix + other), `${fmtEUR(tix)} Tickets${other ? ` + ${fmtEUR(other)} sonstige` : ""}`),
+        k("Ergebnis bisher", fmtEUR(result), result < 0 ? "noch nicht gedeckt" : "Kosten gedeckt", result < 0 ? "var(--bad)" : "var(--ok)")),
+        be ? h("div", { style: { marginTop: "12px" } }, h("div.row.between", { style: { fontSize: "13px", marginBottom: "4px" } }, h("strong", `Break-even bei ${fmtNum(be)} ${R ? "Gästen" : "Tickets"}`), h("span.faint", `${fmtNum(sold)} verkauft${sold >= be ? " – gedeckt" : ` · es fehlen ${fmtNum(be - sold)}`}`)),
+          meter(Math.min(100, (sold / be) * 100), [101, 101])) : null));
+  }
+  const costChart = () => {
+    const C = realCalc(ev.calc) || localCalc;
+    const parts = C ? compute(C).lines.map(([n, v]) => ({ name: n, value: v })) : rows.filter((r) => ["cost", "tech"].includes(r.kind) && (r.actual ?? r.amount)).map((r) => ({ name: r.title, value: Number(r.actual ?? r.amount) || 0 }));
+    if (!parts.length) return null;
+    const tot = parts.reduce((a, x) => a + x.value, 0);
+    return h("section.card", h("div.card-head", h("h3", "Kostenplanung")), h("div.card-body", donut(parts, { fmt: fmtEUR, center: fmtEUR(tot).replace(/,\d\d/, "") })));
+  };
   function draw() {
     const days = ev.event_date ? Math.ceil((new Date(ev.event_date) - Date.now()) / 864e5) : null;
     root.replaceChildren(
@@ -202,34 +281,38 @@ export async function eventPage(id) {
         h("div.actions",
           h("button.btn.primary", { onclick: () => openShareDialog("nx_event", id, ev.name, { admin: false }) }, icon("users"), "Teilen"),
           h("button.btn", { onclick: () => aiDialog(id, () => reload()) }, icon("bot"), "KI-Ideen"),
-          h("button.btn.primary", { title: "Ein Formular für alles", onclick: () => eventSheet({ name: ev.name, tiers: ticketsOf(ev, linked).tiers || [], calc: realCalc(ev.calc) || localCalc || emptyCalc({ capacity: ev.capacity, ticket_price: ev.ticket_price }), details: (ev.calc || localCalc)?.details || {}, onSave: saveAllU }) }, icon("edit"), "Event-Formular"),
+          h("button.btn.primary", { title: "Ein Formular für alles", onclick: () => eventSheet({ name: ev.name, tiers: ticketsOf(ev, linked).tiers || [], calc: realCalc(ev.calc) || localCalc || derivedU(), details: (ev.calc || localCalc)?.details || {}, onSave: saveAllU }) }, icon("edit"), "Event-Formular"),
           h("button.btn", { onclick: () => aiCheck(ev, rows, ticketsOf(ev, linked)) }, icon("sparkles"), "KI-Check"),
           h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("bogen", `ne:${ev.id}`)) }, icon("check"), "Rechts-Check"),
           h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("web", `ne:${ev.id}`)) }, icon("external"), "Event-Website"),
           h("button.btn", { onclick: () => aiCleanup({ items: rows, table: "nx_event_items", context: ev.name, onDone: reload }) }, icon("sparkles"), "KI-Aufräumen"),
           h("button.btn.ghost", { onclick: () => eventForm(ev, (e) => { ev = e; draw(); }) }, icon("edit"), "Bearbeiten"),
+          h("button.btn.ghost", { onclick: exportCsvU, title: "Alle Einträge als CSV (Excel)" }, icon("download"), "CSV"),
+          h("button.btn.ghost", { onclick: exportIcsU, title: "Event + Termine in den Kalender" }, icon("calendar"), "Kalender"),
+          h("button.btn.ghost", { onclick: duplicateU, title: "Als Vorlage kopieren" }, icon("copy"), "Duplizieren"),
           h("button.btn.ghost", { "aria-label": "Event löschen", onclick: async () => {
             if (!(await confirmDialog("Event löschen?", `„${ev.name}“ mit allen Einträgen und Freigaben wird gelöscht.`, { ok: "Löschen" }))) return;
             try { await q(sb.from("cc_shares").delete().in("item_kind", ["nx_event", "tickets"]).eq("item_id", id)).catch(() => {}); await q(sb.from("nx_events").delete().eq("id", id)); toast("Gelöscht"); location.hash = "#/events"; } catch (e) { toastErr(e); }
           } }, icon("trash")))),
-      overviewStrip({ name: ev.name, calc: realCalc(ev.calc) || localCalc || null, tiles: ev.calc?.overview, configHint: OV_HINT,
+      overviewStrip({ name: ev.name, calc: realCalc(ev.calc) || localCalc || (rows.some((r) => ["cost", "tech"].includes(r.kind)) && ev.capacity ? derivedU() : null), tiles: ev.calc?.overview, configHint: OV_HINT,
         onConfig: async (tiles) => { const c = { ...(ev.calc || {}), overview: tiles || undefined }; await q(sb.from("nx_events").update({ calc: c }).eq("id", id)); ev.calc = c; draw(); }, tickets: ticketsOf(ev, linked), eventDate: ev.event_date, capacity: ticketsOf(ev, linked).capacity || ev.capacity, snaps,
         tasks: rows.filter((r) => r.kind === "task"), guests: rows.filter((r) => r.kind === "guest"), spent: rows.filter((r) => r.kind === "cost").reduce((a, r) => a + (+r.amount || 0), 0), budget: ev.budget ?? null,
         onTasks: () => document.getElementById("sec-task")?.scrollIntoView({ behavior: "smooth" }) }),
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px", whiteSpace: "pre-wrap" } }, ev.description) : null,
-      h("div", { style: { marginBottom: "16px" } }, eventCopilot({ ev, rows, tickets: ticketsOf(ev, linked), kinds: ["task", "schedule", "cost", "income", "shift", "guest"],
+      h("div", { style: { marginBottom: "16px" } }, eventCopilot({ ev, rows, tickets: ticketsOf(ev, linked), kinds: ["task", "schedule", "cost", "income", "shift", "guest", "tech", "post", "location"],
         insert: async (list) => { await q(sb.from("nx_event_items").insert(list.map((x) => ({ ...x, event_id: id })))); await reload(); },
         onSync: () => projectSyncDialog({ admin: false, ev, items: rows, projects: projs, onDone: () => location.reload() }),
         info: [detailsText(ev.calc?.details || {}), String(ev.description || "").slice(0, 5000), linked?.url ? `Link: ${linked.url}` : "", ev.ticket_price ? `Ticketpreis: ${ev.ticket_price} €` : ""].filter(Boolean).join("\n"),
         addTask: async (t) => { await q(sb.from("nx_event_items").insert({ event_id: id, kind: "task", title: t.title, note: t.note, at: t.due })); await reload(); } })),
-      calcCard({ name: ev.name, calc: realCalc(ev.calc) || localCalc, tickets: ticketsOf(ev, linked), eventDate: ev.event_date, capacity: ev.capacity, snaps, details: (ev.calc || localCalc)?.details || {}, onSaveAll: saveAllU,
+      calcCard({ name: ev.name, calc: realCalc(ev.calc) || localCalc || derivedU(), tickets: ticketsOf(ev, linked), eventDate: ev.event_date, capacity: ev.capacity, snaps, details: (ev.calc || localCalc)?.details || {}, onSaveAll: saveAllU,
         onSync: () => projectSyncDialog({ admin: false, ev, items: rows, projects: projs, onDone: () => location.reload() }),
         note: ev.calc === undefined && localCalc ? "Kalkulation ist nur auf diesem Gerät gespeichert (Server-Speicher wird mit der nächsten Freischaltung aktiv)." : "",
         onSave: async (c) => { c = { ...c, overview: ev.calc?.overview, docs: ev.calc?.docs }; const R = compute(c); try { await q(sb.from("nx_events").update({ calc: c, budget: R.costs, capacity: Number(c.guests) || ev.capacity }).eq("id", id)); ev.calc = c; }
           catch { localStorage.setItem(calcKey, JSON.stringify(c)); await q(sb.from("nx_events").update({ budget: R.costs }).eq("id", id)).catch(() => {}); } } }),
       h("div", { style: { marginBottom: "16px" } }, docsCard({ name: ev.name, calc: realCalc(ev.calc) || localCalc || emptyCalc({ capacity: ev.capacity, ticket_price: ev.ticket_price }), details: (ev.calc || localCalc)?.details || {}, docs: ev.calc?.docs || [], save: saveDocsU })),
       h("div.grid.g-2", { style: { marginBottom: "16px", alignItems: "start" } }, ticketsCard(), money()),
-      h("div.grid.g-2", { style: { alignItems: "start" } }, SECTIONS.map(section)));
+      settleU(),
+      h("div.grid.g-2", { style: { alignItems: "start" } }, SECTIONS.map(section), costChart()));
   }
   try { draw(); } catch (e) { root.replaceChildren(h("div.banner.bad", errMsg(e))); }
   try { if (sessionStorage.getItem("cc:open-form") === String(id)) { sessionStorage.removeItem("cc:open-form"); setTimeout(() => [...root.querySelectorAll("button")].find((b) => b.textContent.trim() === "Event-Formular")?.click(), 300); } } catch { /* */ }
