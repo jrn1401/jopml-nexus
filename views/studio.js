@@ -7,6 +7,7 @@ import { aiGen } from "../lib/aigen.js";
 import { TYPES, PRESETS, questionsFor, checkRules, marketingIdeas } from "../lib/rules.js";
 import { TEMPLATES, THEMES, buildSite, slugify } from "../lib/sitegen.js";
 import { qrSvg, qrPng } from "../lib/qr.js";
+import { broadcastDialog } from "../lib/broadcast.js";
 
 const BASE = `${location.origin}${location.pathname.replace(/[^/]*$/, "")}`;
 const LS = { get: (k, d) => { try { const v = localStorage.getItem("cc:" + k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem("cc:" + k, JSON.stringify(v)); } catch { /* voll/privat */ } } };
@@ -292,6 +293,7 @@ async function webBuilder(ctx) {
             h("button.btn.primary", { onclick: async (e) => { const b = e.currentTarget; b.disabled = true; try { await save(true); toast("Online!"); copyText(url()); editor({ ...s, data: vals, theme, slug, invite }); } catch (er) { toastErr(er); b.disabled = false; } } }, icon("external"), s.published ? "Aktualisieren" : "Veröffentlichen"),
             h("button.btn", { onclick: async () => { try { await save(false); toast("Als Entwurf gespeichert"); } catch (er) { toastErr(er); } } }, "Entwurf speichern"),
             s.id ? h("button.btn.ghost", { onclick: async () => { if (await confirmDialog("Seite löschen?", "Die Seite ist danach nicht mehr erreichbar.", { ok: "Löschen" })) { await q(sb.from("nx_sites").delete().eq("id", s.id)); location.reload(); } } }, icon("trash")) : null) : null,
+          invite && s.published ? h("button.btn", { onclick: async () => { try { const r = await q(sb.from("cc_push_invites").select("id").eq("code", invite).single()); broadcastDialog(r.id, vals.title); } catch (er) { toastErr(er); } } }, icon("send"), "Nachricht an alle Abonnenten") : null,
           s.published ? h("div.na-note", icon("external"), h("div", "Online unter ", h("a", { href: url(), target: "_blank", rel: "noopener" }, url()), " · ", h("a", { href: "#/studio/marketing", onclick: () => LS.set("mk:url", url()) }, "QR/Visitenkarte dafür"))) : null)),
         h("section.card.site-prev-card", h("div.card-head", h("h3", "Vorschau")), frame)));
     refresh();

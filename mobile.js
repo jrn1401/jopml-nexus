@@ -4,6 +4,7 @@ import { sb, rpc, nx, q, aiModel } from "./lib/api.js";
 import { h, clear, toast, toastErr, errMsg, md, fmtEUR, fmtNum, fmtAgo, copyText, confirmDialog, modal } from "./lib/ui.js";
 import { qrSvg } from "./lib/qr.js";
 import { micButton, speak, canSpeak } from "./lib/voice.js";
+import { broadcastDialog } from "./lib/broadcast.js";
 import { enablePush, disablePush, currentSub, isIOS, isStandalone, supported as pushSupported } from "./lib/webpush.js";
 
 const root = document.getElementById("root");
@@ -277,6 +278,7 @@ async function invitesCard() {
     h("p.m-row-s", { style: { marginTop: 0 } }, "Link schicken – die Person öffnet ihn, legt ihn auf den Home-Bildschirm und bekommt die gewählten Nachrichten. Kein Konto nötig."),
     ...inv.map((i) => { const n = subs.filter((s) => s.invite_id === i.id).length; return h("div.m-li",
       h("div", { style: { flex: 1 } }, h("b", i.label), h("div.m-row-s", `${(i.topics || []).map((t) => (INV_TOPICS.find((x) => x[0] === t) || [t, t])[1]).join(", ")} · ${n} Gerät(e) · Code ${i.code}`)),
+      h("button.btn.sm", { "aria-label": "Nachricht an alle senden", onclick: () => broadcastDialog(i.id, i.label) }, ic("send", 16)),
       h("button.btn.sm", { "aria-label": "Teilen", onclick: () => shareIt(i) }, ic("share", 16)),
       h("button.btn.sm.ghost", { "aria-label": "Zurückziehen", onclick: async () => { if (await confirmDialog("Einladung zurückziehen?", `${n} Gerät(e) bekommen dann keine Nachrichten mehr. Der Link funktioniert nicht mehr.`, { ok: "Zurückziehen" })) { await q(sb.from("cc_push_invites").update({ revoked_at: new Date().toISOString() }).eq("id", i.id)); draw(); } } }, "✕")); }),
     btn);
