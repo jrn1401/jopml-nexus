@@ -8,6 +8,7 @@ import { TYPES, PRESETS, questionsFor, checkRules, marketingIdeas } from "../lib
 import { TEMPLATES, THEMES, buildSite, slugify } from "../lib/sitegen.js";
 import { qrSvg, qrPng } from "../lib/qr.js";
 import { broadcastDialog } from "../lib/broadcast.js";
+import { parentalForm, posterHtml } from "../lib/printables.js";
 
 const BASE = `${location.origin}${location.pathname.replace(/[^/]*$/, "")}`;
 const LS = { get: (k, d) => { try { const v = localStorage.getItem("cc:" + k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem("cc:" + k, JSON.stringify(v)); } catch { /* voll/privat */ } } };
@@ -170,7 +171,9 @@ Höchstens 8 tasks, 4 risks, 5 marketing.`,
           toast(res.msg); if (res.go) location.hash = res.go; else location.reload();
         } catch (er) { toastErr(er); b.disabled = false; }
       } }, icon("check"), st.target ? "Aufgaben ins Projekt übernehmen" : "Projekt anlegen"),
-      h("a.btn", { href: "#/studio/marketing" }, "Weiter zu Marketing")));
+      h("a.btn", { href: "#/studio/marketing" }, "Weiter zu Marketing"),
+      st.type === "event" && (st.answers.ages || []).some((x) => x !== "18+") ? h("button.btn", { onclick: () => { const t = list.find((x) => x.key === st.target);
+        download("erziehungsbeauftragung.html", parentalForm({ event: st.answers.name || t?.row?.name || "", date: st.answers.deadline ? new Date(st.answers.deadline).toLocaleDateString("de-DE") : "", place: t?.row?.location || "" })); } }, icon("download"), "Vorlage Erziehungsbeauftragung („Muttizettel“)") : null));
     resBox.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   pickTarget(takePreset());
@@ -318,7 +321,7 @@ async function marketing(ctx) {
     tools();
   };
   const toolsBox = h("div.row.wrap", { style: { gap: "8px" } });
-  const tools = () => clear(toolsBox, ...[["qr", "QR-Code"], ["card", "Visitenkarten"], ["shirt", "T-Shirt / Merch"], ["social", "Social-Posts"], ["plan", "KI-Marketingplan"]].map(([k, t]) =>
+  const tools = () => clear(toolsBox, ...[["qr", "QR-Code"], ["card", "Visitenkarten"], ["poster", "Plakat / Flyer"], ["shirt", "T-Shirt / Merch"], ["social", "Social-Posts"], ["plan", "KI-Marketingplan"]].map(([k, t]) =>
     h("button.chip", { class: st.tool === k ? "on" : "", onclick: () => { st.tool = k; tools(); run(); } }, t)));
   const need = () => { if (!/^https?:\/\/\S+$/.test(st.url)) { toast("Bitte zuerst einen Link eingeben (https://…)", "err"); return false; } return true; };
 
@@ -338,6 +341,7 @@ async function marketing(ctx) {
       draw();
     } else if (st.tool === "card") cardTool();
     else if (st.tool === "shirt") shirtTool();
+    else if (st.tool === "poster") posterTool();
     else if (st.tool === "social") socialTool();
     else planTool();
   }
@@ -357,6 +361,24 @@ async function marketing(ctx) {
           h("button.btn", { onclick: () => need() && download("visitenkarte.svg", svg(), "image/svg+xml") }, icon("download"), "Einzeln (SVG)")),
         h("div.faint", { style: { fontSize: "12.5px" } }, "Druckbogen öffnen und mit Strg+P (iPhone: Teilen → Drucken) drucken – 85 × 55 mm, Schnittlinien gestrichelt. Oder die SVG an eine Online-Druckerei schicken.")),
       prev)));
+    draw();
+  }
+
+  function posterTool() {
+    const t = list.find((x) => x.key === st.target);
+    const v = LS.get("mk:poster", { title: st.name || "", sub: "", date: t?.row?.event_date ? fmtDate(t.row.event_date) : "", place: t?.row?.location || "", info: "", theme: "rave", size: "A4" });
+    if (st.name && !v.title) v.title = st.name;
+    const frame = h("iframe.site-prev", { title: "Plakat-Vorschau", sandbox: "", style: { height: "520px", aspectRatio: "1 / 1.414", width: "auto", maxWidth: "100%" } });
+    const html = () => posterHtml({ ...v, url: st.url, theme: THEMES[v.theme] || THEMES.rave });
+    const draw = () => { LS.set("mk:poster", v); frame.srcdoc = html(); };
+    const inp = (k, label, ta) => field(label, ta ? h("textarea.input", { rows: 3, maxlength: 400, oninput: (e) => { v[k] = e.target.value; draw(); } }, v[k] || "") : h("input.input", { value: v[k] || "", maxlength: 80, oninput: (e) => { v[k] = e.target.value; draw(); } }));
+    clear(out, h("section.card", h("div.card-body.studio-split",
+      h("div.stack", inp("title", "Titel"), inp("sub", "Untertitel / Motto"), inp("date", "Datum & Uhrzeit"), inp("place", "Ort"), inp("info", "Infos (Line-up, Einlass, Preise)", true),
+        field("Farben", h("div.row.wrap", Object.entries(THEMES).map(([k, th]) => h("button.chip", { class: v.theme === k ? "on" : "", onclick: () => { v.theme = k; posterTool(); } }, th.name)))),
+        field("Format", h("div.seg", ["A5", "A4", "A3"].map((z) => h("button", { class: v.size === z ? "on" : "", onclick: () => { v.size = z; posterTool(); } }, z)))),
+        h("button.btn.primary", { onclick: () => download(`plakat-${slugify(v.title)}.html`, html()) }, icon("download"), "Zum Drucken herunterladen"),
+        h("div.faint", { style: { fontSize: "12.5px" } }, "Datei öffnen → Drucken → „Hintergrundgrafiken“ einschalten → als PDF speichern oder direkt drucken. QR-Code führt zum Link oben.")),
+      frame)));
     draw();
   }
 
