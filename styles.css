@@ -835,3 +835,16 @@ html.simple .card { border-radius: 18px; }
 @media (max-width: 600px) { .calc-phase { grid-template-columns: auto 1fr 1fr auto; } .calc-phase > input:nth-of-type(3) { grid-column: 2 / 4; } }
 .calc-line.calc-line5 { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) auto !important; }
 @media (max-width: 600px) { .calc-line.calc-line5 { grid-template-columns: repeat(3, minmax(0, 1fr)) auto !important; } }
+.sheet-nav { display: flex; gap: 6px; overflow-x: auto; position: sticky; top: 0; z-index: 2; background: var(--surface); padding: 4px 0 8px; }
+.sheet-group > summary { font-size: 15px; }
+.sheet-inner { border: 0 !important; padding: 0 !important; } .sheet-inner > summary { display: none; }
+button.calc-res { width: 100%; text-align: left; cursor: pointer; font: inherit; color: var(--text); }
+button.calc-res:hover { border-color: var(--text-2); }
+.bd-row { display: grid; grid-template-columns: minmax(120px, 220px) 1fr auto; gap: 10px; align-items: center; font-size: 13.5px; }
+.bd-row i { height: 10px; border-radius: 5px; display: block; }
+.ckpi-btn { font: inherit; color: var(--text); text-align: left; cursor: pointer; } .ckpi-btn:hover { border-color: var(--primary); } .ckpi-btn span { color: var(--primary) !important; }
+.sheet-top { position: sticky; top: 56px; z-index: 3; background: var(--surface); margin: -4px 0 0; padding: 4px 0 2px; }
+.sheet-top .calc-res { margin: 0 0 8px; position: static; }
+.sheet-top .sheet-nav { position: static; padding: 0 0 6px; }
+.sheet-group { scroll-margin-top: 150px; }
+.sheet-nav .chip { white-space: nowrap; flex-shrink: 0; } .sheet-nav { scrollbar-width: none; }
