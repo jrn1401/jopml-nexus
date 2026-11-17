@@ -8,7 +8,7 @@ import { aiCleanup } from "../lib/aidedupe.js";
 import { eventWizard } from "../lib/eventwizard.js";
 import { eventCopilot } from "../lib/aiassist.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
-import { calcCard, compute, detailsText, eventSheet, emptyCalc } from "../lib/eventcalc.js";
+import { calcCard, compute, detailsText, eventSheet, emptyCalc, overviewStrip } from "../lib/eventcalc.js";
 
 const STATUS = { idea: "Idee", planning: "In Planung", confirmed: "Fest", done: "Vorbei", cancelled: "Abgesagt" };
 const SECTIONS = [
@@ -138,7 +138,7 @@ export async function eventPage(id) {
   const section = ([kind, title, ic, hint]) => {
     const list = rows.filter((r) => r.kind === kind);
     const sum = list.reduce((a, r) => a + (+r.amount || 0), 0);
-    return h("section.card", h("div.card-head", h("h3.row", icon(ic), title,
+    return h("section.card", { id: `sec-${kind}` }, h("div.card-head", h("h3.row", icon(ic), title,
       kind === "task" && list.length ? h("span.faint", { style: { fontWeight: 400 } }, ` ${list.filter((r) => r.done).length}/${list.length}`) : null,
       (kind === "cost" || kind === "income") && list.length ? h("span.faint", { style: { fontWeight: 400 } }, ` ${fmtEUR(sum)}`) : null),
       h("button.btn.sm.ghost", { onclick: () => itemForm(kind), "aria-label": `${title}: hinzufügen` }, icon("plus"), "Neu")),
@@ -202,6 +202,9 @@ export async function eventPage(id) {
             if (!(await confirmDialog("Event löschen?", `„${ev.name}“ mit allen Einträgen und Freigaben wird gelöscht.`, { ok: "Löschen" }))) return;
             try { await q(sb.from("cc_shares").delete().in("item_kind", ["nx_event", "tickets"]).eq("item_id", id)).catch(() => {}); await q(sb.from("nx_events").delete().eq("id", id)); toast("Gelöscht"); location.hash = "#/events"; } catch (e) { toastErr(e); }
           } }, icon("trash")))),
+      overviewStrip({ name: ev.name, calc: ev.calc || localCalc || null, tickets: ticketsOf(ev, linked), eventDate: ev.event_date, capacity: ticketsOf(ev, linked).capacity || ev.capacity, snaps,
+        tasks: rows.filter((r) => r.kind === "task"), guests: rows.filter((r) => r.kind === "guest"), spent: rows.filter((r) => r.kind === "cost").reduce((a, r) => a + (+r.amount || 0), 0), budget: ev.budget ?? null,
+        onTasks: () => document.getElementById("sec-task")?.scrollIntoView({ behavior: "smooth" }) }),
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px", whiteSpace: "pre-wrap" } }, ev.description) : null,
       h("div", { style: { marginBottom: "16px" } }, eventCopilot({ ev, rows, tickets: ticketsOf(ev, linked), kinds: ["task", "schedule", "cost", "income", "shift", "guest"],
         insert: async (list) => { await q(sb.from("nx_event_items").insert(list.map((x) => ({ ...x, event_id: id })))); await reload(); },

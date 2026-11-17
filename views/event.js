@@ -7,7 +7,7 @@ import { openShareDialog } from "../lib/share.js";
 import { aiCleanup } from "../lib/aidedupe.js";
 import { importDialog } from "../lib/eventfrog.js";
 import { eventCopilot } from "../lib/aiassist.js";
-import { calcCard, compute as calcCompute, detailsText, eventSheet, emptyCalc } from "../lib/eventcalc.js";
+import { calcCard, compute as calcCompute, detailsText, eventSheet, emptyCalc, overviewStrip } from "../lib/eventcalc.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
 
 const SECTIONS = {
@@ -57,7 +57,7 @@ export default async function eventView({ args: [id] }) {
     const list = items.filter((i) => i.kind === kind);
     const [title, ic, addLabel] = SECTIONS[kind];
     const done = list.filter((i) => i.done).length;
-    return h("section.card",
+    return h("section.card", { id: `sec-${kind}` },
       h("div.card-head", h("h3.row", icon(ic, ""), title, list.length ? h("span.faint", { style: { fontWeight: 400 } }, kind === "task" || kind === "tech" || kind === "guest" ? `${done}/${list.length}` : list.length) : null),
         h("button.btn.sm.ghost", { onclick: () => addItem(kind) }, icon("plus"), addLabel)),
       h("div.card-body", list.length ? h("div.list", list.map((it) => h("div.list-item",
@@ -103,13 +103,8 @@ export default async function eventView({ args: [id] }) {
           ev.event_date ? h("button.btn.ghost", { onclick: exportIcs, title: "Event + Termine in den Kalender" }, icon("calendar"), "Kalender") : null,
           h("button.btn.ghost", { onclick: duplicate, title: "Als Vorlage kopieren" }, icon("copy"), "Duplizieren"),
           h("button.btn.danger", { onclick: del }, icon("trash"), "Löschen"))),
-      h("div.grid.g-4", { style: { marginBottom: "16px" } },
-        h("div.card.stat", h("div.k", icon("wallet"), "Budget"), h("div.v", budget !== null ? fmtEUR(budget) : "–"),
-          budget ? meter((spent / budget) * 100, [80, 100]) : null, h("div.d", budget !== null ? `${fmtEUR(spent)} verplant · ${fmtEUR(budget - spent)} übrig` : `${fmtEUR(spent)} verplant · kein Budget gesetzt`)),
-        h("div.card.stat", h("div.k", icon("check"), "Aufgaben"), h("div.v", `${tasks.filter((t) => t.done).length}`, h("small", `/ ${tasks.length}`)), tasks.length ? meter((tasks.filter((t) => t.done).length / tasks.length) * 100, [101, 101]) : null),
-        h("div.card.stat", h("div.k", icon("users"), "Gäste"), h("div.v", fmtNum(guests.length), h("small", ev.expected_guests !== null ? `/ ${fmtNum(ev.expected_guests)} erwartet` : "")), h("div.d", `${guests.filter((g) => g.done).length} bestätigt`)),
-        h("div.card.stat", h("div.k", icon("chart"), "Ergebnis"), h("div.v", { style: { color: income - spent < 0 ? "var(--bad)" : income ? "var(--ok)" : "" } }, fmtEUR(income - spent)),
-          h("div.d", [`${fmtEUR(income)} Einnahmen`, ev.metadata?.calc ? `Break-even bei ${fmtNum(calcCompute(ev.metadata.calc).beAll ?? 0)} Gästen (Kalkulation)` : income && ev.expected_guests ? `Break-even bei ca. ${fmtNum(Math.ceil(spent / (income / ev.expected_guests)))} Gästen (alle Einnahmen pro Gast)` : price ? `Break-even bei ${fmtNum(Math.ceil(spent / price))} Tickets à ${fmtEUR(price)}` : "Ticketpreis unter „Bearbeiten“ setzen"].join(" · ")))),
+      overviewStrip({ name: ev.name, calc: ev.metadata?.calc || null, tickets: ev.metadata?.tickets || {}, eventDate: ev.event_date, capacity: ev.metadata?.tickets?.capacity || ev.expected_guests, snaps,
+        tasks, guests, spent, budget, onTasks: () => document.getElementById("sec-task")?.scrollIntoView({ behavior: "smooth" }) }),
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(ev.description)) : null,
       h("div", { style: { marginBottom: "16px" } }, eventCopilot({ ev: { name: ev.name, event_date: ev.event_date, location: ev.location, capacity: ev.expected_guests, ticket_price: price, budget },
         rows: items, tickets: ev.metadata?.tickets || {}, kinds: ["task", "schedule", "cost", "income", "shift", "tech", "post", "guest"],
