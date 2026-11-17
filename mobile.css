@@ -104,3 +104,6 @@
 .m-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .m-toolbtn { display: block; text-align: center; padding: 12px 8px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); text-decoration: none; font-size: 14px; }
 .m-toolbtn:active { border-color: var(--m-accent); }
+.m-mic { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface); color: var(--text); flex: none; font-size: 18px; }
+.m-mic.rec, .btn.rec { color: var(--bad); border-color: var(--bad); }
+.m-speak { background: none; border: 0; color: var(--text-3); font-size: 15px; padding: 2px 0 0; cursor: pointer; }

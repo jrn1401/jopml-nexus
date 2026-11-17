@@ -4,7 +4,7 @@
 import { sb, q, nx, aiModel } from "../lib/api.js";
 import { h, icon, clear, toast, toastErr, errMsg, md, copyText, fmtDate, fmtAgo, empty, confirmDialog } from "../lib/ui.js";
 import { aiGen } from "../lib/aigen.js";
-import { TYPES, questionsFor, checkRules, marketingIdeas } from "../lib/rules.js";
+import { TYPES, PRESETS, questionsFor, checkRules, marketingIdeas } from "../lib/rules.js";
 import { TEMPLATES, THEMES, buildSite, slugify } from "../lib/sitegen.js";
 import { qrSvg, qrPng } from "../lib/qr.js";
 
@@ -111,6 +111,8 @@ async function bogen(ctx) {
     clear(box,
       h("section.card", h("div.card-body.stack",
         targetSelect(list, st.target, pickTarget, { allowNew: true, label: "Für welches Projekt?" }),
+        st.target ? null : h("div", h("div.faint", { style: { fontSize: "13px", marginBottom: "6px" } }, "Schnellstart-Vorlage (optional)"),
+          h("div.row.wrap", PRESETS.map(([t, type, ans]) => h("button.chip", { type: "button", onclick: () => { st.type = type; st.answers = { ...st.answers, ...ans }; draw(); toast(`Vorlage „${t}“ eingesetzt – bitte anpassen`); } }, t)))),
         h("div", h("div.faint", { style: { fontSize: "13px", marginBottom: "6px" } }, "Art des Projekts"),
           h("div.row.wrap", TYPES.map(([k, t, ic]) => h("button.chip", { type: "button", class: st.type === k ? "on" : "", onclick: () => { st.type = k; draw(); } }, icon(ic), t)))))),
       h("section.card", h("div.card-head", h("h3", "Fragen")), h("div.card-body.form", h("div.grid.g-2", inputs))),

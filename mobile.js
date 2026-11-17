@@ -3,6 +3,7 @@
 import { sb, rpc, nx, q, aiModel } from "./lib/api.js";
 import { h, clear, toast, toastErr, errMsg, md, fmtEUR, fmtNum, fmtAgo, copyText, confirmDialog, modal } from "./lib/ui.js";
 import { qrSvg } from "./lib/qr.js";
+import { micButton, speak, canSpeak } from "./lib/voice.js";
 import { enablePush, disablePush, currentSub, isIOS, isStandalone, supported as pushSupported } from "./lib/webpush.js";
 
 const root = document.getElementById("root");
@@ -179,7 +180,7 @@ function chatView() {
     oninput: (e) => { e.target.style.height = "auto"; e.target.style.height = Math.min(120, e.target.scrollHeight) + "px"; },
     onkeydown: (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } } });
   const SUG = ["Was ist heute wichtig?", "Wie laufen die Tickets?", "Was ist überfällig?", "Schreib mir eine Insta-Caption für das Event"];
-  const bubble = (m) => h("div.m-msg", { class: m.role }, m.role === "assistant" ? md(m.text) : m.text);
+  const bubble = (m) => h("div.m-msg", { class: m.role }, m.role === "assistant" ? [md(m.text), canSpeak() ? h("button.m-speak", { "aria-label": "Vorlesen", onclick: () => speak(m.text) }, "🔊") : null] : m.text);
   const drawLog = () => {
     log.replaceChildren(...(hist.length ? hist.map(bubble) : [h("div.m-chat-hi", ic("spark", 28), h("p", "Die KI kennt deine Projekte, Events und Aufgaben."),
       h("div.m-chips", SUG.map((t) => h("button.chip", { onclick: () => { inp.value = t; send(); } }, t))))]));
@@ -201,7 +202,7 @@ function chatView() {
       h("select.input", { "aria-label": "KI-Modell", style: { height: "34px", width: "auto", fontSize: "13px", padding: "0 8px" }, onchange: (e) => { try { localStorage.setItem("cc:ai:model", JSON.stringify(e.target.value)); } catch { /* privat */ } } },
         [["auto", "Auto"], ["gemini:gemini-flash-lite-latest", "Gemini Lite"], ["gemini:gemini-flash-latest", "Gemini Flash"], ["groq:llama-3.3-70b-versatile", "Llama 70B"], ["groq:openai/gpt-oss-120b", "GPT-OSS"]].map(([v, t]) => h("option", { value: v, selected: aiModel() === v }, t))),
       hist.length ? h("button.btn.sm", { onclick: () => { hist = []; store.set("chat", hist); drawLog(); } }, "Neu") : null)),
-    log, h("div.m-chat-bar", inp, h("button.m-send", { "aria-label": "Senden", onclick: send }, ic("send", 18))));
+    log, h("div.m-chat-bar", inp, micButton(h, inp, "m-mic"), h("button.m-send", { "aria-label": "Senden", onclick: send }, ic("send", 18))));
 }
 
 async function gearView() {
@@ -241,9 +242,9 @@ async function gearView() {
 }
 
 // ---------- Was soll auf dieses Handy kommen? ----------
-const TOPICS = [["tickets", "Ticketverkäufe"], ["sites", "Website-Ausfälle"], ["hosting", "Hosting & Deploys"], ["tasks", "Fällige Aufgaben"], ["digest", "Tagesübersicht (morgens)"], ["security", "Anmeldungen & Sicherheit"], ["other", "Sonstiges (neue Module, Sync …)"]];
+const TOPICS = [["tickets", "Ticketverkäufe"], ["sites", "Website-Ausfälle"], ["hosting", "Hosting & Deploys"], ["tasks", "Fällige Aufgaben"], ["digest", "Überblick (Admin täglich, sonst wöchentlich)"], ["security", "Anmeldungen & Sicherheit"], ["other", "Sonstiges (neue Module, Sync …)"]];
 function topicsCard(sub, mine) {
-  const list = data?.admin ? TOPICS : TOPICS.filter(([k]) => ["sites", "tasks", "other"].includes(k));
+  const list = data?.admin ? TOPICS : TOPICS.filter(([k]) => ["sites", "tasks", "digest", "other"].includes(k));
   const set = new Set(mine.topics || []);
   const save = async () => { try { await rpc("cc_push_topics_set", { p_endpoint: sub.endpoint, p_topics: [...set] }); toast("Gespeichert"); } catch (e) { toastErr(e); } };
   return h("section.m-card", h("div.m-card-h", h("span", "Benachrichtigen bei")),
