@@ -2,7 +2,7 @@
 // Marketing & Druck (QR, Visitenkarten, Merch, Posts), Zusammenfassungen, KI-Einstellungen.
 // Sparsam: Regeln, QR-Codes, Designs und Seiten entstehen im Browser; die KI wird nur auf Knopfdruck gefragt.
 import { sb, q, nx, aiModel } from "../lib/api.js";
-import { h, icon, clear, toast, toastErr, errMsg, md, copyText, fmtDate, fmtAgo, empty, confirmDialog, modal } from "../lib/ui.js";
+import { h, icon, clear, toast, toastErr, errMsg, md, copyText, fmtDate, fmtAgo, empty, confirmDialog, modal, siteThumb } from "../lib/ui.js";
 import { aiGen } from "../lib/aigen.js";
 import { TYPES, PRESETS, questionsFor, checkRules, marketingIdeas } from "../lib/rules.js";
 import { TEMPLATES, THEMES, buildSite, slugify } from "../lib/sitegen.js";
@@ -233,7 +233,7 @@ async function applyBogen(ctx, list, st, items, tasks) {
 // =====================================================================
 async function webBuilder(ctx) {
   let sites = [], tableOk = true;
-  try { sites = await q(sb.from("nx_sites").select("id,slug,title,template,published,views,updated_at,data").order("updated_at", { ascending: false })); }
+  try { sites = await q(sb.from("nx_sites").select("id,slug,title,template,published,views,updated_at,data,html").order("updated_at", { ascending: false })); }
   catch (e) { if (missing(e)) tableOk = false; else throw e; }
   const list = await targets(ctx);
   const wrap = h("div.stack");
@@ -243,10 +243,10 @@ async function webBuilder(ctx) {
       h("p.faint", "Komplette Website zum Runterscrollen per Formular: 6 Designs mit Animationen, Line-up, Termine, Galerie, echte Bewertungen mit Sternen, FAQ, Kontakt, Impressum & Datenschutz. Herunterladen, bei Netlify & Co. veröffentlichen oder hier online stellen – eigener Link zum Weitergeben: …/bau.html"))),
     h("div.grid.g-2", Object.entries(TEMPLATES).map(([k, t]) => h("button.card.studio-tile", { onclick: () => editor({ template: k, data: {}, theme: k === "event" ? "rave" : "nacht" }) },
       h("div.card-body", h("h3", t.name), h("p.faint", t.desc))))),
-    sites.length ? h("section.card", h("div.card-head", h("h3", "Meine Seiten")), h("div.list", sites.map((s) => h("div.list-item",
+    sites.length ? h("section.card", h("div.card-head", h("h3", "Meine Seiten")), h("div.site-thumbs", sites.map((s) => h("div.site-card", siteThumb(s.html || "<p style='font:16px system-ui;padding:20px'>Keine Vorschau</p>"), h("div.list-item", { style: { padding: 0, border: 0 } },
       h("div.li-main", h("div.li-title", s.title), h("div.li-sub", `${TEMPLATES[s.template]?.name || s.template} · ${s.published ? `online · ${s.views} Aufrufe` : "Entwurf"} · ${fmtAgo(s.updated_at)}`)),
       s.published ? h("a.btn.sm", { href: `${BASE}w.html?s=${s.slug}`, target: "_blank", rel: "noopener" }, icon("external")) : null,
-      s.data?.pro ? h("a.btn.sm", { href: `bau.html?id=${s.id}`, title: "Im Profi-Baukasten bearbeiten (Link bleibt gleich)" }, icon("edit")) : h("button.btn.sm", { onclick: () => editor({ id: s.id, slug: s.slug, template: s.template, data: s.data?.fields || {}, theme: s.data?.theme || "nacht", invite: s.data?.invite_code, published: s.published }) }, icon("edit"), "Bearbeiten"))))) : null);
+      s.data?.pro ? h("a.btn.sm", { href: `bau.html?id=${s.id}`, title: "Im Profi-Baukasten bearbeiten (Link bleibt gleich)" }, icon("edit")) : h("button.btn.sm", { onclick: () => editor({ id: s.id, slug: s.slug, template: s.template, data: s.data?.fields || {}, theme: s.data?.theme || "nacht", invite: s.data?.invite_code, published: s.published }) }, icon("edit"), "Bearbeiten")))))) : null);
 
   function editor(s) {
     const tpl = TEMPLATES[s.template];

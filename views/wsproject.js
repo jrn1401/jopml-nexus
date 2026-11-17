@@ -136,6 +136,7 @@ export async function projectPage(id, { ask } = {}) {
     h("div.crumb", h("a", { href: "#/" }, "Übersicht"), icon("chevronR"), h("span", p.name)),
     h("div.page-head", h("div", h("h1", p.name), h("p", [p.kind, p.provider === "claude" ? "aus Claude" : p.provider, `aktualisiert ${fmtAgo(p.updated_at)}`].filter(Boolean).join(" · "))),
       h("div.actions",
+        h("button.btn", { onclick: async () => { const x = await import("../lib/modshare.js"); x.shareWidgetsDialog({ key: `nxp:${p.id}`, title: p.name, subtitle: p.description ? String(p.description).slice(0, 160) : "", widgets: widgets.length ? widgets : [{ type: "markdown", content: p.description || "" }] }); } }, icon("globe"), "Als Website"),
         h("button.btn.primary", { onclick: () => openShareDialog("nx_project", p.id, p.name, { tickets: !!t }) }, icon("users"), "Teilen"),
         h("button.btn", { onclick: () => aiSummary(p) }, icon("sparkles"), "KI-Zusammenfassung"),
         h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("bogen", `np:${p.id}`)) }, icon("check"), "Rechts-Check & Plan"),

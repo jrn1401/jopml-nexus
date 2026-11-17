@@ -795,3 +795,14 @@ html.simple .card { border-radius: 18px; }
 .bau-group { padding: 4px 14px; }
 .bau-group summary { cursor: pointer; padding: 10px 0; }
 @media (max-width: 900px) { .bau-main { grid-template-columns: 1fr; } .bau-right { position: static; } .bau-frame { height: 70dvh; } }
+.bau-ai { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+.bau-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.bau-thumb { display: flex; flex-direction: column; gap: 6px; background: none; border: 2px solid transparent; border-radius: 14px; padding: 6px; cursor: pointer; color: var(--text); font: inherit; text-align: left; }
+.bau-thumb.on, .bau-thumb:hover { border-color: var(--primary); }
+.bau-thumb-frame, .site-thumb { position: relative; width: 100%; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+.bau-thumb-frame iframe, .site-thumb iframe { position: absolute; top: 0; left: 0; width: 1280px; height: 800px; border: 0; transform-origin: 0 0; pointer-events: none; }
+.site-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; padding: 12px; }
+.site-card { display: flex; flex-direction: column; gap: 8px; }
+.form-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.form-prev { width: 100%; height: 640px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+@media (max-width: 900px) { .form-split { grid-template-columns: 1fr; } .form-prev { height: 480px; } }

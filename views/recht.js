@@ -71,10 +71,14 @@ function formulare() {
       return type === "check" ? h("label.check", el, label) : h("div.field", h("label", label), el);
     });
     const outHtml = (blank) => f.render(blank ? {} : vals);
+    const prev = h("iframe.form-prev", { title: "Vorschau", sandbox: "" });
+    const upd = () => { prev.srcdoc = outHtml(false); };
+    setTimeout(upd, 0);
     const dl = (blank) => { const a = h("a", { href: URL.createObjectURL(new Blob([outHtml(blank)], { type: "text/html" })), download: `${f.id}${blank ? "-leer" : ""}.html` }); document.body.append(a); a.click(); a.remove(); };
     const print = (blank) => { const w = window.open("", "_blank"); if (!w) return toast("Pop-up blockiert – bitte „Herunterladen“ nutzen.", "info"); w.document.write(outHtml(blank)); w.document.close(); w.focus(); setTimeout(() => w.print(), 300); };
     box.replaceChildren(h("section.card", h("div.card-head", h("h3", f.title), h("button.btn.ghost.sm", { onclick: () => box.replaceChildren(list) }, "← Alle Formulare")),
-      h("div.card-body.stack", h("p.muted", { style: { margin: 0 } }, f.desc), h("div.grid.g-2", fields),
+      h("div.card-body.stack", h("p.muted", { style: { margin: 0 } }, f.desc),
+        h("div.form-split", h("div.stack", { style: { gap: "8px" }, oninput: () => setTimeout(upd, 0), onchange: () => setTimeout(upd, 0) }, fields), h("div", h("div.faint", { style: { fontSize: "12px", marginBottom: "4px" } }, "Vorschau – so wird es gedruckt"), prev)),
         h("div.row.wrap", { style: { gap: "8px" } }, h("button.btn.primary", { onclick: () => print(false) }, icon("download"), "Ausgefüllt drucken / PDF"), h("button.btn", { onclick: () => dl(false) }, "Herunterladen"),
           f.copy ? h("button.btn", { onclick: () => copyText(f.copy(vals)) }, icon("copy"), "Text kopieren") : null, h("button.btn.ghost", { onclick: () => print(true) }, "Leer drucken")),
         h("div.faint", { style: { fontSize: "12.5px" } }, "Eingaben bleiben nur auf diesem Gerät. Vorlage – keine Rechtsberatung."))));

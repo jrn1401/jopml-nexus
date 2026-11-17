@@ -84,18 +84,41 @@ export default async function projectView({ args: [id], query }) {
     return h("section.card",
       h("div.card-head", h("div.row", h("div.li-icon", { style: { width: "30px", height: "30px" } }, icon(T.icon)), h("h3", m.name), h("span.tag", T.label)),
         h("div.row", { style: { gap: "2px" } },
+          h("button.icon-btn", { title: "Mit KI ändern", "aria-label": `${m.name} mit KI ändern`, onclick: () => aiEditModule(m) }, icon("sparkles")),
+          h("button.icon-btn", { title: "Als Website teilen", "aria-label": `${m.name} als Website teilen`, onclick: async () => { const x = await import("../lib/modshare.js"); x.shareWidgetsDialog({ key: `mod:${m.id}`, title: m.name, subtitle: project.name, widgets: x.moduleWidgets(m) }); } }, icon("globe")),
           h("button.icon-btn", { title: "Konfiguration bearbeiten", "aria-label": "Bearbeiten", onclick: () => editModule(m) }, icon("edit")),
           h("button.icon-btn", { title: "Entfernen", "aria-label": "Entfernen", onclick: () => deleteModule(m) }, icon("trash")))),
       h("div.card-body", T.render(m, ctx)));
   }
+  function aiEditModule(m) {
+    const ta = h("textarea.input", { rows: 3, maxlength: 1500, "aria-label": "Was soll sich ändern?", placeholder: "z. B. „Füge Aufgabe Security buchen hinzu“, „Setze Getränke einkaufen auf erledigt“, „Neue Zeile in der Tabelle: Garderobe 2 €“, „Mach eine Checkliste für den Aufbau“" });
+    const out = h("div");
+    const m2 = modal(`Mit KI ändern: ${m.name}`, h("div.stack", h("p.muted", { style: { margin: 0 } }, "Sag einfach, was rein oder raus soll – die KI ändert das Modul. Geteilte Links zeigen danach automatisch den neuen Stand."), ta, out,
+      h("div.row", { style: { justifyContent: "flex-end" } }, h("button.btn.primary", { onclick: async (e) => {
+        if (ta.value.trim().length < 3) return;
+        const b = e.currentTarget; b.disabled = true; out.replaceChildren(h("div.faint", h("span.spinner"), " KI ändert …"));
+        try {
+          const { aiGen } = await import("../lib/aigen.js");
+          const r = await aiGen({ task: "modul-aendern", json: true, maxTokens: 5000, instructions: 'Ändere die Modul-Konfiguration genau nach dem Wunsch. Behalte alles andere unverändert (gleiche Struktur, gleiche Kachel-Typen: markdown, checklist, timeline, table, stats, links, chart). Nichts erfinden. Antworte NUR mit JSON: {"config":{…komplette neue Konfiguration…},"summary":"was geändert wurde (1 Satz)"}',
+            input: `MODUL: ${m.name} (${m.module_type})\nKONFIGURATION: ${JSON.stringify(m.config).slice(0, 16000)}\n\nWUNSCH: ${ta.value.trim()}` });
+          const cfg = r.json?.config;
+          if (!cfg || typeof cfg !== "object") throw new Error("Die KI hat keine gültige Konfiguration geliefert – bitte genauer formulieren.");
+          await q(sb.from("cc_modules").update({ config: cfg, version: m.version + 1 }).eq("id", m.id));
+          const x = await import("../lib/modshare.js"); x.refreshShare(`mod:${m.id}`, { title: m.name, subtitle: project.name, widgets: x.moduleWidgets({ ...m, config: cfg }) }).catch(() => {});
+          m2.close(); toast(r.json?.summary || "Modul geändert"); dispatchEvent(new Event("hashchange"));
+        } catch (er) { out.replaceChildren(h("div.banner.bad", errMsg(er))); b.disabled = false; }
+      } }, icon("sparkles"), "Ändern"))), { wide: true });
+    ta.focus();
+  }
   function editModule(m) {
     formModal(`Modul „${m.name}“`, [
       { name: "name", label: "Name", value: m.name, required: true, max: 80 },
-      { name: "config", label: "Konfiguration (JSON)", type: "textarea", rows: 10, value: JSON.stringify(m.config, null, 2), max: 100000, hint: "Wird vom Modultyp ausgewertet. Keine Geheimnisse eintragen." },
+      { name: "config", label: "Konfiguration (JSON)", type: "textarea", rows: 10, ai: false, value: JSON.stringify(m.config, null, 2), max: 100000, hint: "Wird vom Modultyp ausgewertet. Keine Geheimnisse eintragen." },
       { name: "enabled", label: "Auf der Projektseite anzeigen", type: "checkbox", value: m.enabled },
     ], async (v) => {
       let config; try { config = JSON.parse(v.config || "{}"); } catch { throw new Error("Konfiguration ist kein gültiges JSON."); }
       await q(sb.from("cc_modules").update({ name: v.name, config, enabled: v.enabled, version: m.version + 1 }).eq("id", m.id));
+      import("../lib/modshare.js").then((x) => x.refreshShare(`mod:${m.id}`, { title: v.name, subtitle: project.name, widgets: x.moduleWidgets({ ...m, config }) })).catch(() => {});
       toast("Modul gespeichert"); dispatchEvent(new Event("hashchange"));
     }, { wide: true });
   }

@@ -1,7 +1,7 @@
 // Website-Baukasten (eigene Seite, ohne Anmeldung nutzbar): Formular → Live-Vorschau → index.html herunterladen.
 // Optional: KI-Texte und „Mit KI ändern“ (Gast-Zugang reicht), Online stellen mit festem Nexus-Link (Google-Konto), später bearbeiten – Link bleibt gleich.
 import { sb, q } from "./lib/api.js";
-import { h, icon, toast, toastErr, errMsg, modal, copyText } from "./lib/ui.js";
+import { h, icon, toast, toastErr, errMsg, modal, copyText, siteThumb } from "./lib/ui.js";
 import { aiGen } from "./lib/aigen.js";
 import { buildPro, STYLES, ANIMS, HOSTS, DEFAULTS, legalMissing } from "./lib/progen.js";
 import { slugify } from "./lib/sitegen.js";
@@ -88,6 +88,30 @@ async function aiChange() {
   ta.focus();
 }
 
+// KI baut die ganze Seite aus einer Beschreibung
+async function aiAll(ta, btn) {
+  const txt = ta.value.trim();
+  if (txt.length < 10) return toast("Beschreib kurz, was für eine Seite du willst.", "info");
+  if (!(await ensureLogin())) return;
+  btn.disabled = true; btn.textContent = "KI baut deine Seite …";
+  try {
+    const r = await aiGen({ task: "website-komplett", json: true, maxTokens: 4500, instructions: `Baue aus der Beschreibung eine komplette One-Page-Website. Deutsch, professionell, lebendig. Nutze alle Angaben (Namen, DJs, Musikrichtung, Daten, Links). Erfinde KEINE Fakten, Preise, Termine oder Bewertungen – fehlt etwas, lass das Feld leer oder schreibe allgemein; Links nur, wenn sie in der Beschreibung stehen.
+Antworte NUR mit JSON: {"name":"","tagline":"max 90 Zeichen","kind":"${Object.keys(KINDS).join("|")}","style":"${Object.keys(STYLES).join("|")}","anim":"sanft|dynamisch","accent":"#rrggbb oder leer","cta1":"","cta1url":"https://… oder #contact","cta2":"","cta2url":"","about":"2 Absätze","servicesTitle":"","services":"Zeilen: Titel | Beschreibung | Preis(optional)","eventsTitle":"","events":"Zeilen: Datum | Titel | Ort | Link | Button","mediaTitle":"","media":"Zeilen: Name | https-Link (Spotify, Instagram, TikTok, YouTube …)","faq":"Zeilen: Frage | Antwort","email":"","whatsapp":"","address":"","sections":{"about":true,"services":true,"events":true,"media":true,"gallery":false,"reviews":false,"faq":true,"contact":true}}`, input: txt.slice(0, 4000) });
+    const j = r.json || {};
+    for (const k of ["name", "tagline", "accent", "cta1", "cta1url", "cta2", "cta2url", "about", "servicesTitle", "services", "eventsTitle", "events", "mediaTitle", "media", "faq", "email", "whatsapp", "address"]) if (typeof j[k] === "string" && j[k].trim()) S[k] = j[k].slice(0, 6000);
+    if (KINDS[j.kind]) S.kind = j.kind; if (STYLES[j.style]) S.style = j.style; if (ANIMS[j.anim]) S.anim = j.anim;
+    if (j.sections && typeof j.sections === "object") S.sections = { ...S.sections, ...j.sections };
+    save(); draw(); toast("Fertig! Rechts siehst du deine Seite – ändern kannst du alles im Formular oder mit „Mit KI ändern“.");
+  } catch (e) { toastErr(e); btn.disabled = false; btn.textContent = "Seite bauen lassen"; }
+}
+// Alle Designs mit deinem Inhalt als Mini-Vorschau
+function designGallery() {
+  const demo = S.name ? S : { ...S, name: "Deine Seite", tagline: "So sieht dein Inhalt in diesem Design aus", about: "Hier steht später dein Text.", services: "Angebot 1 | Kurze Beschreibung\nAngebot 2 | Kurze Beschreibung\nAngebot 3 | Kurze Beschreibung", cta1: "Los geht's", cta1url: "#contact" };
+  const m = modal("Designs ansehen", h("div.bau-gallery", Object.entries(STYLES).map(([k, t]) => {
+    return h("button.bau-thumb", { type: "button", class: S.style === k ? "on" : "", onclick: () => { S.style = k; S.accent = ""; save(); m.close(); draw(); } }, siteThumb(buildPro({ ...demo, style: k, accent: "", anim: "aus" }), "bau-thumb-frame"), h("b", t.name));
+  })), { wide: true });
+}
+
 // ---------- Herunterladen / Online / Teilen
 function download() {
   const miss = legalMissing(S);
@@ -108,7 +132,7 @@ async function publish() {
   if (miss.length) return toast(`Bitte erst das Impressum vervollständigen: ${miss.join(", ")}`, "info");
   try {
     const slug = site?.slug || `${slugify(S.name)}-${Math.random().toString(36).slice(2, 6)}`;
-    const row = { slug, title: (S.name || "Website").slice(0, 120), template: "custom", data: { pro: S }, html: buildPro({ ...S, host: "nexus" }), published: true };
+    const row = { slug, title: (S.name || "Website").slice(0, 120), template: "custom", data: { pro: S }, html: buildPro({ ...S, host: "nexus" }, { hosted: true }), published: true };
     if (site?.id) await q(sb.from("nx_sites").update(row).eq("id", site.id));
     else site = { ...(await q(sb.from("nx_sites").insert(row).select("id,slug").single())) };
     const link = new URL(`w.html?s=${site.slug}`, location.href).href;
@@ -151,14 +175,20 @@ function draw() {
   const animChips = h("div.row.wrap", { style: { gap: "6px" } }, Object.entries(ANIMS).map(([k, t]) => h("button.chip", { type: "button", class: S.anim === k ? "on" : "", onclick: () => { S.anim = k; save(); draw(); } }, t)));
   const hostSel = h("select.input", { "aria-label": "Hosting", onchange: (e) => { S.host = e.target.value; save(); refresh(); } }, Object.entries(HOSTS).map(([k, v]) => h("option", { value: k, selected: S.host === k }, v.name)));
   const form = h("div.stack.bau-form",
+    h("section.card.bau-ai", h("div.card-body.stack", { style: { gap: "8px" } }, h("b.row", { style: { gap: "6px" } }, icon("sparkles"), "Sag der KI, was du willst"),
+      (() => { const ta = h("textarea.input", { rows: 3, maxlength: 4000, "aria-label": "Beschreibung für die KI", placeholder: "z. B. „Seite für meine Techno-Party Raveanation am 9.1. in Berlin, DJ SHEVNØ1, Industrial & Hardgroove, 16+, Tickets: https://eventfrog.de/RAVENATION, Instagram: https://instagram.com/raveanation – dunkel mit Neon und Animationen“" });
+        const b = h("button.btn.primary", { onclick: () => aiAll(ta, b) }, icon("sparkles"), "Seite bauen lassen");
+        return h("div.stack", { style: { gap: "8px" } }, ta, h("div.row.wrap", { style: { gap: "8px" } }, b, h("button.btn", { onclick: designGallery }, icon("eye"), "Designs ansehen"))); })())),
     group("1 · Grundlagen", true, h("div.field", h("label", "Art der Seite"), kindSel), inp("name", "Name / Titel"), inp("tagline", "Slogan (eine Zeile)"),
       h("div.grid.g-2", inp("cta1", "Haupt-Button Text"), inp("cta1url", "Haupt-Button Link", { ph: "https://… oder #contact" })), h("div.grid.g-2", inp("cta2", "Zweiter Button"), inp("cta2url", "Zweiter Button Link"))),
     group("2 · Design & Animation", true, styleChips, h("div.field", h("label", "Eigene Akzentfarbe"), h("input", { type: "color", value: S.accent || STYLES[S.style].a, "aria-label": "Akzentfarbe", oninput: (e) => { S.accent = e.target.value; save(); refresh(); } })), animChips),
     group("3 · Inhalte", true,
-      h("div.row.wrap", { style: { gap: "10px" } }, toggle("about", "Über uns"), toggle("services", S.servicesTitle), toggle("events", S.eventsTitle), toggle("gallery", "Galerie"), toggle("reviews", "Bewertungen"), toggle("faq", "FAQ"), toggle("contact", "Kontakt")),
+      h("div.row.wrap", { style: { gap: "10px" } }, toggle("about", "Über uns"), toggle("services", S.servicesTitle), toggle("events", S.eventsTitle), toggle("media", "Musik & Social"), toggle("gallery", "Galerie"), toggle("reviews", "Bewertungen"), toggle("faq", "FAQ"), toggle("contact", "Kontakt")),
       inp("about", "Über uns", { area: true, ph: "Stichworte reichen – die KI kann daraus Text machen" }),
       inp("servicesTitle", "Überschrift Angebot"), inp("services", "Angebot / Line-up / Leistungen", { area: true, ph: "Eine Zeile pro Eintrag: Titel | Beschreibung | Preis (optional)" }),
       inp("eventsTitle", "Überschrift Termine"), inp("events", "Termine", { area: true, ph: "Datum | Titel | Ort | Ticket-Link (https://…) | Button-Text" }),
+      inp("mediaTitle", "Überschrift Musik & Social"), inp("media", "Musik & Social (Spotify, Instagram, TikTok, YouTube …)", { area: true, rows: 3, ph: "Spotify | https://open.spotify.com/…\nInstagram | https://instagram.com/…", hint: "Wird als schöne Karten angezeigt. Mit „Player einbetten“ spielen Spotify/YouTube/SoundCloud direkt auf der Seite (nur in der heruntergeladenen Version; Hinweis kommt automatisch in die Datenschutzerklärung)." }),
+      h("label.check", h("input", { type: "checkbox", checked: !!S.embed, onchange: (e) => { S.embed = e.target.checked; save(); refresh(); } }), "Player einbetten (Spotify, YouTube, SoundCloud)"),
       inp("gallery", "Galerie (Bild-Links)", { area: true, rows: 3, ph: "https://…/bild.jpg | Bildunterschrift", hint: "Nur Bilder, an denen du die Rechte hast und auf denen erkennbare Personen eingewilligt haben (§ 22 KunstUrhG)." }),
       inp("reviewsTitle", "Überschrift Bewertungen"), inp("reviews", "Bewertungen (nur echte!)", { area: true, rows: 3, ph: "Name | Sterne 1–5 | Text", hint: "Nur echte Stimmen mit Erlaubnis der Person eintragen – erfundene Bewertungen sind unzulässig." }),
       inp("faq", "Häufige Fragen", { area: true, ph: "Frage | Antwort" })),
