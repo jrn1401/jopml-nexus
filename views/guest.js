@@ -2,6 +2,7 @@
 import { sb, rpc } from "../lib/api.js";
 import { h, icon, clear, badge, EVENT_STATUS, fmtDateTime, fmtEUR, fmtBytes, fmtAgo, md, toast, toastErr, empty, errMsg, formModal } from "../lib/ui.js";
 import { LOC_STATUS } from "./event.js";
+import { overviewStrip } from "../lib/eventcalc.js";
 import { CONFIG } from "../config.js";
 import { webSharedBlock } from "../lib/web.js";
 import { staticWidgets } from "../lib/modules.js";
@@ -90,6 +91,18 @@ function financeCard(f) {
       row("Ticket-Einnahmen", f.ticket_revenue), row("Weitere Einnahmen", f.income), row("Kosten", f.costs), row("Ergebnis", f.result, true)));
 }
 
+// Überblicksleiste wie beim Veranstalter; jeder Gast kann sie für sich umstellen (nur auf diesem Gerät)
+function sharedOverview(p, ctx, reload, items) {
+  const key = `cc:ov:${ctx.token || ctx.shareId || ""}`;
+  let mine = null; try { mine = JSON.parse(localStorage.getItem(key)); } catch { mine = null; }
+  const ov = p.overview || {};
+  return overviewStrip({ name: p.event?.name || "Event", calc: ov.calc || null, tickets: p.tickets || {}, eventDate: p.event?.date, capacity: p.tickets?.capacity,
+    tasks: items.filter((i) => i.kind === "task" || i.kind === "tech"), guests: items.filter((i) => i.kind === "guest"), finance: p.finance || null,
+    tiles: mine || ov.tiles || null, hasDefault: true,
+    configHint: "Stell den Überblick so ein, wie du ihn brauchst. Das gilt nur für dich auf diesem Gerät – „Wie vom Veranstalter“ stellt die ursprüngliche Ansicht wieder her.",
+    onConfig: (tiles) => { try { if (tiles) localStorage.setItem(key, JSON.stringify(tiles)); else localStorage.removeItem(key); } catch { /* privat */ } if (reload) reload(); else location.reload(); } });
+}
+
 // Inhalt einer Freigabe darstellen. ctx: { token } für Links oder { shareId } für angemeldete Gäste
 export function renderShared(p, ctx, reload) {
   if (p.type === "tickets") {
@@ -127,6 +140,7 @@ export function renderShared(p, ctx, reload) {
         h("span.faint", { style: { fontSize: "13px" } }, [ev.date ? fmtDateTime(ev.date) : "ohne Datum", ev.location].filter(Boolean).join(" · "))))),
       ms !== null && ms > 0 ? h("div.countdown", { style: { maxWidth: "360px" } }, h("div", h("strong", Math.floor(ms / 86400_000)), h("span", "Tage")), h("div", h("strong", Math.floor((ms % 86400_000) / 3600_000)), h("span", "Std."))) : null,
       p.note || p.share?.note ? h("div.na-note", { style: { marginBottom: "16px" } }, icon("info"), h("div", { style: { whiteSpace: "pre-wrap" } }, p.note || p.share.note)) : null,
+      sharedOverview(p, ctx, reload, items),
       p.tickets && (p.tickets.sold !== undefined || p.tickets.revenue !== undefined) ? h("div", { style: { marginBottom: "16px" } }, ticketBlock(p.tickets, { compact: !board })) : null,
       p.finance ? financeCard(p.finance) : null,
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(ev.description)) : null,

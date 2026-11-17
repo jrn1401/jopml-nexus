@@ -7,7 +7,7 @@ import { openShareDialog } from "../lib/share.js";
 import { aiCleanup } from "../lib/aidedupe.js";
 import { importDialog } from "../lib/eventfrog.js";
 import { eventCopilot } from "../lib/aiassist.js";
-import { calcCard, compute as calcCompute, detailsText, eventSheet, emptyCalc, overviewStrip } from "../lib/eventcalc.js";
+import { calcCard, compute as calcCompute, detailsText, eventSheet, emptyCalc, overviewStrip, OV_HINT } from "../lib/eventcalc.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
 
 const SECTIONS = {
@@ -104,6 +104,8 @@ export default async function eventView({ args: [id] }) {
           h("button.btn.ghost", { onclick: duplicate, title: "Als Vorlage kopieren" }, icon("copy"), "Duplizieren"),
           h("button.btn.danger", { onclick: del }, icon("trash"), "Löschen"))),
       overviewStrip({ name: ev.name, calc: ev.metadata?.calc || null, tickets: ev.metadata?.tickets || {}, eventDate: ev.event_date, capacity: ev.metadata?.tickets?.capacity || ev.expected_guests, snaps,
+        tiles: ev.metadata?.overview, configHint: OV_HINT,
+        onConfig: async (tiles) => { const meta = { ...(ev.metadata || {}) }; if (tiles) meta.overview = tiles; else delete meta.overview; await q(sb.from("cc_events").update({ metadata: meta }).eq("id", id)); ev.metadata = meta; draw(); },
         tasks, guests, spent, budget, onTasks: () => document.getElementById("sec-task")?.scrollIntoView({ behavior: "smooth" }) }),
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(ev.description)) : null,
       h("div", { style: { marginBottom: "16px" } }, eventCopilot({ ev: { name: ev.name, event_date: ev.event_date, location: ev.location, capacity: ev.expected_guests, ticket_price: price, budget },
