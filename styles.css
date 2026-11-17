@@ -712,3 +712,26 @@ details.list-item > summary { list-style: none; } details.list-item > summary::-
 .top-pill:hover { border-color: var(--primary); }
 .top-pill svg { width: 16px; height: 16px; }
 @media (max-width: 760px) { .top-pill { padding: 0; width: 36px; justify-content: center; } .top-pill span { display: none; } }
+
+/* ---------- KI-Studio ---------- */
+.studio-tile { text-align: left; cursor: pointer; text-decoration: none; color: var(--text); font: inherit; border: 1px solid var(--line); transition: border-color .15s, transform .15s; }
+.studio-tile:hover { border-color: var(--primary); transform: translateY(-1px); }
+.studio-tile h3 { margin: 8px 0 4px; font-size: 16px; }
+.studio-tile p { margin: 0; font-size: 13.5px; line-height: 1.5; }
+.studio-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--primary); }
+.studio-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.site-prev-card { position: sticky; top: 70px; overflow: hidden; }
+.site-prev { width: 100%; height: 70vh; border: 0; background: #fff; display: block; }
+.qr-prev, .vcard-prev, .shirt-prev { display: grid; place-items: center; background: var(--surface-2); border-radius: 14px; padding: 18px; min-height: 220px; }
+.qr-prev svg { width: 220px; height: 220px; border-radius: 10px; }
+.vcard-prev svg { width: 100%; height: auto; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+.shirt-prev svg { width: 100%; max-width: 380px; height: auto; }
+.chip svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
+@media (max-width: 900px) { .studio-split { grid-template-columns: 1fr; } .site-prev-card { position: static; } .site-prev { height: 60vh; } }
+
+/* ---------- Einfach-Modus: größer, ruhiger, weniger Details ---------- */
+html.simple { font-size: 112%; }
+html.simple .faint, html.simple .li-sub { font-size: 14px; }
+html.simple .btn { min-height: 44px; font-size: 15px; }
+html.simple .badge.plain, html.simple .kbd, html.simple .status-pill, html.simple [data-advanced] { display: none !important; }
+html.simple .card { border-radius: 18px; }

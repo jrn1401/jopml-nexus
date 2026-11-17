@@ -7,4 +7,5 @@ try {
   var d = g("density", ""); if (d) r.dataset.density = d;
   var f = g("fontscale", ""); if (f) r.style.fontSize = f + "%";
   if (g("reducemotion", false)) r.dataset.motion = "reduce";
+  if (g("simple", false)) r.classList.add("simple");
 } catch (e) { /* Standard: dunkel */ }

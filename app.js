@@ -12,10 +12,10 @@ const ROUTES = [
   [/^\/events$/, "events"], [/^\/events\/([\w-]+)$/, "event"], [/^\/jopml$/, "jopml"],
   [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"], [/^\/shares$/, "shares"], [/^\/web(?:\/([0-9a-f-]{36}))?$/, "web"],
   [/^\/(impressum|datenschutz|nutzung)$/, "legal"], [/^\/connections$/, "connections"], [/^\/hosting$/, "hosting"],
-  [/^\/tasks$/, "tasks"], [/^\/door\/([\w-]+)$/, "door"], [/^\/links$/, "links"], [/^\/security$/, "security"], [/^\/help$/, "help"], [/^\/users$/, "users"],
+  [/^\/tasks$/, "tasks"], [/^\/door\/([\w-]+)$/, "door"], [/^\/links$/, "links"], [/^\/security$/, "security"], [/^\/help$/, "help"], [/^\/users$/, "users"], [/^\/studio(?:\/(\w+))?$/, "studio"],
 ];
 const NAV_GROUPS = [
-  ["Übersicht", [["#/", "dashboard", "Dashboard"]]],
+  ["Übersicht", [["#/", "dashboard", "Dashboard"], ["#/studio", "sparkles", "KI-Studio"]]],
   ["Planung", [["#/tasks", "check", "Aufgaben"], ["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"], ["#/shares", "users", "Teilen & Team"]]],
   ["Online", [["#/web", "globe", "Websites"], ["#/links", "link", "Marketing-Links"], ["#/jopml", "layers", "JOPML"]]],
   ["Geräte", [["#/servers", "server", "Geräte & Server"], ["#/hosting", "rocket", "Hosting"]]],
