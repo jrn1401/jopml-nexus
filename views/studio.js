@@ -183,6 +183,14 @@ Höchstens 8 tasks, 4 risks, 5 marketing.`,
 async function applyBogen(ctx, list, st, items, tasks) {
   const t = list.find((x) => x.key === st.target);
   const a = st.answers;
+  // Die KI merkt sich das Wichtigste aus dem Bogen (wenn das KI-Gedächtnis freigeschaltet und erlaubt ist)
+  if (LS.get("ai:learn", true)) {
+    const uid = (await sb.auth.getSession()).data.session?.user?.id;
+    const nm = a.name || t?.row?.name;
+    const fact = [nm && `Projekt „${nm}“ (${TYPES.find((x) => x[0] === st.type)?.[1] || st.type})`, a.deadline && `am/bis ${new Date(a.deadline).toLocaleDateString("de-DE")}`, a.guests && `${a.guests} Gäste`,
+      (a.ages || []).length && `Alter ${a.ages.join("/")}`, a.state && a.state !== "nicht in Deutschland" && `in ${a.state}`, a.goal && `Ziel: ${String(a.goal).slice(0, 120)}`].filter(Boolean).join(", ");
+    if (uid && fact.length > 8) sb.from("nx_ai_facts").insert({ owner_id: uid, fact: fact.slice(0, 300), source: "bogen" }).then(() => {}, () => {});
+  }
   const profile = { type: st.type, answers: a, checked_at: new Date().toISOString(), check: items.map((i) => ({ level: i.level, title: i.title, ref: i.ref?.[0] || null })) };
   const due = (weeks) => (a.deadline && weeks ? new Date(new Date(a.deadline).getTime() - weeks * 7 * 864e5).toISOString() : null);
   const dedupe = (existing) => tasks.filter((x) => !existing.some((e) => e.title.toLowerCase() === x.title.toLowerCase()));
