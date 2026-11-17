@@ -222,6 +222,7 @@ export async function eventPage(id) {
       h("div.grid.g-2", { style: { alignItems: "start" } }, SECTIONS.map(section)));
   }
   try { draw(); } catch (e) { root.replaceChildren(h("div.banner.bad", errMsg(e))); }
+  try { if (sessionStorage.getItem("cc:open-form") === String(id)) { sessionStorage.removeItem("cc:open-form"); setTimeout(() => [...root.querySelectorAll("button")].find((b) => b.textContent.trim() === "Event-Formular")?.click(), 300); } } catch { /* */ }
   return root;
 }
 

@@ -107,3 +107,7 @@
 .m-mic { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface); color: var(--text); flex: none; font-size: 18px; }
 .m-mic.rec, .btn.rec { color: var(--bad); border-color: var(--bad); }
 .m-speak { background: none; border: 0; color: var(--text-3); font-size: 15px; padding: 2px 0 0; cursor: pointer; }
+
+.m-ov .ov-strip { position: static; display: flex; overflow-x: auto; margin: 8px -4px 10px; padding: 0 4px; background: transparent; scrollbar-width: none; }
+.m-ov .ov-tile { flex: 0 0 auto; min-width: 116px; }
+.m-ov-btns { display: flex; gap: 8px; margin-top: 8px; } .m-ov-btns .btn { flex: 1; justify-content: center; }

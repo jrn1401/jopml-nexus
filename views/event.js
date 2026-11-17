@@ -276,5 +276,6 @@ export default async function eventView({ args: [id] }) {
     } catch (e) { toastErr(e); }
   }
   draw();
+  try { if (sessionStorage.getItem("cc:open-form") === String(id)) { sessionStorage.removeItem("cc:open-form"); setTimeout(() => [...root.querySelectorAll("button")].find((b) => b.textContent.trim() === "Event-Formular")?.click(), 300); } } catch { /* */ }
   return root;
 }

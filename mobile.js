@@ -107,6 +107,32 @@ function hero(sub) {
 const tile = (label, value, sub, onclick) => h(onclick ? "button.m-tile" : "div.m-tile", { onclick }, h("div.m-tile-l", label), h("div.m-tile-v", value), sub ? h("div.m-tile-s", sub) : null);
 const daysTo = (d) => Math.ceil((new Date(d) - Date.now()) / 864e5);
 
+// Überblick des nächsten Events – dieselbe Leiste wie in der Vollversion (Ergebnis, Prognose, Aufgaben, Gäste …)
+function eventOverview(next) {
+  const box = h("section.m-card.m-ov", h("div.m-card-h", ic("ticket", 18), h("span", next.name)), h("div.m-row-s", "Lädt Überblick …"));
+  (async () => {
+    try {
+      const { overviewStrip, breakdownModal, compute } = await import("./lib/eventcalc.js");
+      let ev = await q(sb.from("cc_events").select("id,name,event_date,expected_guests,budget,metadata").eq("id", next.id).maybeSingle()), admin = true, items = [];
+      if (ev) items = await q(sb.from("cc_event_items").select("kind,done,at,amount,actual,status").eq("event_id", ev.id));
+      else { admin = false; ev = await q(sb.from("nx_events").select("id,name,event_date,capacity,budget,tickets,calc").eq("id", next.id).maybeSingle()); if (ev) items = await q(sb.from("nx_event_items").select("kind,done,at,amount").eq("event_id", ev.id)); }
+      if (!ev) { box.remove(); return; }
+      const meta = ev.metadata || {}, calc = admin ? meta.calc : ev.calc && (ev.calc.guests !== undefined || ev.calc.tickets) ? ev.calc : null;
+      const tickets = admin ? meta.tickets || {} : ev.tickets || {};
+      const tasks = items.filter((i) => i.kind === "task" || i.kind === "tech"), guests = items.filter((i) => i.kind === "guest");
+      const spent = items.filter((i) => i.kind === "cost").reduce((a, i) => a + (Number(i.actual ?? i.amount) || 0), 0);
+      const R = calc ? compute(calc) : null;
+      const url = `./#/events/${ev.id}`;
+      box.replaceChildren(h("div.m-card-h", ic("ticket", 18), h("span", ev.name)),
+        overviewStrip({ name: ev.name, calc, tickets, eventDate: ev.event_date, capacity: tickets.capacity || ev.expected_guests || ev.capacity, tasks, guests, spent, budget: ev.budget,
+          tiles: admin ? meta.overview : ev.calc?.overview, onTasks: () => document.getElementById("m-tasks")?.scrollIntoView({ behavior: "smooth" }) }),
+        R && R.result < 0 ? h("button.btn.sm.m-wide", { onclick: () => breakdownModal(calc, ev.name) }, "Wo kommt das Minus her?") : null,
+        h("div.m-ov-btns", h("a.btn.sm.primary", { href: url }, "Ganzes Event öffnen"), h("a.btn.sm", { href: url, onclick: () => { try { sessionStorage.setItem("cc:open-form", ev.id); } catch { /* */ } } }, "Event-Formular")));
+    } catch (e) { box.lastChild.textContent = errMsg(e); }
+  })();
+  return box;
+}
+
 async function homeView() {
   await load(); drawBar();
   const show = store.get("tiles", { events: true, tasks: true, sites: true, shares: true });
@@ -122,6 +148,7 @@ async function homeView() {
   if (show.tasks) kpis.append(tile("Offen", fmtNum(next?.open_tasks ?? (data.tasks || []).length), "Aufgaben", () => document.getElementById("m-tasks")?.scrollIntoView({ behavior: "smooth" })));
   if (show.sites && data.sites?.total) kpis.append(tile("Websites", data.sites.down ? `${data.sites.down} down` : "alle online", `${data.sites.total} überwacht`));
   if (kpis.childElementCount) parts.push(kpis);
+  if (show.events && next?.id) parts.push(eventOverview(next));
   if (show.events && next?.capacity && next.sold !== null && next.sold !== undefined) {
     const pct = Math.min(100, Math.round((next.sold / next.capacity) * 100));
     parts.push(h("section.m-card", h("div.m-card-h", ic("ticket", 18), h("span", next.name)),
