@@ -7,6 +7,7 @@ import { openShareDialog } from "../lib/share.js";
 import { aiCleanup } from "../lib/aidedupe.js";
 import { eventWizard } from "../lib/eventwizard.js";
 import { eventCopilot } from "../lib/aiassist.js";
+import { projectSyncDialog } from "../lib/syncproject.js";
 
 const STATUS = { idea: "Idee", planning: "In Planung", confirmed: "Fest", done: "Vorbei", cancelled: "Abgesagt" };
 const SECTIONS = [
@@ -197,7 +198,8 @@ export async function eventPage(id) {
           } }, icon("trash")))),
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px", whiteSpace: "pre-wrap" } }, ev.description) : null,
       h("div", { style: { marginBottom: "16px" } }, eventCopilot({ ev, rows, tickets: ticketsOf(ev, linked), kinds: ["task", "schedule", "cost", "income", "shift", "guest"],
-        insert: async (list) => { await q(sb.from("nx_event_items").insert(list.map((x) => ({ ...x, event_id: id })))); await reload(); } })),
+        insert: async (list) => { await q(sb.from("nx_event_items").insert(list.map((x) => ({ ...x, event_id: id })))); await reload(); },
+        onSync: () => projectSyncDialog({ admin: false, ev, items: rows, projects: projs, onDone: () => location.reload() }) })),
       h("div.grid.g-2", { style: { marginBottom: "16px", alignItems: "start" } }, ticketsCard(), money()),
       h("div.grid.g-2", { style: { alignItems: "start" } }, SECTIONS.map(section)));
   }
