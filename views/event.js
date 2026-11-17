@@ -7,7 +7,7 @@ import { openShareDialog } from "../lib/share.js";
 import { aiCleanup } from "../lib/aidedupe.js";
 import { importDialog } from "../lib/eventfrog.js";
 import { eventCopilot } from "../lib/aiassist.js";
-import { calcCard } from "../lib/eventcalc.js";
+import { calcCard, compute as calcCompute } from "../lib/eventcalc.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
 
 const SECTIONS = {
@@ -104,7 +104,7 @@ export default async function eventView({ args: [id] }) {
         h("div.card.stat", h("div.k", icon("check"), "Aufgaben"), h("div.v", `${tasks.filter((t) => t.done).length}`, h("small", `/ ${tasks.length}`)), tasks.length ? meter((tasks.filter((t) => t.done).length / tasks.length) * 100, [101, 101]) : null),
         h("div.card.stat", h("div.k", icon("users"), "Gäste"), h("div.v", fmtNum(guests.length), h("small", ev.expected_guests !== null ? `/ ${fmtNum(ev.expected_guests)} erwartet` : "")), h("div.d", `${guests.filter((g) => g.done).length} bestätigt`)),
         h("div.card.stat", h("div.k", icon("chart"), "Ergebnis"), h("div.v", { style: { color: income - spent < 0 ? "var(--bad)" : income ? "var(--ok)" : "" } }, fmtEUR(income - spent)),
-          h("div.d", [`${fmtEUR(income)} Einnahmen`, income && ev.expected_guests ? `Break-even bei ca. ${fmtNum(Math.ceil(spent / (income / ev.expected_guests)))} Gästen (alle Einnahmen pro Gast)` : price ? `Break-even bei ${fmtNum(Math.ceil(spent / price))} Tickets à ${fmtEUR(price)}` : "Ticketpreis unter „Bearbeiten“ setzen"].join(" · ")))),
+          h("div.d", [`${fmtEUR(income)} Einnahmen`, ev.metadata?.calc ? `Break-even bei ${fmtNum(calcCompute(ev.metadata.calc).beAll ?? 0)} Gästen (Kalkulation)` : income && ev.expected_guests ? `Break-even bei ca. ${fmtNum(Math.ceil(spent / (income / ev.expected_guests)))} Gästen (alle Einnahmen pro Gast)` : price ? `Break-even bei ${fmtNum(Math.ceil(spent / price))} Tickets à ${fmtEUR(price)}` : "Ticketpreis unter „Bearbeiten“ setzen"].join(" · ")))),
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(ev.description)) : null,
       h("div", { style: { marginBottom: "16px" } }, eventCopilot({ ev: { name: ev.name, event_date: ev.event_date, location: ev.location, capacity: ev.expected_guests, ticket_price: price, budget },
         rows: items, tickets: ev.metadata?.tickets || {}, kinds: ["task", "schedule", "cost", "income", "shift", "tech", "post", "guest"],
@@ -113,6 +113,7 @@ export default async function eventView({ args: [id] }) {
         info: [String(ev.description || "").slice(0, 5000), ...Object.entries(ev.metadata || {}).filter(([k, v]) => typeof v === "string" && /url|website|link|dj|age|insta|tiktok|whatsapp|music|genre/i.test(k)).map(([k, v]) => `${k}: ${v}`)].join("\n"),
         addTask: async (t) => { await q(sb.from("cc_event_items").insert({ event_id: id, kind: "task", title: t.title, note: t.note, at: t.due })); await reload(); } })),
       calcCard({ name: ev.name, calc: ev.metadata?.calc || null, tickets: ev.metadata?.tickets || {}, eventDate: ev.event_date, capacity: ev.metadata?.tickets?.capacity || ev.expected_guests, snaps,
+        onSync: () => projectSyncDialog({ admin: true, ev, items, projects, onDone: () => location.reload() }),
         onSave: async (c) => { const { compute } = await import("../lib/eventcalc.js"); const R = compute(c); ev.metadata = { ...(ev.metadata || {}), calc: c }; await q(sb.from("cc_events").update({ metadata: ev.metadata, budget: R.costs, expected_guests: Number(c.guests) || ev.expected_guests }).eq("id", id)); } }),
       ticketCard(),
       settleCard(costs, income),
@@ -139,7 +140,8 @@ export default async function eventView({ args: [id] }) {
     const otherIncome = items.filter((i) => i.kind === "income").reduce((a, i) => a + (Number(i.actual ?? 0) || 0), 0);
     const ticketRev = Number(t.revenue) || 0, sold = Number(t.sold) || 0, cap = Number(t.capacity) || ev.expected_guests || null;
     const avg = sold ? ticketRev / sold : Number(ev.metadata?.ticket_price) || (t.tiers?.length ? t.tiers.reduce((a, x) => a + (Number(x.price) || 0) * (x.capacity || 1), 0) / t.tiers.reduce((a, x) => a + (x.capacity || 1), 0) : null);
-    const be = avg ? Math.ceil(ist / avg) : null;
+    const CR = ev.metadata?.calc ? calcCompute(ev.metadata.calc) : null;
+    const be = CR?.beAll ?? (avg ? Math.ceil(ist / avg) : null);
     const days = ev.event_date ? Math.ceil((new Date(ev.event_date) - Date.now()) / 864e5) : null;
     // Prognose: Verkaufstempo der letzten 14 Tage bis zum Event fortschreiben (nur wenn schon verkauft wurde)
     const daily = (t.daily || []).slice(-14), pace = daily.length ? daily.reduce((a, d) => a + d.n, 0) / 14 : 0;
@@ -154,7 +156,7 @@ export default async function eventView({ args: [id] }) {
         k("Einnahmen bisher", fmtEUR(ticketRev + otherIncome), `${fmtEUR(ticketRev)} Tickets${otherIncome ? ` + ${fmtEUR(otherIncome)} sonstige` : ""} · geplant ${fmtEUR(incomePlan)}`),
         k("Ergebnis bisher", fmtEUR(result), result < 0 ? "noch nicht gedeckt" : "Kosten gedeckt", result < 0 ? "var(--bad)" : "var(--ok)")),
         be ? h("div", { style: { marginTop: "14px" } }, h("div.row.between", { style: { fontSize: "13px", marginBottom: "4px" } },
-          h("span", h("strong", `Break-even bei ${fmtNum(be)} Tickets`), ` (Ø ${fmtEUR(avg)} pro Ticket)`), h("span.faint", `${fmtNum(sold)} verkauft${sold >= be ? " – Kosten gedeckt" : ` · es fehlen ${fmtNum(be - sold)}`}`)),
+          h("span", h("strong", `Break-even bei ${fmtNum(be)} ${CR ? "Gästen" : "Tickets"}`), CR ? " (aus der Kalkulation: Tickets + Bar + Garderobe)" : ` (Ø ${fmtEUR(avg)} pro Ticket, ohne Bar/Garderobe – genauer mit „Kalkulation bearbeiten“)`), h("span.faint", `${fmtNum(sold)} verkauft${sold >= be ? " – Kosten gedeckt" : ` · es fehlen ${fmtNum(be - sold)}`}`)),
           meter(Math.min(100, (sold / be) * 100), [101, 101]),
           cap && be > cap ? h("div.sync-err", `Achtung: Der Break-even (${be}) liegt über der Kapazität (${cap}). Kosten senken oder Preise erhöhen.`) : null,
           forecast !== null && be && forecast < be && sold < be ? h("div.sync-err", `Budget-Warnung: Bei gleichem Verkaufstempo kommen etwa ${fmtNum(forecast)} Tickets zusammen – für den Break-even fehlen dann rund ${fmtNum(be - forecast)}. Werbung verstärken oder Kosten senken.`) : null,

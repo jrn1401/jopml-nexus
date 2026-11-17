@@ -207,6 +207,7 @@ export async function eventPage(id) {
         info: [String(ev.description || "").slice(0, 5000), linked?.url ? `Link: ${linked.url}` : "", ev.ticket_price ? `Ticketpreis: ${ev.ticket_price} €` : ""].filter(Boolean).join("\n"),
         addTask: async (t) => { await q(sb.from("nx_event_items").insert({ event_id: id, kind: "task", title: t.title, note: t.note, at: t.due })); await reload(); } })),
       calcCard({ name: ev.name, calc: ev.calc || localCalc, tickets: ticketsOf(ev, linked), eventDate: ev.event_date, capacity: ev.capacity, snaps,
+        onSync: () => projectSyncDialog({ admin: false, ev, items: rows, projects: projs, onDone: () => location.reload() }),
         note: ev.calc === undefined && localCalc ? "Kalkulation ist nur auf diesem Gerät gespeichert (Server-Speicher wird mit der nächsten Freischaltung aktiv)." : "",
         onSave: async (c) => { const R = compute(c); try { await q(sb.from("nx_events").update({ calc: c, budget: R.costs, capacity: Number(c.guests) || ev.capacity }).eq("id", id)); ev.calc = c; }
           catch { localStorage.setItem(calcKey, JSON.stringify(c)); await q(sb.from("nx_events").update({ budget: R.costs }).eq("id", id)).catch(() => {}); } } }),

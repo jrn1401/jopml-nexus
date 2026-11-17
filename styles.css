@@ -830,3 +830,6 @@ html.simple .card { border-radius: 18px; }
 @media (max-width: 820px) { .calc-split { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .calc-line { grid-template-columns: repeat(3, minmax(0, 1fr)) auto !important; } .calc-line > input:first-child { grid-column: 1 / -1; } }
 @media (max-width: 600px) { .calc-res { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 8px; } .calc-res > div:nth-child(n+5) { display: none; } .calc-res b { font-size: 12.5px; } .calc-res small { font-size: 10px; } }
+.calc-ticket { border: 1px solid var(--line); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.calc-phase { display: grid; grid-template-columns: auto minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; align-items: center; padding-left: 10px; border-left: 2px solid var(--primary); }
+@media (max-width: 600px) { .calc-phase { grid-template-columns: auto 1fr 1fr auto; } .calc-phase > input:nth-of-type(3) { grid-column: 2 / 4; } }
