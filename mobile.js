@@ -323,6 +323,17 @@ async function start() {
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && tab === "home") draw(); });
 }
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator) {
+  // Neue Versionen sofort übernehmen (die Handy-App hat keine langen Formulare)
+  navigator.serviceWorker.register("sw.js").then((reg) => {
+    const go = (w) => w && navigator.serviceWorker.controller && w.postMessage("skipWaiting");
+    if (reg.waiting) go(reg.waiting);
+    reg.addEventListener("updatefound", () => { const w = reg.installing; w?.addEventListener("statechange", () => w.state === "installed" && go(w)); });
+    reg.update().catch(() => {});
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
+  }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloaded) { reloaded = true; location.reload(); } });
+}
 sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") renderLogin(); });
 start();

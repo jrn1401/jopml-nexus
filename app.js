@@ -32,11 +32,12 @@ async function boot() {
     navigator.serviceWorker.register("sw.js").then((reg) => {
       const t0 = Date.now();
       // Kurz nach dem Öffnen gefundene Updates sofort übernehmen, später nur anbieten (nichts Getipptes verlieren)
-      const ask = (w) => w && navigator.serviceWorker.controller && (Date.now() - t0 < 20_000 ? w.postMessage("skipWaiting") : showUpdate(w));
+      const busy = () => !!document.querySelector(".overlay, .drawer") || ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
+      const ask = (w) => w && navigator.serviceWorker.controller && (Date.now() - t0 < 20_000 || !busy() ? w.postMessage("skipWaiting") : showUpdate(w));
       if (reg.waiting) ask(reg.waiting);
       reg.addEventListener("updatefound", () => { const w = reg.installing; w?.addEventListener("statechange", () => w.state === "installed" && ask(w)); });
       reg.update().catch(() => {});
-      setInterval(() => reg.update().catch(() => {}), 10 * 60_000);
+      setInterval(() => reg.update().catch(() => {}), 3 * 60_000);
       document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
     }).catch(() => {});
     let reloaded = false;
