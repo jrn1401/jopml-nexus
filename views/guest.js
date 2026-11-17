@@ -175,7 +175,8 @@ export function renderShared(p, ctx, reload) {
 
 function frame(right, body) {
   return h("div.guest-wrap",
-    h("header.guest-top", h("div.brand", h("div.brand-mark", icon("logo")), h("div.brand-text", CONFIG.appName, h("small", "Geteilt mit dir"))), h("div.spacer"), right),
+    h("header.guest-top", h("a.brand", { href: "./", title: "Zu JOPML Nexus – anmelden oder eigenen Bereich öffnen", onclick: (e) => { e.preventDefault(); try { localStorage.setItem("cc:came-from-link", location.hash); } catch { /* */ } location.href = location.pathname; } }, h("div.brand-mark", icon("logo")), h("div.brand-text", CONFIG.appName, h("small", "Geteilt mit dir"))), h("div.spacer"),
+      right || h("a.btn.sm.primary", { href: "./", onclick: (e) => { e.preventDefault(); location.href = location.pathname; } }, icon("users"), h("span.hide-sm", "Anmelden / eigener Bereich"), h("span.only-sm", "Anmelden"))),
     h("main.content", body));
 }
 
@@ -186,7 +187,9 @@ export async function renderLink(root, token) {
       const p = await rpc("cc_link_open", { p_token: token });
       if (!p) throw new Error("not_shared");
       if (p.share?.permission === "door") { const { doorPanel } = await import("./door.js"); clear(root, frame(null, doorPanel({ token }))); document.title = `Abendkasse · ${CONFIG.appName}`; return; }
-      clear(root, frame(null, renderShared(p, { token }, draw)));
+      clear(root, frame(null, h("div", renderShared(p, { token }, draw), h("section.card.link-cta", h("div.card-body.row.between", { style: { flexWrap: "wrap", gap: "12px" } },
+        h("div", h("b", "Selbst etwas planen?"), h("div.faint", { style: { fontSize: "13.5px" } }, "Mit JOPML Nexus planst und rechnest du Events, Projekte und Websites – kostenlos.")),
+        h("div.row", { style: { gap: "8px" } }, h("a.btn.sm.ghost", { href: "start.html" }, "Was ist das?"), h("a.btn.sm.primary", { href: "./", onclick: (e) => { e.preventDefault(); location.href = location.pathname; } }, "Kostenlos starten")))))));
       if (["tickets", "site", "board"].includes(p.type)) liveRefresh(root, () => rpc("cc_link_refresh", { p_token: token }), (np) => renderShared(np, { token }, draw));
       document.title = `${p.event?.name || p.project?.name || p.file?.name || "Geteilt"} · ${CONFIG.appName}`;
     } catch (e) {
@@ -195,7 +198,7 @@ export async function renderLink(root, token) {
         clear(root, frame(null, empty("lock", "Nur für bestimmte Personen", session ? "Dein Google-Konto ist für diesen Link nicht freigegeben. Bitte die Person, die ihn geschickt hat, dich hinzuzufügen." : "Melde dich mit dem Google-Konto an, für das der Link freigegeben wurde.",
           session ? h("button.btn", { onclick: async () => { await sb.auth.signOut({ scope: "local" }); location.reload(); } }, "Anderes Konto") : h("button.btn.primary", { onclick: async () => {
             localStorage.setItem("cc:after-login", location.hash);
-            await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname, queryParams: { prompt: "select_account" } } });
+            const { googleDialog } = await import("../lib/gsi.js"); googleDialog({ text: "Melde dich mit dem Google-Konto an, für das der Link freigegeben wurde.", onDone: () => location.reload() });
           } }, "Mit Google anmelden"))));
         return;
       }

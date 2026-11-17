@@ -23,6 +23,8 @@ export default async function dashboard({ user }) {
     q(sb.from("cc_events").select("id,name,event_date,location,status").gte("event_date", new Date().toISOString()).not("status", "in", "(done,cancelled)").order("event_date").limit(4)),
     rpc("cc_web_overview").catch(() => []),
   ]);
+  const legal = await rpc("cc_legal").catch(() => ({}));
+  const legalMiss = [["name", "Name"], ["address", "Anschrift"], ["email", "E-Mail"]].filter(([k]) => !String(legal?.[k] || "").trim()).map((x) => x[1]);
   const hour = new Date().getHours();
   const hello = hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Hallo" : "Guten Abend";
   const name = (user.user_metadata?.full_name || "").split(" ")[0];
@@ -36,6 +38,7 @@ export default async function dashboard({ user }) {
     ["JOPML-KI", cfg.ai_enabled === false ? "warn" : "ok", cfg.ai_enabled === false ? "abgeschaltet" : o.ai_last_use ? `zuletzt ${fmtAgo(o.ai_last_use)}` : "bereit"],
     ["Fehler 24 h", o.jopml.errors_24h > 20 ? "bad" : o.jopml.errors_24h ? "warn" : "ok", `${fmtNum(o.jopml.errors_24h)} · ${fmtNum(o.jopml.tickets_open)} Tickets offen`],
   ];
+  if (legalMiss.length) checks.push(["Rechtstexte", "warn", `Impressum unvollständig: ${legalMiss.join(", ")} fehlt – Einstellungen › Rechtliches`]);
   const worst = checks.some((c) => c[1] === "bad") ? "bad" : checks.some((c) => c[1] === "warn") ? "warn" : "ok";
   const ne = o.next_event;
   const W = {

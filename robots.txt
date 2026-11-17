@@ -1,2 +1,5 @@
 User-agent: *
-Disallow: /
+Allow: /
+Disallow: /jopml-nexus/w.html
+Disallow: /jopml-nexus/i.html
+Sitemap: https://jrn1401.github.io/jopml-nexus/sitemap.xml

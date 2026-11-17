@@ -10,6 +10,7 @@ import { eventCopilot } from "../lib/aiassist.js";
 import { calcCard, compute as calcCompute, detailsText, eventSheet, emptyCalc, overviewStrip, OV_HINT, deriveCalc } from "../lib/eventcalc.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
 import { docsCard } from "../lib/eventdocs.js";
+import { readinessCard } from "../lib/readiness.js";
 
 const SECTIONS = {
   task: ["Aufgaben", "check", "Neue Aufgabe"], tech: ["Technik", "zap", "Technik hinzufügen"], cost: ["Kosten", "wallet", "Kostenposten"],
@@ -117,6 +118,7 @@ export default async function eventView({ args: [id] }) {
         tiles: ev.metadata?.overview, configHint: OV_HINT,
         onConfig: async (tiles) => { const meta = { ...(ev.metadata || {}) }; if (tiles) meta.overview = tiles; else delete meta.overview; await q(sb.from("cc_events").update({ metadata: meta }).eq("id", id)); ev.metadata = meta; draw(); },
         tasks, guests, spent, budget, onTasks: () => document.getElementById("sec-task")?.scrollIntoView({ behavior: "smooth" }) }),
+      readinessCard({ calc: ev.metadata?.calc, details: ev.metadata?.details || {}, docs: ev.metadata?.docs || [], items, tickets: ev.metadata?.tickets || {}, eventDate: ev.event_date }, { onFix: () => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Event-Formular")?.click() }),
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(ev.description)) : null,
       h("div", { style: { marginBottom: "16px" } }, eventCopilot({ ev: { name: ev.name, event_date: ev.event_date, location: ev.location, capacity: ev.expected_guests, ticket_price: price, budget },
         rows: items, tickets: ev.metadata?.tickets || {}, kinds: ["task", "schedule", "cost", "income", "shift", "tech", "post", "guest"],

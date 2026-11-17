@@ -1,23 +1,56 @@
 {
   "name": "JOPML Nexus – Control Center",
   "short_name": "Nexus",
-  "description": "Zentrales Control Center für Projekte, Server, KI-Nutzung, Events und JOPML.",
+  "description": "Kostenloses Kontrollzentrum: Events planen und durchrechnen, Tickets live, Belege per KI, Projekte, Aufgaben, Website-Baukasten, Teilen.",
   "lang": "de",
   "start_url": "./#/",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone"],
+  "display_override": [
+    "window-controls-overlay",
+    "standalone"
+  ],
   "background_color": "#0a0b0e",
   "theme_color": "#0a0b0e",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
   ],
   "shortcuts": [
-    { "name": "Projekte", "url": "./#/projects" },
-    { "name": "Server", "url": "./#/servers" },
-    { "name": "KI & Tokens", "url": "./#/ai" }
+    {
+      "name": "Events",
+      "url": "./#/events"
+    },
+    {
+      "name": "Neues Event",
+      "url": "./#/neues-event"
+    },
+    {
+      "name": "Aufgaben",
+      "url": "./#/tasks"
+    },
+    {
+      "name": "Website bauen",
+      "url": "./bau.html"
+    }
   ]
 }

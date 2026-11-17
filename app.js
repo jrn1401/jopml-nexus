@@ -11,7 +11,7 @@ const ROUTES = [
   [/^\/servers$/, "servers"], [/^\/servers\/([\w-]+)$/, "server"], [/^\/ai$/, "ai"],
   [/^\/events$/, "events"], [/^\/events\/([\w-]+)$/, "event"], [/^\/jopml$/, "jopml"],
   [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"], [/^\/shares$/, "shares"], [/^\/web(?:\/([0-9a-f-]{36}))?$/, "web"],
-  [/^\/(impressum|datenschutz|nutzung)$/, "legal"], [/^\/connections$/, "connections"], [/^\/hosting$/, "hosting"],
+  [/^\/(impressum|datenschutz|nutzung|agb|inhalte|ki|cookies|barrierefreiheit|veranstalter|sicherheit|melden)$/, "legal"], [/^\/connections$/, "connections"], [/^\/hosting$/, "hosting"],
   [/^\/tasks$/, "tasks"], [/^\/door\/([\w-]+)$/, "door"], [/^\/links$/, "links"], [/^\/security$/, "security"], [/^\/help$/, "help"], [/^\/users$/, "users"], [/^\/studio(?:\/(\w+))?$/, "studio"], [/^\/recht(?:\/(\w+))?$/, "recht"],
 ];
 const NAV_GROUPS = [
@@ -63,7 +63,7 @@ async function boot() {
   if (!session) {
     // Rechtsseiten sind ohne Anmeldung erreichbar
     const showPublic = async () => {
-      const leg = location.hash.match(/^#\/(impressum|datenschutz|nutzung)$/);
+      const leg = location.hash.match(/^#\/(impressum|datenschutz|nutzung|agb|inhalte|ki|cookies|barrierefreiheit|veranstalter|sicherheit|melden)$/);
       if (!leg) return renderLogin(oauthErr);
       const { legalPage } = await import("./views/legal.js");
       clear(root, h("div.guest-wrap", h("header.guest-top", h("a.brand", { href: "#/" }, h("div.brand-mark", icon("logo")), h("div.brand-text", CONFIG.appName, h("small", "Rechtliches")))), h("main.content", await legalPage(leg[1]))));
@@ -138,11 +138,12 @@ function renderLogin(error) {
     h("div.login-foot", icon("lock"), "Jeder sieht nur seine eigenen Daten · Schlüssel verschlüsselt gespeichert"),
     h("div.login-sub", { style: { marginTop: "10px" } }, h("a", { href: "#/skills", onclick: (e) => { e.preventDefault(); location.hash = "#/skills"; location.reload(); } }, "Claude-Skills für Nexus"), " · ",
       h("a", { href: "#/download", onclick: (e) => { e.preventDefault(); location.hash = "#/download"; location.reload(); } }, "JOPML Launcher herunterladen"), " · ", h("a", { href: "m.html" }, "Handy-App")),
+    h("a.login-more", { href: "start.html" }, icon("layers"), "Alle Funktionen & Module ansehen"),
     h("details.login-feats", h("summary", "Was kann Nexus? (kurz erklärt)"),
       h("ul", [["Alles an einem Ort", "Websites, Server, API-Schlüssel, Events und Projekte – automatisch aktuell."], ["KI, die mitdenkt", "Fragt, plant, fasst zusammen, merkt sich Wichtiges – Modell frei wählbar."],
         ["Projekt-Assistent", "Ein paar Fragen → Plan, Aufgaben und Rechts-Check (z. B. Jugendschutz, Impressum)."], ["Websites & Werbung", "Event-/Link-Seiten, QR-Codes, Visitenkarten, Plakate, Shirt-Designs."],
         ["Teilen & Push", "Live-Links ohne Konto, Benachrichtigungen aufs Handy – auch fürs Team."], ["Kostenlos & sparsam", "Ohne Tracking-Cookies; jeder sieht nur seine eigenen Daten."]].map(([t, d]) => h("li", h("b", t), " – ", d)))),
-    h("div.footer-links", h("a", { href: "#/impressum" }, "Impressum"), h("a", { href: "#/datenschutz" }, "Datenschutz"), h("a", { href: "#/nutzung" }, "Nutzungsbedingungen")))));
+    h("div.footer-links", [["impressum", "Impressum"], ["datenschutz", "Datenschutz"], ["agb", "AGB"], ["inhalte", "Inhalte & Melden"], ["ki", "KI-Hinweise"], ["cookies", "Cookies"], ["barrierefreiheit", "Barrierefreiheit"], ["veranstalter", "Leitfaden Veranstalter"], ["sicherheit", "Sicherheit"]].map(([k, t]) => h("a", { href: `#/${k}` }, t))))));
 }
 function svgGoogle() {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");

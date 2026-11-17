@@ -3,7 +3,9 @@
 import { sb, q } from "./lib/api.js";
 import { h, icon, toast, toastErr, errMsg, modal, copyText, siteThumb } from "./lib/ui.js";
 import { aiGen } from "./lib/aigen.js";
-import { buildPro, STYLES, ANIMS, HOSTS, DEFAULTS, legalMissing } from "./lib/progen.js";
+import { buildPro, STYLES, ANIMS, HOSTS, DEFAULTS, legalMissing, FONTS, LAYOUTS } from "./lib/progen.js";
+import { SHOWROOM } from "./lib/showroom.js";
+import { qrSvg } from "./lib/qr.js";
 import { slugify } from "./lib/sitegen.js";
 
 const root = document.getElementById("root");
@@ -13,7 +15,10 @@ let S = window.structuredClone({ ...DEFAULTS, ...(load() || {}) });
 S.legal = { ...DEFAULTS.legal, ...(S.legal || {}) }; S.sections = { ...DEFAULTS.sections, ...(S.sections || {}) };
 let site = null;           // { id, slug } wenn online
 const params = new URLSearchParams(location.search);
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* voll */ } };
+const hist = []; let histT = 0, lastSnap = "";
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* voll */ }
+  clearTimeout(histT); histT = setTimeout(() => { const j = JSON.stringify(S); if (j !== lastSnap) { if (lastSnap) hist.push(lastSnap); lastSnap = j; if (hist.length > 40) hist.shift(); } const st = document.querySelector(".bau-saved"); if (st) { st.textContent = "✓ gespeichert"; st.classList.add("on"); setTimeout(() => st.classList.remove("on"), 1200); } }, 700); };
+function undo() { const prev = hist.pop(); if (!prev) return toast("Nichts mehr rückgängig zu machen", "info"); S = JSON.parse(prev); lastSnap = prev; try { localStorage.setItem(KEY, prev); } catch { /* */ } draw(); toast("Rückgängig gemacht"); }
 
 const KINDS = {
   "Event / Party": { servicesTitle: "Line-up", eventsTitle: "Termine", cta1: "Tickets", sections: { events: true, gallery: true } },
@@ -38,8 +43,8 @@ const toggle = (k, label) => h("label.check", h("input", { type: "checkbox", che
 const group = (title, open, ...kids) => h("details.card.bau-group", { open }, h("summary", h("b", title)), h("div.stack", { style: { gap: "10px", padding: "4px 2px 8px" } }, ...kids));
 
 // ---------- Vorschau
-const frame = h("iframe.bau-frame", { title: "Vorschau", sandbox: "allow-same-origin" });
-let device = "desk", timer = 0;
+const frame = h("iframe.bau-frame", { title: "Vorschau deiner Website", sandbox: "allow-same-origin" });
+let device = "desk", timer = 0, pane = "edit";
 function refresh() { clearTimeout(timer); timer = setTimeout(() => { frame.srcdoc = buildPro(S); warn(); }, 220); }
 const warnBox = h("div");
 function warn() {
@@ -136,6 +141,19 @@ function designGallery() {
   })), { wide: true });
 }
 
+// Showroom: komplette Beispielseiten live ansehen und als Vorlage übernehmen
+function showroom() {
+  const m = modal("Showroom – fertige Beispiel-Websites", h("div.stack", { style: { gap: "12px" } },
+    h("p.faint", { style: { margin: 0, fontSize: "13px" } }, "Klick auf eine Seite, um sie groß anzusehen, oder übernimm sie direkt. Alle Texte und Links sind Beispiele – ersetze sie durch deine eigenen."),
+    h("div.bau-gallery", SHOWROOM.map((x) => { const st = { ...DEFAULTS, ...x.s, legal: S.legal, sections: { ...Object.fromEntries(Object.keys(DEFAULTS.sections).map((k) => [k, false])), ...x.s.sections } };
+      return h("div.bau-thumb.sr-item", h("button.sr-view", { type: "button", "aria-label": `${x.title} groß ansehen`, onclick: () => preview(x, st) }, siteThumb(buildPro({ ...st, anim: "aus" }), "bau-thumb-frame")),
+        h("b", x.title), h("small.faint", x.note), h("button.btn.sm.primary", { onclick: () => use(st) }, icon("check"), "Als Vorlage nehmen")); }))), { wide: true });
+  const use = (st) => { if (S.name && !window.confirm("Deinen aktuellen Entwurf durch diese Vorlage ersetzen? (Impressum-Angaben bleiben)")) return; S = window.structuredClone(st); save(); m.close(); draw(); toast("Vorlage übernommen – jetzt Texte anpassen"); };
+  const preview = (x, st) => { let dev = "desk"; const f = h("iframe.sr-big", { title: x.title, sandbox: "allow-same-origin", srcdoc: buildPro(st) });
+    const chips = h("div.row", { style: { gap: "6px" } }, [["desk", "Computer"], ["tab", "Tablet"], ["phone", "Handy"]].map(([k, t]) => h("button.chip", { type: "button", class: dev === k ? "on" : "", onclick: (e) => { dev = k; f.className = `sr-big ${k}`; [...e.currentTarget.parentNode.children].forEach((c) => c.classList.toggle("on", c === e.currentTarget)); } }, t)));
+    const pm = modal(x.title, h("div.stack", { style: { gap: "10px" } }, h("div.row.between", chips, h("button.btn.primary.sm", { onclick: () => { pm.close(); use(st); } }, icon("check"), "Diese Vorlage nehmen")), f), { wide: true }); };
+}
+
 // ---------- Herunterladen / Online / Teilen
 function download() {
   const miss = legalMissing(S);
@@ -151,7 +169,7 @@ function importDraft() {
 async function publish() {
   const { data } = await sb.auth.getSession();
   const u = data.session?.user;
-  if (!u || u.is_anonymous) return modal("Online stellen", h("div.stack", h("p", "Für einen festen Link brauchst du ein kostenloses JOPML-Nexus-Konto (Anmeldung mit Google). Alternativ: Seite herunterladen und bei Netlify Drop hochladen – siehe „Veröffentlichen“."), h("a.btn.primary", { href: "./#/studio/web" }, "Anmelden")));
+  if (!u || u.is_anonymous) { const { googleDialog } = await import("./lib/gsi.js"); return googleDialog({ title: "Online stellen", text: "Für einen festen Link brauchst du ein kostenloses Konto – einfach mit Google anmelden. Dein Entwurf bleibt erhalten.", onDone: () => publish() }); }
   const miss = legalMissing(S);
   if (miss.length) return toast(`Bitte erst das Impressum vervollständigen: ${miss.join(", ")}`, "info");
   try {
@@ -163,6 +181,7 @@ async function publish() {
     try { history.replaceState(null, "", `?id=${site.id}`); } catch { /* */ }
     draw();
     modal("Online!", h("div.stack", h("p", "Deine Seite ist erreichbar unter:"), h("div.row", { style: { gap: "8px" } }, h("input.input", { value: link, readonly: true, "aria-label": "Link" }), h("button.btn", { onclick: () => copyText(link) }, icon("copy"))),
+      h("img", { src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(qrSvg(link, { size: 160 }))}`, alt: "QR-Code zur Seite", width: 160, height: 160, style: { margin: "4px auto", display: "block", background: "#fff", borderRadius: "8px" } }), h("p.faint", { style: { textAlign: "center", margin: 0, fontSize: "12.5px" } }, "QR-Code für Flyer und Plakate (Rechtsklick › Bild speichern)"),
       h("p.muted", "Änderungen später einfach hier machen (oder „Mit KI ändern“) und „Online aktualisieren“ drücken – der Link bleibt gleich."), h("a.btn.primary", { href: link, target: "_blank", rel: "noopener" }, "Seite öffnen")));
   } catch (e) { toastErr(e); }
 }
@@ -192,6 +211,9 @@ function hostingGuide() {
 }
 
 // ---------- Seite zeichnen
+const chipRow = (label, opts, key) => h("div.field", h("label", label), h("div.row.wrap", { style: { gap: "6px" } }, Object.entries(opts).map(([k, t]) => h("button.chip", { type: "button", class: (S[key] || Object.keys(opts)[0]) === k ? "on" : "", onclick: () => { S[key] = k; save(); draw(); } }, t))));
+const seoPreview = () => h("div.seo-prev", h("small", "So ungefähr bei Google:"), h("div.seo-t", (S.name || "Deine Seite") + (S.tagline ? ` – ${S.tagline}` : "")), h("div.seo-u", "deine-seite.de"), h("div.seo-d", (S.seoDesc || S.tagline || S.about || "Beschreibung fehlt – trag oben eine ein.").slice(0, 160)));
+
 function draw() {
   const kindSel = h("select.input", { "aria-label": "Art der Seite", onchange: (e) => { S.kind = e.target.value; const k = KINDS[S.kind]; if (k) { S.servicesTitle = k.servicesTitle; S.eventsTitle = k.eventsTitle; if (!S.cta1) S.cta1 = k.cta1; S.sections = { ...S.sections, ...k.sections }; } save(); draw(); } }, Object.keys(KINDS).map((k) => h("option", { selected: S.kind === k }, k)));
   const styleChips = h("div.row.wrap", { style: { gap: "6px" } }, Object.entries(STYLES).map(([k, t]) => h("button.chip", { type: "button", class: S.style === k ? "on" : "", onclick: () => { S.style = k; S.accent = ""; save(); draw(); } },
@@ -202,12 +224,15 @@ function draw() {
     h("section.card.bau-ai", h("div.card-body.stack", { style: { gap: "8px" } }, h("b.row", { style: { gap: "6px" } }, icon("sparkles"), "Sag der KI, was du willst"),
       (() => { const ta = h("textarea.input", { rows: 3, maxlength: 4000, "aria-label": "Beschreibung für die KI", placeholder: "z. B. „Seite für meine Techno-Party Raveanation am 9.1. in Berlin, DJ SHEVNØ1, Industrial & Hardgroove, 16+, Tickets: https://eventfrog.de/RAVENATION, Instagram: https://instagram.com/raveanation – dunkel mit Neon und Animationen“" });
         const b = h("button.btn.primary", { onclick: () => aiAll(ta, b) }, icon("sparkles"), "Seite bauen lassen");
-        return h("div.stack", { style: { gap: "8px" } }, ta, h("div.row.wrap", { style: { gap: "8px" } }, b, h("button.btn", { onclick: designGallery }, icon("eye"), "Designs ansehen"), h("button.btn", { onclick: fromEvent }, icon("calendar"), "Aus meinem Event"))); })())),
+        return h("div.stack", { style: { gap: "8px" } }, ta, h("div.row.wrap", { style: { gap: "8px" } }, b, h("button.btn", { onclick: showroom }, icon("layers"), "Showroom"), h("button.btn", { onclick: designGallery }, icon("eye"), "Designs ansehen"), h("button.btn", { onclick: fromEvent }, icon("calendar"), "Aus meinem Event"))); })())),
     group("1 · Grundlagen", true, h("div.field", h("label", "Art der Seite"), kindSel), inp("name", "Name / Titel"), inp("tagline", "Slogan (eine Zeile)"),
       h("div.grid.g-2", inp("cta1", "Haupt-Button Text"), inp("cta1url", "Haupt-Button Link", { ph: "https://… oder #contact" })), h("div.grid.g-2", inp("cta2", "Zweiter Button"), inp("cta2url", "Zweiter Button Link"))),
-    group("2 · Design & Animation", true, styleChips, h("div.field", h("label", "Eigene Akzentfarbe"), h("input", { type: "color", value: S.accent || STYLES[S.style].a, "aria-label": "Akzentfarbe", oninput: (e) => { S.accent = e.target.value; save(); refresh(); } })), animChips),
+    group("2 · Design & Animation", true, styleChips, h("div.field", h("label", "Eigene Akzentfarbe"), h("input", { type: "color", value: S.accent || STYLES[S.style].a, "aria-label": "Akzentfarbe", oninput: (e) => { S.accent = e.target.value; save(); refresh(); } })), animChips,
+      chipRow("Kopfbereich", LAYOUTS, "heroLayout"), chipRow("Schrift", Object.fromEntries(Object.entries(FONTS).map(([k, v]) => [k, v[0]])), "font"), chipRow("Buttons", { rund: "Rund", eckig: "Leicht eckig", kantig: "Kantig" }, "btnShape"),
+      inp("heroImg", "Titelbild (Link, optional)", { ph: "https://…/bild.jpg", hint: "Bei „Mittig“/„Linksbündig“ als Hintergrund, bei „Text + Bild“ daneben. Nur Bilder mit Nutzungsrechten." }),
+      h("div.grid.g-2", inp("badge", "Hinweis über dem Titel", { ph: "z. B. Sa, 9.1. · Berlin" }), inp("announce", "Ankündigungs-Leiste ganz oben", { ph: "z. B. Nur noch 20 Tickets!" })), inp("announceUrl", "Link der Ankündigung (optional)", { ph: "https://…" })),
     group("3 · Inhalte", true,
-      h("div.row.wrap", { style: { gap: "10px" } }, toggle("about", "Über uns"), toggle("services", S.servicesTitle), toggle("events", S.eventsTitle), toggle("media", "Musik & Social"), toggle("gallery", "Galerie"), toggle("reviews", "Bewertungen"), toggle("faq", "FAQ"), toggle("contact", "Kontakt")),
+      h("div.row.wrap", { style: { gap: "10px" } }, toggle("about", "Über uns"), toggle("services", S.servicesTitle), toggle("events", S.eventsTitle), toggle("pricing", "Preise/Tickets"), toggle("media", "Musik & Social"), toggle("video", "Video"), toggle("gallery", "Galerie"), toggle("team", "Team"), toggle("hours", "Öffnungszeiten"), toggle("reviews", "Bewertungen"), toggle("partners", "Partner"), toggle("faq", "FAQ"), toggle("contact", "Kontakt"), toggle("form", "Kontaktformular")),
       inp("about", "Über uns", { area: true, ph: "Stichworte reichen – die KI kann daraus Text machen" }),
       inp("servicesTitle", "Überschrift Angebot"), inp("services", "Angebot / Line-up / Leistungen", { area: true, ph: "Eine Zeile pro Eintrag: Titel | Beschreibung | Preis (optional)" }),
       inp("eventsTitle", "Überschrift Termine"), inp("events", "Termine", { area: true, ph: "Datum | Titel | Ort | Ticket-Link (https://…) | Button-Text" }),
@@ -215,30 +240,46 @@ function draw() {
       h("label.check", h("input", { type: "checkbox", checked: !!S.embed, onchange: (e) => { S.embed = e.target.checked; save(); refresh(); } }), "Player einbetten (Spotify, YouTube, SoundCloud)"),
       inp("gallery", "Galerie (Bild-Links)", { area: true, rows: 3, ph: "https://…/bild.jpg | Bildunterschrift", hint: "Nur Bilder, an denen du die Rechte hast und auf denen erkennbare Personen eingewilligt haben (§ 22 KunstUrhG)." }),
       inp("reviewsTitle", "Überschrift Bewertungen"), inp("reviews", "Bewertungen (nur echte!)", { area: true, rows: 3, ph: "Name | Sterne 1–5 | Text", hint: "Nur echte Stimmen mit Erlaubnis der Person eintragen – erfundene Bewertungen sind unzulässig." }),
-      inp("faq", "Häufige Fragen", { area: true, ph: "Frage | Antwort" })),
+      inp("faq", "Häufige Fragen", { area: true, ph: "Frage | Antwort" }),
+      S.sections.pricing ? [inp("pricingTitle", "Überschrift Preise"), inp("pricing", "Preise / Tickets / Pakete", { area: true, rows: 3, ph: "Name | Preis | Beschreibung | Link (https://…) | Button-Text" })] : null,
+      S.sections.team ? [inp("teamTitle", "Überschrift Team"), inp("team", "Team", { area: true, rows: 3, ph: "Name | Rolle | Foto-Link (optional)" })] : null,
+      S.sections.hours ? inp("hours", "Öffnungszeiten", { area: true, rows: 3, ph: "Mo–Fr | 8–18 Uhr" }) : null,
+      S.sections.video ? inp("video", "Video-Link (YouTube)", { ph: "https://youtube.com/watch?v=…", hint: "Online als Karte, in der heruntergeladenen Seite als Player (YouTube ohne Cookies)." }) : null,
+      S.sections.partners ? [inp("partnersTitle", "Überschrift Partner"), inp("partners", "Partner & Sponsoren", { area: true, rows: 3, ph: "Name | Link | Logo-Link (optional)" })] : null),
     group("4 · Kontakt & Social", false, h("div.grid.g-2", inp("email", "E-Mail", { type: "email" }), inp("phone", "Telefon")), h("div.grid.g-2", inp("whatsapp", "WhatsApp-Nummer", { ph: "49170…" }), inp("address", "Adresse (Karte)")),
-      inp("social", "Social Media", { area: true, rows: 3, ph: "Instagram | https://instagram.com/…" })),
-    group("5 · Impressum & Datenschutz", false, h("p.faint", { style: { margin: 0, fontSize: "13px" } }, "Pflicht für geschäftsmäßige Seiten (§ 5 DDG). Wird automatisch als „Impressum“ und „Datenschutz“ unten verlinkt. Vorlage – keine Rechtsberatung."),
+      inp("social", "Social Media", { area: true, rows: 3, ph: "Instagram | https://instagram.com/…" }),
+      h("label.check", h("input", { type: "checkbox", checked: !!S.mapEmbed, onchange: (e) => { S.mapEmbed = e.target.checked; save(); refresh(); } }), "Karte einbetten (OpenStreetMap, nur in der heruntergeladenen Seite)"),
+      S.sections.form ? inp("formTitle", "Überschrift Kontaktformular") : null),
+    group("5 · Google & Teilen (SEO)", false, h("p.faint", { style: { margin: 0, fontSize: "13px" } }, "So wird deine Seite bei Google und beim Teilen auf WhatsApp/Instagram angezeigt."),
+      inp("seoDesc", `Beschreibung für Google (${(S.seoDesc || "").length}/160 Zeichen)`, { area: true, rows: 2, hint: (S.seoDesc || "").length > 160 ? "Zu lang – Google kürzt nach ca. 160 Zeichen." : "Ein bis zwei Sätze: was, wo, für wen." }), inp("keywords", "Stichwörter", { ph: "techno, party, berlin" }),
+      h("div.grid.g-2", inp("ogImage", "Vorschaubild beim Teilen (Link)", { ph: "https://…/bild.jpg" }), inp("favicon", "Tab-Symbol (Emoji)", { ph: "🎧" })), seoPreview()),
+    group("6 · Impressum & Datenschutz", false, h("p.faint", { style: { margin: 0, fontSize: "13px" } }, "Pflicht für geschäftsmäßige Seiten (§ 5 DDG). Wird automatisch als „Impressum“ und „Datenschutz“ unten verlinkt. Vorlage – keine Rechtsberatung."),
       inp("legal.name", "Name / Firma"), inp("legal.street", "Straße und Hausnummer"), inp("legal.city", "PLZ und Ort"), h("div.grid.g-2", inp("legal.email", "E-Mail"), inp("legal.phone", "Telefon (optional)")),
       inp("legal.responsible", "Verantwortlich für den Inhalt (falls anders)"), h("div.grid.g-2", inp("legal.vat", "USt-IdNr. (falls vorhanden)"), inp("legal.register", "Register (falls vorhanden)")),
       h("div.field", h("label", "Wo wird die Seite gehostet? (für die Datenschutzerklärung)"), hostSel)),
   );
   const bar = h("div.bau-bar",
+    h("button.btn.ghost", { onclick: undo, title: "Letzte Änderung rückgängig (Strg+Z außerhalb von Feldern)" }, icon("refresh"), "Rückgängig"),
     h("button.btn", { onclick: (e) => aiTexts(e.currentTarget) }, icon("sparkles"), "KI-Texte"), h("button.btn", { onclick: aiChange }, icon("sparkles"), "Mit KI ändern"),
     h("button.btn.primary", { onclick: download }, icon("download"), "Herunterladen"), h("button.btn", { onclick: hostingGuide }, icon("globe"), "Veröffentlichen"),
     h("button.btn", { onclick: publish }, icon("upload"), site ? "Online aktualisieren" : "Online stellen"),
     h("button.btn.ghost", { onclick: () => modal("Mehr", h("div.stack", h("button.btn", { onclick: exportDraft }, icon("download"), "Entwurf speichern (.json)"), h("button.btn", { onclick: importDraft }, icon("upload"), "Entwurf öffnen (.json)"),
       h("button.btn", { onclick: () => copyText(new URL("bau.html", location.href).href) }, icon("copy"), "Link zum Baukasten kopieren"),
+      h("button.btn", { onclick: () => copyText(buildPro(S)) }, icon("code"), "HTML-Code kopieren"),
+      h("button.btn", { onclick: () => { const u = URL.createObjectURL(new Blob([buildPro(S)], { type: "text/html" })); window.open(u, "_blank", "noopener"); setTimeout(() => URL.revokeObjectURL(u), 60000); } }, icon("external"), "Vorschau in neuem Tab"),
       h("button.btn.ghost", { onclick: () => { if (window.confirm("Alles leeren und neu anfangen?")) { S = window.structuredClone(DEFAULTS); site = null; save(); history.replaceState(null, "", "bau.html"); draw(); } } }, icon("trash"), "Neu anfangen"))) }, "Mehr"));
-  const dev = h("div.row", { style: { gap: "6px" } }, [["desk", "Computer"], ["phone", "Handy"]].map(([k, t]) => h("button.chip", { type: "button", class: device === k ? "on" : "", onclick: () => { device = k; draw(); } }, t)));
+  const dev = h("div.row.bau-dev", { style: { gap: "6px" } }, [["desk", "Computer"], ["tab", "Tablet"], ["phone", "Handy"]].map(([k, t]) => h("button.chip", { type: "button", class: device === k ? "on" : "", onclick: () => { device = k; draw(); } }, t)));
   frame.className = `bau-frame ${device}`;
-  root.replaceChildren(h("div.bau",
-    h("header.bau-head", h("a", { href: "./", style: { color: "inherit", textDecoration: "none" } }, h("b", "JOPML Nexus")), h("span.faint", " · Website-Baukasten"), h("span.spacer"), dev),
+  root.replaceChildren(h("div.bau", { "data-pane": pane },
+    h("header.bau-head", h("a", { href: "./", style: { color: "inherit", textDecoration: "none" } }, h("b", "JOPML Nexus")), h("span.faint", " · Website-Baukasten"), h("span.bau-saved"), h("span.spacer"), dev),
+    h("div.bau-tabs", ["edit", "prev"].map((k) => h("button", { type: "button", class: pane === k ? "on" : "", onclick: () => { pane = k; document.querySelector(".bau")?.setAttribute("data-pane", k); document.querySelectorAll(".bau-tabs button").forEach((b, i) => b.classList.toggle("on", ["edit", "prev"][i] === k)); if (k === "prev") window.scrollTo(0, 0); } }, k === "edit" ? "✏️ Bearbeiten" : "👁 Vorschau"))),
     h("div.bau-main", h("div.bau-left", h("h1", { style: { margin: "0 0 4px", fontSize: "24px" } }, "Deine Website in 5 Minuten"),
       h("p.muted", { style: { margin: "0 0 12px" } }, "Formular ausfüllen, Design wählen, rechts siehst du sofort das Ergebnis. Mit Impressum & Datenschutz. Kostenlos herunterladen oder online stellen."),
       warnBox, form), h("div.bau-right", bar, frame))));
   refresh();
 }
+
+document.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "z" && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "")) { e.preventDefault(); undo(); } });
 
 (async () => {
   const id = params.get("id");

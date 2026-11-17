@@ -83,7 +83,7 @@ export default async function helpView() {
   inp.addEventListener("input", draw);
   try { const pre = new URLSearchParams(location.hash.split("?")[1] || "").get("q"); if (pre) inp.value = pre; } catch { /* ohne Vorbelegung */ }
   draw();
-  return h("div", h("div.page-head", h("div", h("h1", "Handbuch"), h("p", "Jede Funktion kurz erklärt. Antippen zum Aufklappen.")),
+  return h("div", h("div.page-head", h("div", h("h1", "Handbuch"), h("p", "Jede Funktion kurz erklärt. Antippen zum Aufklappen."), h("div.row.wrap", { style: { gap: "8px", marginTop: "8px" } }, h("a.btn.sm", { href: "start.html", target: "_blank" }, icon("layers"), "Alle Module im Überblick"), h("a.btn.sm", { href: "#/veranstalter" }, icon("book"), "Rechtsleitfaden für Veranstalter"), h("a.btn.sm", { href: "#/datenschutz" }, icon("lock"), "Datenschutz"), h("a.btn.sm", { href: "#/melden" }, icon("alert"), "Inhalt melden"))),
     h("div.actions", h("a.btn", { href: "#/skills", onclick: (e) => { e.preventDefault(); location.hash = "#/skills"; location.reload(); } }, icon("sparkles"), "Claude-Skills"),
       h("a.btn", { href: "#/download", onclick: (e) => { e.preventDefault(); location.hash = "#/download"; location.reload(); } }, icon("download"), "Launcher"),
       h("button.btn", { onclick: () => openAssistant() }, icon("bot"), "KI fragen"))), h("div", { style: { marginBottom: "16px" } }, inp), body);

@@ -68,6 +68,7 @@ export async function renderWorkspace(root, who) {
 
   let seq = 0;
   async function show() {
+    if (location.hash === "#/tasks") { location.replace("#/aufgaben"); return; }
     if (location.hash === "#/neues-event") { location.replace("#/events"); setTimeout(() => Promise.resolve().then(() => Promise.all([import("../lib/eventwizard.js"), import("./wsevents.js")]).then(([w, e]) => w.eventWizard({ admin: false, quick: () => e.eventForm(null, (x) => { location.hash = `#/events/${x.id}`; }) }))), 500); return; }
     const hash = location.hash || "#/";
     const s = ++seq;
@@ -76,7 +77,7 @@ export async function renderWorkspace(root, who) {
     try {
       let node;
       const g = hash.match(/^#\/g\/([0-9a-f-]{36})$/);
-      const leg = hash.match(/^#\/(impressum|datenschutz|nutzung)$/);
+      const leg = hash.match(/^#\/(impressum|datenschutz|nutzung|agb|inhalte|ki|cookies|barrierefreiheit|veranstalter|sicherheit|melden)$/);
       if (leg) node = await legalPage(leg[1]);
       else if (g) { const p = await rpc("cc_guest_open", { p_share: g[1] }); node = h("div", h("div.crumb", h("a", { href: "#/geteilt" }, "Mit dir geteilt"), icon("chevronR"), h("span", p.event?.name || p.project?.name || p.file?.name)), renderShared(p, { shareId: g[1] }, null)); }
       else if (hash === "#/verbindungen" && feat("connections")) node = await connectionsPage();

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JOPML Nexus – kostenloses Kontrollzentrum für Events, Projekte, Websites &amp; KI</title>
+  <meta name="description" content="Events planen und durchrechnen (Break-even, Min/Ø/Max, Tickets, Belege), Projekte und Aufgaben organisieren, Websites mit Impressum bauen und alles teilen – kostenlos, ohne Tracking, mit KI.">
+  <meta name="keywords" content="Eventplanung, Party planen, Break-even Rechner Event, Ticketverkauf Analyse, Muttizettel Vorlage, Website Baukasten kostenlos, Impressum Generator, Projektmanagement Schule, KI Assistent Deutsch, JOPML Nexus">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <link rel="canonical" href="https://jrn1401.github.io/jopml-nexus/start.html">
+  <meta name="theme-color" content="#0a0b0e">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="JOPML Nexus">
+  <meta property="og:title" content="JOPML Nexus – Events, Projekte, Websites & KI an einem Ort">
+  <meta property="og:description" content="Kostenlos: Events durchrechnen, Tickets live verfolgen, Websites bauen, Projekte teilen – mit KI und ohne Tracking.">
+  <meta property="og:url" content="https://jrn1401.github.io/jopml-nexus/start.html">
+  <meta property="og:image" content="https://jrn1401.github.io/jopml-nexus/icons/og-image.jpg">
+  <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"SoftwareApplication","name":"JOPML Nexus","applicationCategory":"BusinessApplication","operatingSystem":"Web, Android, iOS, Windows","url":"https://jrn1401.github.io/jopml-nexus/","description":"Kostenloses Kontrollzentrum für Eventplanung mit Kalkulation und Ticket-Analyse, Projekte, Aufgaben, Website-Baukasten, Rechtsvorlagen und KI.","inLanguage":"de","offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"},"featureList":["Event-Kalkulation mit Break-even und Minimum/Durchschnitt/Maximum","Ticketverkauf live mit Prognose (Eventfrog)","Belege und Verträge per KI auslesen","Website-Baukasten mit Impressum und Datenschutz","Projekte, Module, Aufgaben und Kalender","Teilen per Link mit eigener Übersicht","Recht & Formulare: Muttizettel, Foto-Einwilligung, Impressum","Handy-App mit Push-Benachrichtigungen"]},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Was kostet JOPML Nexus?","acceptedAnswer":{"@type":"Answer","text":"Nichts. Die Nutzung ist kostenlos. Für KI gibt es ein Tageslimit; mit eigenem KI-Schlüssel entfällt es."}},{"@type":"Question","name":"Brauche ich ein Konto?","acceptedAnswer":{"@type":"Answer","text":"Du kannst ohne Konto als Gast 7 Tage ausprobieren. Mit Google-Anmeldung bleiben deine Daten dauerhaft."}},{"@type":"Question","name":"Wo liegen meine Daten?","acceptedAnswer":{"@type":"Answer","text":"In einer Datenbank im Rechenzentrum Frankfurt am Main. Jede Person sieht nur ihre eigenen Daten, API-Schlüssel liegen verschlüsselt."}},{"@type":"Question","name":"Kann ich damit eine Website erstellen?","acceptedAnswer":{"@type":"Answer","text":"Ja. Der Website-Baukasten erstellt per Formular oder KI eine fertige Seite mit Impressum und Datenschutz, die du herunterladen oder online stellen kannst."}}]}]}</script>
+  <style>
+    :root { --bg:#0a0b0e; --s:#13151b; --s2:#1a1d25; --l:#262a35; --t:#eef0f5; --m:#a2a8b8; --p:#8b5cf6; --p2:#ec4899; --ok:#22c55e; }
+    @media (prefers-color-scheme: light) { :root { --bg:#f6f7fb; --s:#ffffff; --s2:#eef0f6; --l:#e1e4ec; --t:#141824; --m:#5b6275; } }
+    * { box-sizing: border-box } html { scroll-behavior: smooth } body { margin: 0; background: var(--bg); color: var(--t); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased }
+    a { color: var(--p) } .w { max-width: 1120px; margin: 0 auto; padding: 0 22px }
+    nav { position: sticky; top: 0; z-index: 5; backdrop-filter: blur(12px); background: color-mix(in srgb, var(--bg) 82%, transparent); border-bottom: 1px solid var(--l) }
+    nav .w { display: flex; align-items: center; gap: 18px; height: 62px } nav .b { display: flex; gap: 10px; align-items: center; font-weight: 800; color: var(--t); text-decoration: none; margin-right: auto }
+    nav .b img { width: 30px; height: 30px } nav a.l { color: var(--m); text-decoration: none; font-size: 14.5px } nav a.l:hover { color: var(--t) }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; border-radius: 999px; background: linear-gradient(135deg, var(--p), var(--p2)); color: #fff; font-weight: 700; text-decoration: none; border: 0 }
+    .btn.g { background: transparent; color: var(--t); border: 1.5px solid var(--l) } .btn.sm { padding: 8px 16px; font-size: 14px }
+    .hero { padding: 90px 0 70px; text-align: center; position: relative; overflow: hidden }
+    .hero::before { content: ""; position: absolute; inset: -40% -10% auto; height: 520px; background: radial-gradient(closest-side, color-mix(in srgb, var(--p) 40%, transparent), transparent), radial-gradient(closest-side at 70% 60%, color-mix(in srgb, var(--p2) 30%, transparent), transparent); z-index: -1; filter: blur(30px) }
+    .hero h1 { font-size: clamp(34px, 6vw, 64px); line-height: 1.06; margin: 0 0 16px; letter-spacing: -.02em } .hero p { font-size: clamp(17px, 2.2vw, 21px); color: var(--m); max-width: 760px; margin: 0 auto }
+    .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 28px } .pill { display: inline-block; padding: 6px 14px; border: 1px solid var(--l); border-radius: 999px; font-size: 14px; color: var(--m); margin-bottom: 18px; background: var(--s) }
+    section { padding: 64px 0 } section h2 { font-size: clamp(26px, 3.6vw, 38px); margin: 0 0 10px; letter-spacing: -.01em } .sub { color: var(--m); margin: 0 0 28px; max-width: 760px }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px }
+    .card { background: var(--s); border: 1px solid var(--l); border-radius: 18px; padding: 22px } .card h3 { margin: 0 0 6px; font-size: 18px; display: flex; gap: 10px; align-items: center }
+    .card p { margin: 0 0 10px; color: var(--m) } .card ul { margin: 0; padding-left: 18px; color: var(--m); font-size: 14.5px } .card li { margin: 3px 0 }
+    .ic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(135deg, var(--p), var(--p2)); color: #fff; font-size: 18px; flex: none }
+    .focus { border: 1.5px solid color-mix(in srgb, var(--p) 60%, var(--l)); background: linear-gradient(160deg, color-mix(in srgb, var(--p) 10%, var(--s)), var(--s)) }
+    .steps { counter-reset: s; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px } .step { position: relative; padding-top: 50px }
+    .step::before { counter-increment: s; content: counter(s); position: absolute; top: 18px; left: 22px; width: 26px; height: 26px; border-radius: 50%; background: var(--p); color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 14px }
+    .alt { background: var(--s2) } details { border-bottom: 1px solid var(--l); padding: 14px 0 } summary { cursor: pointer; font-weight: 700 } details p { color: var(--m); margin: 8px 0 0 }
+    .trust { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 26px } .trust span { font-size: 13.5px; color: var(--m); padding: 6px 12px; border: 1px solid var(--l); border-radius: 999px; background: var(--s) }
+    footer { border-top: 1px solid var(--l); padding: 34px 0 50px; color: var(--m); font-size: 14px } footer .w { display: flex; flex-wrap: wrap; gap: 14px 22px } footer a { color: var(--m) }
+    @media (max-width: 720px) { nav a.l { display: none } section { padding: 48px 0 } .hero { padding: 64px 0 50px } }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto } }
+  </style>
+</head>
+<body>
+<nav><div class="w"><a class="b" href="start.html"><img src="icons/icon.svg" alt="">JOPML Nexus</a><a class="l" href="#events">Events</a><a class="l" href="#module">Funktionen</a><a class="l" href="#website">Website-Baukasten</a><a class="l" href="#faq">FAQ</a><a class="btn sm" href="./">Anmelden</a></div></nav>
+
+<header class="hero"><div class="w">
+  <span class="pill">Kostenlos · ohne Tracking · Daten in Frankfurt</span>
+  <h1>Events, Projekte, Websites &amp; KI – an einem Ort.</h1>
+  <p>JOPML Nexus ist dein Kontrollzentrum: Partys und Veranstaltungen durchrechnen, Tickets live verfolgen, Aufgaben im Team verteilen, Websites mit Impressum bauen und alles per Link teilen. Die KI hilft bei jedem Schritt.</p>
+  <div class="cta"><a class="btn" href="./">Kostenlos starten</a><a class="btn g" href="./">Ohne Konto ausprobieren</a><a class="btn g" href="bau.html">Website bauen</a></div>
+  <div class="trust"><span>Google-Anmeldung oder Gast</span><span>Handy, Tablet &amp; PC</span><span>Teilen ohne Konto</span><span>KI auf Deutsch</span><span>Impressum &amp; Datenschutz inklusive</span></div>
+</div></header>
+
+<section id="events"><div class="w">
+  <h2>Der Fokus: Events planen, die sich rechnen</h2>
+  <p class="sub">Von der ersten Idee bis zur Abrechnung – für Partys, Konzerte, Schul- und Vereinsevents. Ein Formular für alles, und die Zahlen stimmen.</p>
+  <div class="grid">
+    <div class="card focus"><h3><span class="ic">€</span>Kalkulation mit Rechenweg</h3><p>Location, Personal, Security, GEMA, Bar, Garderobe, Tickets mit Preisstufen.</p><ul><li>Break-even, Minimum, Durchschnitt und Maximum</li><li>„Wo kommt das Minus her?“ – mit Lösungen</li><li>Rechenweg: jede Zahl mit Formel</li></ul></div>
+    <div class="card focus"><h3><span class="ic">🎟</span>Tickets live</h3><p>Verkäufe aus Eventfrog alle paar Minuten.</p><ul><li>Tempo pro Tag, beste Uhrzeiten, Prognose</li><li>Reicht das aktuelle Tempo bis zum Break-even?</li><li>Überblick oben, auch für Geteilte</li></ul></div>
+    <div class="card focus"><h3><span class="ic">📄</span>Belege &amp; Verträge mit KI</h3><p>Rechnung oder Vertrag hochladen – die KI liest Beträge, Fristen und Stornoklauseln.</p><ul><li>Vorschläge abhaken, alles wird neu berechnet</li><li>Zahlungsfristen werden Aufgaben</li><li>Offene und bezahlte Rechnungen</li></ul></div>
+    <div class="card focus"><h3><span class="ic">✓</span>Plan, Team &amp; Abend</h3><p>Aufgaben, Ablauf, Schichten, Locations, Technik, Posting-Plan, Gästeliste.</p><ul><li>Event-Assistent: Fragebogen oder Import</li><li>Abendkasse mit Wechselgeld und Live-Auslastung</li><li>Muttizettel, Rechts-Check, Jugendschutz</li></ul></div>
+  </div>
+</div></section>
+
+<section id="module" class="alt"><div class="w">
+  <h2>Alle Module auf einen Blick</h2>
+  <p class="sub">Alles ist in Bereiche sortiert, die du oben in der App findest. Jeder Bereich hat eigene KI-Knöpfe – du musst nicht suchen.</p>
+  <div class="grid">
+    <div class="card"><h3><span class="ic">◎</span>Übersicht</h3><ul><li>KI-Briefing am Morgen</li><li>„Als Nächstes wichtig“</li><li>Schnellaktionen</li></ul></div>
+    <div class="card"><h3><span class="ic">🎉</span>Events</h3><ul><li>Event-Formular, Kalkulation, Tickets</li><li>Belege, Abrechnung, Abendkasse</li><li>CSV, Kalender, Duplizieren</li></ul></div>
+    <div class="card"><h3><span class="ic">📁</span>Projekte &amp; Module</h3><ul><li>Checklisten, Tabellen, Kennzahlen, Zeitleisten</li><li>Module als eigene Website teilen</li><li>Mit KI ändern, aus Claude einfügen</li></ul></div>
+    <div class="card"><h3><span class="ic">☑</span>Aufgaben &amp; Kalender</h3><ul><li>„morgen 18 Uhr Getränke kaufen !“ wird verstanden</li><li>Erinnerungen, Kalender-Abo fürs Handy</li><li>KI: Was zuerst? und Schritte zerlegen</li></ul></div>
+    <div class="card"><h3><span class="ic">🌐</span>Websites</h3><ul><li>Baukasten mit Showroom und 10 Designs</li><li>Live-Besucher, Erreichbarkeit, Deploys</li><li>Statusseite, Kurzlinks mit QR-Code</li></ul></div>
+    <div class="card"><h3><span class="ic">✨</span>KI-Studio</h3><ul><li>Projekt-Assistent mit Rechts-Check</li><li>Marketing: Plakate, Posts, Visitenkarten</li><li>Zusammenfassungen, eigene KI-Schlüssel</li></ul></div>
+    <div class="card"><h3><span class="ic">§</span>Recht &amp; Formulare</h3><ul><li>Fragen mit aktuellen Gesetzestexten</li><li>Muttizettel, Foto-Einwilligung, Hausordnung</li><li>Impressum-Generator</li></ul></div>
+    <div class="card"><h3><span class="ic">↗</span>Teilen</h3><ul><li>Links ohne Konto, Rechte pro Bereich</li><li>„Alles zeigen“ inkl. Kalkulation</li><li>Link bleibt gleich, Inhalt aktualisiert sich</li></ul></div>
+    <div class="card"><h3><span class="ic">🔌</span>Verbindungen &amp; Geräte</h3><ul><li>Netlify, GitHub, Vercel, Supabase, Eventfrog</li><li>Raspberry Pi/PC: Werte, Dateien, Hosting</li><li>Schlüssel verschlüsselt im Vault</li></ul></div>
+    <div class="card"><h3><span class="ic">📱</span>Handy-App</h3><ul><li>Push-Benachrichtigungen</li><li>Überblick des nächsten Events</li><li>Für Helfer ohne Konto</li></ul></div>
+  </div>
+</div></section>
+
+<section id="website"><div class="w">
+  <h2>Website-Baukasten: fertig in 5 Minuten</h2>
+  <p class="sub">Formular ausfüllen oder der KI sagen, was du willst. Mit Showroom fertiger Beispielseiten, Live-Vorschau für Handy, Tablet und PC, Tickets &amp; Preisen, Team, Öffnungszeiten, Video, Karte, Kontaktformular, Google-Vorschau – und automatisch Impressum und Datenschutzerklärung.</p>
+  <div class="cta" style="justify-content:flex-start"><a class="btn" href="bau.html">Baukasten öffnen</a><a class="btn g" href="bau.html">Showroom ansehen</a></div>
+</div></section>
+
+<section class="alt"><div class="w">
+  <h2>So startest du</h2>
+  <div class="steps">
+    <div class="card step"><h3>Anmelden</h3><p>Mit Google oder als Gast – ohne Passwort, in Sekunden.</p></div>
+    <div class="card step"><h3>Event oder Projekt anlegen</h3><p>Fragebogen beantworten, Text einfügen oder der KI einen Satz sagen.</p></div>
+    <div class="card step"><h3>Durchrechnen &amp; verteilen</h3><p>Kalkulation, Aufgaben, Schichten – das Team bekommt einen Link.</p></div>
+    <div class="card step"><h3>Teilen &amp; feiern</h3><p>Website online, Tickets live, Abendkasse am Handy.</p></div>
+  </div>
+</div></section>
+
+<section id="faq"><div class="w">
+  <h2>Häufige Fragen</h2>
+  <details><summary>Was kostet JOPML Nexus?</summary><p>Nichts. Für die KI gibt es ein Tageslimit von 30 Anfragen (Gäste: 10). Mit deinem eigenen KI-Schlüssel (Gemini, Groq, OpenAI) entfällt es.</p></details>
+  <details><summary>Brauche ich ein Konto?</summary><p>Nein, du kannst 7 Tage als Gast ausprobieren. Mit Google-Anmeldung bleiben deine Daten dauerhaft – Gast-Daten werden beim Sichern übernommen.</p></details>
+  <details><summary>Wo liegen meine Daten und wer sieht sie?</summary><p>In einer Datenbank im Rechenzentrum Frankfurt am Main. Jede Person sieht nur ihre eigenen Daten und was ihr freigegeben wurde. API-Schlüssel liegen verschlüsselt. Keine Werbung, kein Tracking.</p></details>
+  <details><summary>Für wen ist das?</summary><p>Für alle, die Veranstaltungen, Schul- und Vereinsprojekte oder kleine Websites organisieren – von der ersten Party bis zum Verein mit Team.</p></details>
+  <details><summary>Ersetzt die KI eine Rechts- oder Steuerberatung?</summary><p>Nein. Rechtshinweise beruhen auf hinterlegten Gesetzestexten mit Stand-Datum und sind eine Orientierung. Wichtige Fragen bitte fachkundig prüfen lassen.</p></details>
+  <details><summary>Gibt es eine App?</summary><p>Ja: Nexus Mobil läuft im Browser und lässt sich auf den Startbildschirm legen – mit Push-Benachrichtigungen. Für Windows gibt es den JOPML Launcher.</p></details>
+</div></section>
+
+<section class="alt"><div class="w" style="text-align:center">
+  <h2>Bereit?</h2><p class="sub" style="margin:0 auto 22px">In einer Minute angemeldet – dein erstes Event ist schneller durchgerechnet als die Getränkeliste geschrieben.</p>
+  <div class="cta"><a class="btn" href="./">Kostenlos starten</a><a class="btn g" href="m.html">Handy-App</a><a class="btn g" href="https://github.com/jrn1401/jopml-nexus">Quellcode auf GitHub</a></div>
+</div></section>
+
+<footer><div class="w"><span>© 2026 JOPML Nexus</span><a href="./#/impressum">Impressum</a><a href="./#/datenschutz">Datenschutz</a><a href="./#/agb">AGB</a><a href="./#/inhalte">Inhalte &amp; Melden</a><a href="./#/ki">KI-Hinweise</a><a href="./#/cookies">Cookies</a><a href="./#/barrierefreiheit">Barrierefreiheit</a><a href="./#/veranstalter">Leitfaden für Veranstalter</a><a href="./#/sicherheit">Sicherheit</a></div></footer>
+</body>
+</html>

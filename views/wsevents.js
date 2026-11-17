@@ -11,6 +11,7 @@ import { eventWizard } from "../lib/eventwizard.js";
 import { eventCopilot } from "../lib/aiassist.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
 import { docsCard } from "../lib/eventdocs.js";
+import { readinessCard } from "../lib/readiness.js";
 import { calcCard, compute, detailsText, eventSheet, emptyCalc, overviewStrip, OV_HINT, deriveCalc } from "../lib/eventcalc.js";
 
 const STATUS = { idea: "Idee", planning: "In Planung", confirmed: "Fest", done: "Vorbei", cancelled: "Abgesagt" };
@@ -298,6 +299,7 @@ export async function eventPage(id) {
         onConfig: async (tiles) => { const c = { ...(ev.calc || {}), overview: tiles || undefined }; await q(sb.from("nx_events").update({ calc: c }).eq("id", id)); ev.calc = c; draw(); }, tickets: ticketsOf(ev, linked), eventDate: ev.event_date, capacity: ticketsOf(ev, linked).capacity || ev.capacity, snaps,
         tasks: rows.filter((r) => r.kind === "task"), guests: rows.filter((r) => r.kind === "guest"), spent: rows.filter((r) => r.kind === "cost").reduce((a, r) => a + (+r.amount || 0), 0), budget: ev.budget ?? null,
         onTasks: () => document.getElementById("sec-task")?.scrollIntoView({ behavior: "smooth" }) }),
+      readinessCard({ calc: realCalc(ev.calc) || localCalc, details: (ev.calc || localCalc)?.details || {}, items: rows, tickets: ticketsOf(ev, linked), eventDate: ev.event_date }, { onFix: () => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Event-Formular")?.click() }),
       ev.description ? h("section.card.card-pad", { style: { marginBottom: "16px", whiteSpace: "pre-wrap" } }, ev.description) : null,
       h("div", { style: { marginBottom: "16px" } }, eventCopilot({ ev, rows, tickets: ticketsOf(ev, linked), kinds: ["task", "schedule", "cost", "income", "shift", "guest", "tech", "post", "location"],
         insert: async (list) => { await q(sb.from("nx_event_items").insert(list.map((x) => ({ ...x, event_id: id })))); await reload(); },
