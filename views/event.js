@@ -7,7 +7,7 @@ import { openShareDialog } from "../lib/share.js";
 import { aiCleanup } from "../lib/aidedupe.js";
 import { importDialog } from "../lib/eventfrog.js";
 import { eventCopilot } from "../lib/aiassist.js";
-import { calcCard, compute as calcCompute } from "../lib/eventcalc.js";
+import { calcCard, compute as calcCompute, detailsModal, detailsText } from "../lib/eventcalc.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
 
 const SECTIONS = {
@@ -92,6 +92,7 @@ export default async function eventView({ args: [id] }) {
         h("span.faint", { style: { fontSize: "13px" } }, [ev.event_date ? `${fmtDateTime(ev.event_date)} (${fmtAgo(ev.event_date)})` : "ohne Datum", ev.location].filter(Boolean).join(" · ")),
         proj ? h("a.tag", { href: `#/projects/${proj.id}` }, icon("folder", ""), " ", proj.name) : null)),
         h("div.actions", h("button.btn.primary", { onclick: () => openShareDialog("event", id, ev.name) }, icon("users"), "Teilen"), h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("bogen", `ce:${id}`)) }, icon("check"), "Rechts-Check"), h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("web", `ce:${id}`)) }, icon("external"), "Event-Website"), h("button.btn", { onclick: () => aiCleanup({ items, table: "cc_event_items", context: `${ev.name}, ${ev.location || ""}`, onDone: reload }) }, icon("sparkles"), "KI-Aufräumen"), h("button.btn", { onclick: edit }, icon("edit"), "Bearbeiten"),
+          h("button.btn", { title: "Alle Infos zum Event als Formular (Line-up, Zeiten, Preise, Links, Regeln)", onclick: () => detailsModal({ name: ev.name, details: ev.metadata?.details || {}, onSave: async (d) => { ev.metadata = { ...(ev.metadata || {}), details: d }; await q(sb.from("cc_events").update({ metadata: ev.metadata }).eq("id", id)); draw(); } }) }, icon("edit"), "Steckbrief"),
           h("a.btn", { href: `#/door/${id}`, title: "Barverkauf, Wechselgeld, Gästeliste und Auslastung am Abend" }, icon("ticket"), "Abendkasse"),
           h("button.btn", { onclick: () => importDialog(ev, () => dispatchEvent(new Event("hashchange"))), title: "Ticketverkäufe aus Eventfrog-Export übernehmen" }, icon("ticket"), "Eventfrog-Import"),
           h("button.btn.ghost", { onclick: exportCsv, title: "Alle Einträge als CSV (Excel)" }, icon("download"), "CSV"),
@@ -110,7 +111,7 @@ export default async function eventView({ args: [id] }) {
         rows: items, tickets: ev.metadata?.tickets || {}, kinds: ["task", "schedule", "cost", "income", "shift", "tech", "post", "guest"],
         insert: async (list) => { await q(sb.from("cc_event_items").insert(list.map((x) => ({ ...x, event_id: id })))); await reload(); },
         onSync: () => projectSyncDialog({ admin: true, ev, items, projects, onDone: () => location.reload() }),
-        info: [String(ev.description || "").slice(0, 5000), ...Object.entries(ev.metadata || {}).filter(([k, v]) => typeof v === "string" && /url|website|link|dj|age|insta|tiktok|whatsapp|music|genre/i.test(k)).map(([k, v]) => `${k}: ${v}`)].join("\n"),
+        info: [detailsText(ev.metadata?.details || {}), String(ev.description || "").slice(0, 5000), ...Object.entries(ev.metadata || {}).filter(([k, v]) => typeof v === "string" && /url|website|link|dj|age|insta|tiktok|whatsapp|music|genre/i.test(k)).map(([k, v]) => `${k}: ${v}`)].join("\n"),
         addTask: async (t) => { await q(sb.from("cc_event_items").insert({ event_id: id, kind: "task", title: t.title, note: t.note, at: t.due })); await reload(); } })),
       calcCard({ name: ev.name, calc: ev.metadata?.calc || null, tickets: ev.metadata?.tickets || {}, eventDate: ev.event_date, capacity: ev.metadata?.tickets?.capacity || ev.expected_guests, snaps,
         onSync: () => projectSyncDialog({ admin: true, ev, items, projects, onDone: () => location.reload() }),

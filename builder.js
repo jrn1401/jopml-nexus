@@ -104,6 +104,30 @@ Antworte NUR mit JSON: {"name":"","tagline":"max 90 Zeichen","kind":"${Object.ke
     save(); draw(); toast("Fertig! Rechts siehst du deine Seite – ändern kannst du alles im Formular oder mit „Mit KI ändern“.");
   } catch (e) { toastErr(e); btn.disabled = false; btn.textContent = "Seite bauen lassen"; }
 }
+// Aus einem Event übernehmen (Steckbrief-Formular) – nur mit Konto
+async function fromEvent() {
+  const { data } = await sb.auth.getSession();
+  if (!data.session) return toast("Bitte im JOPML Nexus anmelden, um Events zu übernehmen.", "info");
+  let admin = false; try { const r = await sb.rpc("cc_is_admin"); admin = r.data === true; } catch { /* */ }
+  const evs = await q(sb.from(admin ? "cc_events" : "nx_events").select(admin ? "id,name,event_date,location,description,metadata" : "id,name,event_date,location,description,calc,ticket_price").order("event_date", { ascending: false }).limit(30)).catch(() => []);
+  if (!evs.length) return toast("Keine Events gefunden.", "info");
+  const m = modal("Aus Event übernehmen", h("div.list", evs.map((e) => h("button.list-item", { type: "button", style: { width: "100%", textAlign: "left" }, onclick: () => {
+    const d = (admin ? e.metadata?.details : e.calc?.details) || {};
+    const date = e.event_date ? new Date(e.event_date).toLocaleDateString("de-DE") : "";
+    S.name = e.name; S.kind = "Event / Party";
+    S.tagline = [d.genre, d.age, e.location?.split(",").slice(-1)[0]?.trim()].filter(Boolean).join(" · ").slice(0, 90) || S.tagline;
+    S.about = String(e.description || "").replace(/[*#_]/g, "").slice(0, 1500) || S.about;
+    if (d.lineup) { S.servicesTitle = "Line-up"; S.services = String(d.lineup).split("\n").filter(Boolean).map((x) => `${x.trim()} | ${d.genre || ""}`).join("\n"); }
+    S.events = `${date}${d.start ? ` ${d.start}` : ""} | ${e.name} | ${d.venue || e.location || ""} | ${d.tickets || ""} | Tickets`;
+    if (d.tickets) { S.cta1 = "Tickets"; S.cta1url = d.tickets; }
+    S.media = [["Spotify", d.spotify], ["Instagram", d.instagram], ["TikTok", d.tiktok], ["WhatsApp-Gruppe", d.whatsapp]].filter((x) => x[1]).map((x) => `${x[0]} | ${x[1]}`).join("\n") || S.media;
+    const faq = [d.age && ["Ab wie viel Jahren?", `${d.age}${d.u18 ? `, unter 18 bis ${d.u18} Uhr` : ""} – Ausweis mitbringen.`], d.entry && ["Wann ist Einlass?", `Ab ${d.entry} Uhr.`], d.wardrobe && ["Gibt es eine Garderobe?", `Ja, ${d.wardrobe} € pro Teil.`], d.payment && ["Kann ich mit Karte zahlen?", d.payment], d.address && ["Wo ist der Eingang?", d.address]].filter(Boolean);
+    if (faq.length) S.faq = faq.map((x) => x.join(" | ")).join("\n");
+    S.address = d.address || e.location || S.address;
+    S.sections = { ...S.sections, events: true, media: !!S.media, faq: !!S.faq, services: !!S.services };
+    save(); m.close(); draw(); toast("Event übernommen – prüfen und Impressum ausfüllen");
+  } }, h("div.li-main", h("div.li-title", e.name), h("div.li-sub", [e.event_date ? new Date(e.event_date).toLocaleDateString("de-DE") : "", e.location].filter(Boolean).join(" · ")))))));
+}
 // Alle Designs mit deinem Inhalt als Mini-Vorschau
 function designGallery() {
   const demo = S.name ? S : { ...S, name: "Deine Seite", tagline: "So sieht dein Inhalt in diesem Design aus", about: "Hier steht später dein Text.", services: "Angebot 1 | Kurze Beschreibung\nAngebot 2 | Kurze Beschreibung\nAngebot 3 | Kurze Beschreibung", cta1: "Los geht's", cta1url: "#contact" };
@@ -178,7 +202,7 @@ function draw() {
     h("section.card.bau-ai", h("div.card-body.stack", { style: { gap: "8px" } }, h("b.row", { style: { gap: "6px" } }, icon("sparkles"), "Sag der KI, was du willst"),
       (() => { const ta = h("textarea.input", { rows: 3, maxlength: 4000, "aria-label": "Beschreibung für die KI", placeholder: "z. B. „Seite für meine Techno-Party Raveanation am 9.1. in Berlin, DJ SHEVNØ1, Industrial & Hardgroove, 16+, Tickets: https://eventfrog.de/RAVENATION, Instagram: https://instagram.com/raveanation – dunkel mit Neon und Animationen“" });
         const b = h("button.btn.primary", { onclick: () => aiAll(ta, b) }, icon("sparkles"), "Seite bauen lassen");
-        return h("div.stack", { style: { gap: "8px" } }, ta, h("div.row.wrap", { style: { gap: "8px" } }, b, h("button.btn", { onclick: designGallery }, icon("eye"), "Designs ansehen"))); })())),
+        return h("div.stack", { style: { gap: "8px" } }, ta, h("div.row.wrap", { style: { gap: "8px" } }, b, h("button.btn", { onclick: designGallery }, icon("eye"), "Designs ansehen"), h("button.btn", { onclick: fromEvent }, icon("calendar"), "Aus meinem Event"))); })())),
     group("1 · Grundlagen", true, h("div.field", h("label", "Art der Seite"), kindSel), inp("name", "Name / Titel"), inp("tagline", "Slogan (eine Zeile)"),
       h("div.grid.g-2", inp("cta1", "Haupt-Button Text"), inp("cta1url", "Haupt-Button Link", { ph: "https://… oder #contact" })), h("div.grid.g-2", inp("cta2", "Zweiter Button"), inp("cta2url", "Zweiter Button Link"))),
     group("2 · Design & Animation", true, styleChips, h("div.field", h("label", "Eigene Akzentfarbe"), h("input", { type: "color", value: S.accent || STYLES[S.style].a, "aria-label": "Akzentfarbe", oninput: (e) => { S.accent = e.target.value; save(); refresh(); } })), animChips),

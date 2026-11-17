@@ -8,7 +8,7 @@ import { aiCleanup } from "../lib/aidedupe.js";
 import { eventWizard } from "../lib/eventwizard.js";
 import { eventCopilot } from "../lib/aiassist.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
-import { calcCard, compute } from "../lib/eventcalc.js";
+import { calcCard, compute, detailsModal, detailsText } from "../lib/eventcalc.js";
 
 const STATUS = { idea: "Idee", planning: "In Planung", confirmed: "Fest", done: "Vorbei", cancelled: "Abgesagt" };
 const SECTIONS = [
@@ -191,6 +191,7 @@ export async function eventPage(id) {
         h("div.actions",
           h("button.btn.primary", { onclick: () => openShareDialog("nx_event", id, ev.name, { admin: false }) }, icon("users"), "Teilen"),
           h("button.btn", { onclick: () => aiDialog(id, () => reload()) }, icon("bot"), "KI-Ideen"),
+          h("button.btn", { title: "Alle Infos zum Event als Formular", onclick: () => detailsModal({ name: ev.name, details: ev.calc?.details || {}, onSave: async (d) => { const c = { ...(ev.calc || localCalc || {}), details: d }; try { await q(sb.from("nx_events").update({ calc: c }).eq("id", id)); ev.calc = c; } catch { localStorage.setItem(calcKey, JSON.stringify(c)); } location.reload(); } }) }, icon("edit"), "Steckbrief"),
           h("button.btn", { onclick: () => aiCheck(ev, rows, ticketsOf(ev, linked)) }, icon("sparkles"), "KI-Check"),
           h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("bogen", `ne:${ev.id}`)) }, icon("check"), "Rechts-Check"),
           h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("web", `ne:${ev.id}`)) }, icon("external"), "Event-Website"),
@@ -204,7 +205,7 @@ export async function eventPage(id) {
       h("div", { style: { marginBottom: "16px" } }, eventCopilot({ ev, rows, tickets: ticketsOf(ev, linked), kinds: ["task", "schedule", "cost", "income", "shift", "guest"],
         insert: async (list) => { await q(sb.from("nx_event_items").insert(list.map((x) => ({ ...x, event_id: id })))); await reload(); },
         onSync: () => projectSyncDialog({ admin: false, ev, items: rows, projects: projs, onDone: () => location.reload() }),
-        info: [String(ev.description || "").slice(0, 5000), linked?.url ? `Link: ${linked.url}` : "", ev.ticket_price ? `Ticketpreis: ${ev.ticket_price} €` : ""].filter(Boolean).join("\n"),
+        info: [detailsText(ev.calc?.details || {}), String(ev.description || "").slice(0, 5000), linked?.url ? `Link: ${linked.url}` : "", ev.ticket_price ? `Ticketpreis: ${ev.ticket_price} €` : ""].filter(Boolean).join("\n"),
         addTask: async (t) => { await q(sb.from("nx_event_items").insert({ event_id: id, kind: "task", title: t.title, note: t.note, at: t.due })); await reload(); } })),
       calcCard({ name: ev.name, calc: ev.calc || localCalc, tickets: ticketsOf(ev, linked), eventDate: ev.event_date, capacity: ev.capacity, snaps,
         onSync: () => projectSyncDialog({ admin: false, ev, items: rows, projects: projs, onDone: () => location.reload() }),
