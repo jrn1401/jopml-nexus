@@ -4,7 +4,14 @@ import { openAssistant } from "../lib/actions.js";
 
 // [Titel, Link, Symbol, Kurz, Schritte[]]
 const BOOK = [
-  ["KI-Studio (neu)", [
+  ["KI hilft direkt (neu)", [
+    ["Event-Assistent", "#/events", "calendar", "„Event erstellen“ → Fragebogen mit KI, Importieren (Text, WhatsApp, E-Mail, Tabelle, .ics), In einem Satz oder Schnell von Hand.",
+      ["4 kurze Schritte: Event, Gäste & Einlass, Programm & Versorgung, Geld & Ziel – mit Schnellstart-Vorlagen (Club-Night 16+, Abi-Party, Geburtstag, Vereinsfest, Konzert, Workshop).", "Rechts daneben live: Tage bis zum Event, Break-even, Personal-Faustregeln, Rechts-Check mit Gesetzes-Links, Muttizettel-Vorlage und eine Frage-Box an die KI.", "„KI-Plan erstellen“: Aufgaben mit Fristen, Ablauf, Kosten (Schätzung), Einnahmen, Schichten, Technik und Werbeplan – vor dem Anlegen einzeln an-/abwählbar, Beträge änderbar.", "Entwurf wird auf dem Gerät gemerkt."]],
+    ["KI-Copilot auf Event- und Projektseiten", null, "sparkles", "Zeigt sofort, was gerade wichtig ist (überfällig, Budget, Break-even) und hilft mit einem Klick.",
+      ["Event: Fehlendes ergänzen, Ablauf & Schichten, Kosten & Einnahmen, Werbeplan, Endspurt-Liste bzw. Nachbericht, Nachricht schreiben, Liste einfügen, freie Frage.", "Projekt: Nächste Schritte (als Aufgaben), Risiken & Lücken, Status-Update, Ideen, Nachricht schreiben."]],
+    ["Text-KI an Textfeldern", null, "edit", "Unter längeren Textfeldern: Schreiben, Verbessern, Kürzer, Korrigieren – mit Rückgängig.", []],
+    ["KI-Briefing & Aufgaben", "#/tasks", "check", "Startseite: Tagesbriefing (einmal pro Tag). Aufgaben: „KI: Was zuerst?“, ✨ zerlegt eine Aufgabe in Schritte, die Schnell-Eingabe versteht „morgen 18 Uhr …“, „Fr …“, „14.2. …“ und „!“ für wichtig.", []]]],
+  ["KI-Studio", [
     ["Projekt-Assistent mit Rechts-Check", "#/studio/bogen", "check", "Fragebogen je Projektart – für neue und bestehende Projekte/Events.",
       ["Prüft u. a. Jugendschutz (§§ 4, 5, 9, 10 JuSchG), Verträge Minderjähriger (§§ 107, 110 BGB), Gestattung (§ 12 GastG), Versammlungsstätten ab 200 Gästen, GEMA, Gewerbe (§ 14 GewO), Kleinunternehmer (§ 19 UStG), Impressum (§ 5 DDG), Datenschutz (Art. 13 DSGVO), Cookies (§ 25 TDDDG), Online-Verkauf (§§ 312g, 312j BGB), Fotos (§ 22 KunstUrhG).", "Ausgewählte Punkte werden als Aufgaben ins Event/Projekt übernommen (ohne Doppelungen), die KI-Analyse ergänzt Aufgaben mit Termin vor dem Datum.", "Im Event: Knopf „Rechts-Check“."]],
     ["Website-Baukasten", "#/studio/web", "external", "Event-, Link-, Benachrichtigungs- und Projektseiten mit QR-Code.",

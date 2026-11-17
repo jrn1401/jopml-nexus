@@ -1,3 +1,4 @@
+import { projectCopilot } from "../lib/aiassist.js";
 import { sb, q, rpc, invalidateProjects, downloadFile, removeFile, api } from "../lib/api.js";
 import { h, icon, badge, catIcon, empty, naNote, md, fmtAgo, fmtDate, fmtDateTime, fmtBytes, fmtNum, CATEGORIES, PROJECT_STATUS, SERVER_STATUS,
   formModal, confirmDialog, toast, toastErr, modal, errMsg, meter, fmtPct } from "../lib/ui.js";
@@ -65,7 +66,10 @@ export default async function projectView({ args: [id], query }) {
   };
   function overview() {
     const enabled = modules.filter((m) => m.enabled && !(isWeb && ["metrics", "links"].includes(m.module_type) && ["Website", "Links"].includes(m.name)));
-    return h("div.stack", enabled.length ? h("div.row", { style: { justifyContent: "flex-end" } }, viewToggle()) : null, linkedEvents(id),
+    let cop = null;
+    try { cop = projectCopilot({ name: project.name, projectId: id, facts: `Projekt: ${project.name} [${project.category}, ${project.status}] Tags: ${(project.tags || []).join(", ")}\nBeschreibung: ${String(project.description || "").slice(0, 2500)}\nModule: ${modules.map((m) => `${m.name} (${m.module_type})`).join(", ")}`,
+      addTasks: async (list) => { await q(sb.from("cc_tasks").insert(list.map((x) => ({ title: x.title.slice(0, 200), note: x.note || "", due: x.due, project_id: id })))); } }); } catch { cop = null; }
+    return h("div.stack", enabled.length ? h("div.row", { style: { justifyContent: "flex-end" } }, viewToggle()) : null, cop, linkedEvents(id),
       project.category === "jopml" ? h("a.card.card-pad.row.clickable", { href: `#/projects/${id}?tab=launcher`, style: { gap: "12px", textDecoration: "none", color: "inherit" } },
         h("div.li-icon", icon("layers")), h("div", { style: { flex: 1 } }, h("div.li-title", "Launcher-Steuerung"), h("div.li-sub", "Nutzer, Fehlercodes, Support-Tickets, KI-Verbrauch und Release-Checkliste")), icon("chevronR", "faint")) : null,
       webSlot(),

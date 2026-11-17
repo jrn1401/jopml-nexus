@@ -264,6 +264,7 @@ function markActive() {
 let routeSeq = 0;
 async function route(silent = false) {
   if (silent instanceof Event) silent = false;
+  if (location.hash === "#/neues-event") { location.replace("#/events"); setTimeout(() => newEvent(), 400); return; }
   const seq = ++routeSeq;
   const [path, query] = location.hash.replace(/^#/, "").split("?");
   let view = null, args = [];

@@ -21,7 +21,7 @@ const toLocal = (d) => (d ? new Date(new Date(d).getTime() - new Date(d).getTime
 const iso = (v) => (v ? new Date(v).toISOString() : null);
 const ticketsOf = (ev, proj) => (proj?.metadata?.tickets ? { ...proj.metadata.tickets, live: true } : { ...(ev.tickets || {}), live: false });
 
-function eventForm(ev, onSaved) {
+export function eventForm(ev, onSaved) {
   formModal(ev ? "Event bearbeiten" : "Neues Event", [
     { name: "name", label: "Name", value: ev?.name, required: true, max: 160, placeholder: "z. B. Sommerparty 2027" },
     { name: "event_date", label: "Datum & Uhrzeit", type: "datetime-local", half: true, value: toLocal(ev?.event_date) },

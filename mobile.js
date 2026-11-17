@@ -142,7 +142,7 @@ async function homeView() {
     h("button.btn.sm.m-mt", { onclick: () => { tab = "share"; store.set("tab", tab); drawBar(); draw(); } }, "Ansehen")));
   parts.push(h("button.m-ask", { onclick: () => { tab = "chat"; store.set("tab", tab); drawBar(); draw(); } }, ic("spark", 18), "KI fragen: „Was ist heute wichtig?“"));
   parts.push(h("section.m-card", h("div.m-card-h", ic("spark", 18), h("span", "KI-Studio")),
-    h("div.m-tools", [["bogen", "Projekt planen"], ["web", "Website bauen"], ["marketing", "QR & Werbung"], ["summary", "Zusammenfassen"]].map(([k, t]) => h("a.m-toolbtn", { href: `./#/studio/${k}` }, t)))));
+    h("div.m-tools", [["#/neues-event", "Event mit KI"], ["#/studio/bogen", "Projekt planen"], ["#/studio/web", "Website bauen"], ["#/studio/marketing", "QR & Werbung"], ["#/studio/summary", "Zusammenfassen"]].map(([k, t]) => h("a.m-toolbtn", { href: `./${k}` }, t)))));
   return h("div", ...parts);
 }
 

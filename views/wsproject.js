@@ -4,6 +4,7 @@ import { sb, q, nx, local } from "../lib/api.js";
 import { h, icon, toast, toastErr, fmtAgo, fmtEUR, empty, modal, errMsg, confirmDialog, md } from "../lib/ui.js";
 import { staticWidgets } from "../lib/modules.js";
 import { openShareDialog } from "../lib/share.js";
+import { projectCopilot } from "../lib/aiassist.js";
 
 const KIND_OK = ["website", "repo", "event", "ai", "database", "app", "other", "school", "shop", "business", "personal", "server", "api", "finance"];
 const W_OK = ["markdown", "stats", "chart", "progress", "table", "timeline", "links", "checklist"];
@@ -146,6 +147,8 @@ export async function projectPage(id, { ask } = {}) {
           try { await q(sb.from("cc_shares").delete().in("item_kind", ["nx_project", "tickets"]).eq("item_id", p.id)).catch(() => {}); await q(sb.from("nx_projects").delete().eq("id", p.id)); toast("Gelöscht"); location.hash = "#/"; } catch (e) { toastErr(e); }
         } }, icon("trash")) : null)),
     p.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(p.description)) : null,
+    projectCopilot({ name: p.name, facts: `Projekt: ${p.name} [${p.kind}, ${p.status}]${p.url ? ` ${p.url}` : ""}\nBeschreibung: ${String(p.description || "").slice(0, 3000)}\nKacheln: ${JSON.stringify(widgets).slice(0, 5000)}${p.metadata?.profile ? `\nProjekt-Check: ${(p.metadata.profile.check || []).map((c) => c.title).join("; ")}` : ""}${t ? `\nTickets: ${t.sold ?? 0}, Umsatz ${t.revenue ?? "?"} €` : ""}`,
+      addTasks: async (list) => { await q(sb.from("nx_tasks").insert(list.map((x) => ({ title: `${p.name}: ${x.title}`.slice(0, 300), note: x.note || "", due: x.due })))); } }),
     p.metadata?.profile ? h("section.card", { style: { marginBottom: "16px" } }, h("div.card-head", h("h3", "Projekt-Check"), h("span.faint", { style: { fontSize: "12px" } }, `geprüft ${fmtAgo(p.metadata.profile.checked_at)}`)),
       h("div.card-body", h("div.row.wrap", { style: { gap: "6px" } }, (p.metadata.profile.check || []).slice(0, 12).map((c) => h("span.badge", { class: c.level === "muss" ? "b-bad" : c.level === "wichtig" ? "b-warn" : "b-idle" }, c.title))),
         h("button.btn.sm", { style: { marginTop: "10px" }, onclick: () => import("./studio.js").then((m) => m.openStudio("bogen", `np:${p.id}`)) }, "Erneut prüfen / anpassen"))) : null,
