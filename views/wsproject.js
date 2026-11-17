@@ -146,6 +146,10 @@ export async function projectPage(id, { ask } = {}) {
           try { await q(sb.from("cc_shares").delete().in("item_kind", ["nx_project", "tickets"]).eq("item_id", p.id)).catch(() => {}); await q(sb.from("nx_projects").delete().eq("id", p.id)); toast("Gelöscht"); location.hash = "#/"; } catch (e) { toastErr(e); }
         } }, icon("trash")) : null)),
     p.description ? h("section.card.card-pad", { style: { marginBottom: "16px" } }, md(p.description)) : null,
+    p.metadata?.profile ? h("section.card", { style: { marginBottom: "16px" } }, h("div.card-head", h("h3", "Projekt-Check"), h("span.faint", { style: { fontSize: "12px" } }, `geprüft ${fmtAgo(p.metadata.profile.checked_at)}`)),
+      h("div.card-body", h("div.row.wrap", { style: { gap: "6px" } }, (p.metadata.profile.check || []).slice(0, 12).map((c) => h("span.badge", { class: c.level === "muss" ? "b-bad" : c.level === "wichtig" ? "b-warn" : "b-idle" }, c.title))),
+        h("button.btn.sm", { style: { marginTop: "10px" }, onclick: () => import("./studio.js").then((m) => m.openStudio("bogen", `np:${p.id}`)) }, "Erneut prüfen / anpassen"))) : null,
+    p.metadata?.ai_summary ? h("section.card", { style: { marginBottom: "16px" } }, h("div.card-head", h("h3", "KI-Zusammenfassung"), h("span.faint", { style: { fontSize: "12px" } }, fmtAgo(p.metadata.ai_summary.at))), h("div.card-body", md(p.metadata.ai_summary.text))) : null,
     t ? h("div.grid.g-3", { style: { marginBottom: "16px" } }, h("div.card.stat", h("div.k", icon("ticket"), "Tickets"), h("div.v", String(t.sold ?? 0))),
       t.revenue !== undefined ? h("div.card.stat", h("div.k", icon("wallet"), "Umsatz"), h("div.v", fmtEUR(t.revenue))) : null) : null,
     widgets.length ? staticWidgets(widgets) : h("section.card", empty("dashboard", "Noch keine Kacheln", "Frag Claude mit dem Skill „nexus-board“ nach einem Steckbrief zu diesem Thema und füge ihn hier ein – oder füge Notizen/Zahlen ein, die KI macht Kacheln daraus.",

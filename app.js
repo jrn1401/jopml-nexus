@@ -137,6 +137,10 @@ function renderLogin(error) {
     h("div.login-foot", icon("lock"), "Jeder sieht nur seine eigenen Daten · Schlüssel verschlüsselt gespeichert"),
     h("div.login-sub", { style: { marginTop: "10px" } }, h("a", { href: "#/skills", onclick: (e) => { e.preventDefault(); location.hash = "#/skills"; location.reload(); } }, "Claude-Skills für Nexus"), " · ",
       h("a", { href: "#/download", onclick: (e) => { e.preventDefault(); location.hash = "#/download"; location.reload(); } }, "JOPML Launcher herunterladen"), " · ", h("a", { href: "m.html" }, "Handy-App")),
+    h("details.login-feats", h("summary", "Was kann Nexus? (kurz erklärt)"),
+      h("ul", [["Alles an einem Ort", "Websites, Server, API-Schlüssel, Events und Projekte – automatisch aktuell."], ["KI, die mitdenkt", "Fragt, plant, fasst zusammen, merkt sich Wichtiges – Modell frei wählbar."],
+        ["Projekt-Assistent", "Ein paar Fragen → Plan, Aufgaben und Rechts-Check (z. B. Jugendschutz, Impressum)."], ["Websites & Werbung", "Event-/Link-Seiten, QR-Codes, Visitenkarten, Plakate, Shirt-Designs."],
+        ["Teilen & Push", "Live-Links ohne Konto, Benachrichtigungen aufs Handy – auch fürs Team."], ["Kostenlos & sparsam", "Ohne Tracking-Cookies; jeder sieht nur seine eigenen Daten."]].map(([t, d]) => h("li", h("b", t), " – ", d)))),
     h("div.footer-links", h("a", { href: "#/impressum" }, "Impressum"), h("a", { href: "#/datenschutz" }, "Datenschutz"), h("a", { href: "#/nutzung" }, "Nutzungsbedingungen")))));
 }
 function svgGoogle() {

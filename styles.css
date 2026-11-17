@@ -748,3 +748,6 @@ html.simple .card { border-radius: 18px; }
 .btn.rec { color: var(--bad); border-color: var(--bad); }
 .ws-nav a { white-space: nowrap; }
 @media (max-width: 520px) { .guest-top .top-pill { display: none; } }
+.login-feats { margin-top: 14px; text-align: left; font-size: 13.5px; color: var(--text-2); }
+.login-feats summary { cursor: pointer; color: var(--text); font-weight: 600; }
+.login-feats ul { margin: 8px 0 0; padding-left: 18px; line-height: 1.55; }
