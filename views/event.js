@@ -1,4 +1,4 @@
-import { sb, q, api, projects as loadProjects } from "../lib/api.js";
+import { sb, q, api, projects as loadProjects, uploadFile } from "../lib/api.js";
 import { h, icon, badge, EVENT_STATUS, fmtDateTime, fmtEUR, fmtNum, fmtAgo, empty, formModal, confirmDialog, toast, toastErr, meter, md } from "../lib/ui.js";
 import { donut, barChart, lineChart, PALETTE } from "../lib/charts.js";
 import { timeline, fileRow, lazy } from "../lib/modules.js";
@@ -9,6 +9,7 @@ import { importDialog } from "../lib/eventfrog.js";
 import { eventCopilot } from "../lib/aiassist.js";
 import { calcCard, compute as calcCompute, detailsText, eventSheet, emptyCalc, overviewStrip, OV_HINT } from "../lib/eventcalc.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
+import { docsCard } from "../lib/eventdocs.js";
 
 const SECTIONS = {
   task: ["Aufgaben", "check", "Neue Aufgabe"], tech: ["Technik", "zap", "Technik hinzufügen"], cost: ["Kosten", "wallet", "Kostenposten"],
@@ -78,6 +79,15 @@ export default async function eventView({ args: [id] }) {
         : h("div.faint", { style: { fontSize: "13px" } }, "Noch keine Einträge.")));
   }
 
+  async function saveDocs({ calc, details, docs, tasks }) {
+    const meta = { ...(ev.metadata || {}) }; const upd = {};
+    if (calc) { meta.calc = calc; const R = calcCompute(calc); upd.budget = R.costs; upd.expected_guests = Number(calc.guests) || ev.expected_guests; }
+    if (details) meta.details = details;
+    if (docs) meta.docs = docs;
+    await q(sb.from("cc_events").update({ ...upd, metadata: meta }).eq("id", id)); ev.metadata = meta; Object.assign(ev, upd);
+    if (tasks?.length) await q(sb.from("cc_event_items").insert(tasks.map((t) => ({ event_id: id, kind: "task", title: t.title, at: t.due ? new Date(`${t.due}T12:00:00`).toISOString() : null }))));
+    await reload();
+  }
   async function saveAll({ calc, details }) {
     const R = calcCompute(calc); ev.metadata = { ...(ev.metadata || {}), calc, details };
     await q(sb.from("cc_events").update({ metadata: ev.metadata, budget: R.costs, expected_guests: Number(calc.guests) || ev.expected_guests }).eq("id", id)); draw();
@@ -118,6 +128,8 @@ export default async function eventView({ args: [id] }) {
         onSync: () => projectSyncDialog({ admin: true, ev, items, projects, onDone: () => location.reload() }),
         details: ev.metadata?.details || {}, onSaveAll: saveAll,
         onSave: async (c) => { const { compute } = await import("../lib/eventcalc.js"); const R = compute(c); ev.metadata = { ...(ev.metadata || {}), calc: c }; await q(sb.from("cc_events").update({ metadata: ev.metadata, budget: R.costs, expected_guests: Number(c.guests) || ev.expected_guests }).eq("id", id)); } }),
+      docsCard({ name: ev.name, calc: ev.metadata?.calc || emptyCalc({ capacity: ev.expected_guests }), details: ev.metadata?.details || {}, docs: ev.metadata?.docs || [], save: saveDocs,
+        storeFile: ev.project_id ? async (f) => { const r = await uploadFile(f, { projectId: ev.project_id, relPath: `Belege/${ev.name.replace(/[\\/:*?"<>|]/g, "-")}/${f.name}` }); return r?.path || `Belege/${f.name}`; } : null }),
       ticketCard(),
       settleCard(costs, income),
       h("div.grid.g-2", section("task"), section("location"), section("schedule"), section("shift"), section("tech"), section("cost"), section("income"), section("post"), commentsCard(),

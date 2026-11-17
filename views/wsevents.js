@@ -8,6 +8,7 @@ import { aiCleanup } from "../lib/aidedupe.js";
 import { eventWizard } from "../lib/eventwizard.js";
 import { eventCopilot } from "../lib/aiassist.js";
 import { projectSyncDialog } from "../lib/syncproject.js";
+import { docsCard } from "../lib/eventdocs.js";
 import { calcCard, compute, detailsText, eventSheet, emptyCalc, overviewStrip, OV_HINT } from "../lib/eventcalc.js";
 
 const STATUS = { idea: "Idee", planning: "In Planung", confirmed: "Fest", done: "Vorbei", cancelled: "Abgesagt" };
@@ -115,8 +116,16 @@ export async function eventPage(id) {
   const linked = projs.find((p) => p.id === ev.nx_project_id);
   let snaps = []; if (linked) { try { snaps = await q(sb.from("nx_ticket_snaps").select("at,sold").eq("ref_id", linked.id).order("at").limit(3000)); } catch { snaps = []; } }
   const calcKey = `cc:calc:${id}`;
-  const saveAllU = async ({ calc, details }) => { const c = { ...calc, details, overview: ev.calc?.overview }; const R = compute(c); try { await q(sb.from("nx_events").update({ calc: c, budget: R.costs, capacity: Number(c.guests) || ev.capacity }).eq("id", id)); ev.calc = c; } catch { localStorage.setItem(calcKey, JSON.stringify(c)); } location.reload(); };
-  const realCalc = (c) => (c && Object.keys(c).some((k) => !['overview', 'details'].includes(k)) ? c : null);
+  const saveDocsU = async ({ calc, details, docs, tasks }) => {
+    const base = calc ? { ...calc } : { ...(ev.calc || localCalc || {}) };
+    base.details = details || (ev.calc || localCalc)?.details; base.overview = ev.calc?.overview; base.docs = docs || ev.calc?.docs;
+    const upd = { calc: base }; if (calc) { const R = compute(base); upd.budget = R.costs; upd.capacity = Number(base.guests) || ev.capacity; }
+    try { await q(sb.from("nx_events").update(upd).eq("id", id)); ev.calc = base; } catch { localStorage.setItem(calcKey, JSON.stringify(base)); }
+    if (tasks?.length) await q(sb.from("nx_event_items").insert(tasks.map((t) => ({ event_id: id, kind: "task", title: t.title, at: t.due ? new Date(`${t.due}T12:00:00`).toISOString() : null })))).catch(() => {});
+    location.reload();
+  };
+  const saveAllU = async ({ calc, details }) => { const c = { ...calc, details, overview: ev.calc?.overview, docs: ev.calc?.docs }; const R = compute(c); try { await q(sb.from("nx_events").update({ calc: c, budget: R.costs, capacity: Number(c.guests) || ev.capacity }).eq("id", id)); ev.calc = c; } catch { localStorage.setItem(calcKey, JSON.stringify(c)); } location.reload(); };
+  const realCalc = (c) => (c && Object.keys(c).some((k) => !['overview', 'details', 'docs'].includes(k)) ? c : null);
   let localCalc = null; try { localCalc = JSON.parse(localStorage.getItem(calcKey)); } catch { /* */ }
   const root = h("div");
   const reload = async () => { rows = await q(sb.from("nx_event_items").select("*").eq("event_id", id).order("at", { ascending: true, nullsFirst: false }).order("created_at")); draw(); };
@@ -216,8 +225,9 @@ export async function eventPage(id) {
       calcCard({ name: ev.name, calc: realCalc(ev.calc) || localCalc, tickets: ticketsOf(ev, linked), eventDate: ev.event_date, capacity: ev.capacity, snaps, details: (ev.calc || localCalc)?.details || {}, onSaveAll: saveAllU,
         onSync: () => projectSyncDialog({ admin: false, ev, items: rows, projects: projs, onDone: () => location.reload() }),
         note: ev.calc === undefined && localCalc ? "Kalkulation ist nur auf diesem Gerät gespeichert (Server-Speicher wird mit der nächsten Freischaltung aktiv)." : "",
-        onSave: async (c) => { c = { ...c, overview: ev.calc?.overview }; const R = compute(c); try { await q(sb.from("nx_events").update({ calc: c, budget: R.costs, capacity: Number(c.guests) || ev.capacity }).eq("id", id)); ev.calc = c; }
+        onSave: async (c) => { c = { ...c, overview: ev.calc?.overview, docs: ev.calc?.docs }; const R = compute(c); try { await q(sb.from("nx_events").update({ calc: c, budget: R.costs, capacity: Number(c.guests) || ev.capacity }).eq("id", id)); ev.calc = c; }
           catch { localStorage.setItem(calcKey, JSON.stringify(c)); await q(sb.from("nx_events").update({ budget: R.costs }).eq("id", id)).catch(() => {}); } } }),
+      h("div", { style: { marginBottom: "16px" } }, docsCard({ name: ev.name, calc: realCalc(ev.calc) || localCalc || emptyCalc({ capacity: ev.capacity, ticket_price: ev.ticket_price }), details: (ev.calc || localCalc)?.details || {}, docs: ev.calc?.docs || [], save: saveDocsU })),
       h("div.grid.g-2", { style: { marginBottom: "16px", alignItems: "start" } }, ticketsCard(), money()),
       h("div.grid.g-2", { style: { alignItems: "start" } }, SECTIONS.map(section)));
   }

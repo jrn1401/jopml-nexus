@@ -22,6 +22,7 @@ function normalize(o) {
   const ev = p.event && p.event.name ? { name: String(p.event.name).slice(0, 160), event_date: p.event.date && !Number.isNaN(Date.parse(p.event.date)) ? new Date(p.event.date).toISOString() : null,
     location: String(p.event.location || "").slice(0, 300), capacity: Number.isFinite(+p.event.capacity) && +p.event.capacity > 0 ? Math.round(+p.event.capacity) : null,
     ticket_price: Number.isFinite(+p.event.ticket_price) && +p.event.ticket_price > 0 ? +p.event.ticket_price : null, description: String(p.event.description || "").slice(0, 8000),
+    calc: (() => { const c = p.event.calc && typeof p.event.calc === "object" && !Array.isArray(p.event.calc) ? { ...p.event.calc } : null; const d = p.event.details && typeof p.event.details === "object" ? p.event.details : null; if (!c && !d) return null; const o = c || {}; if (d) o.details = d; return JSON.stringify(o).length < 60000 ? o : null; })(),
     items: (Array.isArray(p.event.items) ? p.event.items : []).slice(0, 300).filter((i) => i?.title && KINDS.includes(i.kind || "task")).map((i) => ({ kind: i.kind || "task", title: String(i.title).slice(0, 200),
       note: String(i.note || "").slice(0, 2000), at: i.at && !Number.isNaN(Date.parse(i.at)) ? new Date(i.at).toISOString() : null, amount: Number.isFinite(+i.amount) && i.amount !== null && i.amount !== "" ? +i.amount : null, done: !!i.done })) } : null;
   return { name: String(p.name).slice(0, 120), slug: slugify(p.slug || p.name), kind: KIND_OK.includes(p.kind) ? p.kind : "other",
@@ -60,6 +61,8 @@ async function saveExtras(b) {
     const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
     const found = all.find((e) => e.name.toLowerCase() === ev.name.toLowerCase()) || (ev.event_date ? all.find((e) => day(e.event_date) === day(ev.event_date)) : null);
     const patch = Object.fromEntries(Object.entries(ev).filter(([, v]) => v !== null && v !== ""));
+    if (found && patch.calc) { const cur = await q(sb.from("nx_events").select("calc").eq("id", found.id).single()).catch(() => null); if (cur?.calc) { const { mergeCalc } = await import("../lib/eventcalc.js"); patch.calc = { ...mergeCalc(cur.calc, patch.calc), details: { ...(cur.calc.details || {}), ...(patch.calc.details || {}) } }; } }
+    if (patch.calc) { const { compute } = await import("../lib/eventcalc.js"); const R = compute(patch.calc); if (R.costs) patch.budget = R.costs; if (+patch.calc.guests) patch.capacity = +patch.calc.guests; }
     const e = found ? await q(sb.from("nx_events").update(patch).eq("id", found.id).select("id").single()) : await q(sb.from("nx_events").insert(ev).select("id").single());
     out.event = e.id;
     if (items.length) {

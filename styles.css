@@ -858,3 +858,26 @@ button.ov-tile { cursor: pointer; } button.ov-tile:hover { border-color: var(--p
 .ov-gear { flex: 0 0 auto; align-items: center; justify-content: center; color: var(--text-3); min-width: 44px !important; }
 .ov-strip { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
 .dv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; margin-top: 6px; } .dv-row { display: flex; flex-direction: column; font-size: 14px; min-width: 0; } .dv-row small { color: var(--text-3); font-size: 11.5px; }
+.rw-sec h4 { margin: 0 0 6px; font-size: 14px; color: var(--primary); }
+.rw-step { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+.rw-main { min-width: 0; } .rw-f { color: var(--text-3); font-size: 12.5px; margin-top: 2px; overflow-wrap: anywhere; } .rw-v { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chip.on { border-color: var(--primary); color: var(--primary); }
+.tk-line { align-items: end; } .tk-f { margin: 0; min-width: 0; } .tk-f label { font-size: 11.5px; } .tk-sum { font-size: 13px; padding: 8px 10px; border: 1px dashed var(--line-2); border-radius: 10px; }
+.spin { width: 14px; height: 14px; border: 2px solid var(--line-2); border-top-color: var(--primary); border-radius: 50%; display: inline-block; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.dc-busy { font-size: 13px; color: var(--text-2); } .dc-busy.bad { color: var(--bad); }
+.dc-drop { display: flex; gap: 12px; align-items: center; text-align: left; padding: 14px; }
+.dc-prev { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; } .dc-prev:empty { display: none; }
+.dc-prev > div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; } .dc-prev small { display: block; color: var(--text-3); font-size: 11px; } .dc-prev span { display: block; color: var(--text-3); font-size: 11.5px; }
+.dc-prop { cursor: pointer; }
+.row.wrap > .badge { white-space: normal; max-width: 100%; height: auto; min-height: 22px; line-height: 1.35; padding-top: 3px; padding-bottom: 3px; text-align: left; }
+.ws-nav { min-width: 0; flex: 0 1 auto; overflow-x: auto; scrollbar-width: none; } .ws-nav a { white-space: nowrap; flex-shrink: 0; } .guest-top > * { flex-shrink: 0; } .guest-top > .ws-nav { flex-shrink: 1; }
+.calc-line.tk-line { display: grid !important; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) auto !important; gap: 8px; align-items: end; }
+.calc-line.tk-line > .field { display: flex; flex-direction: column; gap: 4px; width: auto; }
+.calc-line.tk-line > .field > label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 600px) { .calc-line.tk-line { grid-template-columns: repeat(3, minmax(0, 1fr)) auto !important; } .calc-line.tk-line > .field:first-child { grid-column: 1 / -1; } .calc-line.tk-line > .field > label { white-space: normal; font-size: 11px; } }
+.rng-b { border: 0; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 560; }
+.bar-row { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--surface-2, transparent); }
+.bar-grid { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) auto; gap: 8px; align-items: end; }
+.bar-mg { font-size: 11.5px; margin-top: 4px; } .bar-mg:empty { display: none; }
+@media (max-width: 600px) { .bar-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; } .bar-grid > .field:first-child { grid-column: 1 / -1; } .bar-grid .field > label { font-size: 11px; white-space: normal; } }
