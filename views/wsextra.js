@@ -89,7 +89,8 @@ export function firstSteps({ projects, conns, guest, shared }) {
   const steps = [
     [!guest, guest ? "Konto mit Google sichern" : "Mit Google angemeldet", "Damit bleiben deine Daten dauerhaft erhalten.", null],
     [conns > 0, "Einen Dienst verbinden", "Netlify, GitHub, Vercel, Supabase oder Eventfrog – Projekte erscheinen automatisch.", guest ? null : "#/verbindungen"],
-    [projects > 0, "Erstes Projekt", "Wird beim Verbinden automatisch angelegt – oder von Hand über „Projekt anlegen“.", null],
+    [projects > 0, "Erstes Projekt", "Am einfachsten mit dem Projekt-Assistenten: ein paar Fragen, fertig – inkl. Aufgaben und Rechts-Check.", "#/studio/bogen"],
+    [local.get("ws:did-studio", false), "Etwas fürs Projekt erstellen", "Website, QR-Code, Visitenkarte oder Shirt im KI-Studio.", "#/studio"],
     [local.get("ws:did-event", false), "Ein Event planen", "Unter „Events“ – oder einfach die KI planen lassen.", "#/events"],
     [local.get("ws:did-task", false), "Eine Aufgabe notieren", "Unter „Aufgaben“: tippen, Enter, fertig.", "#/aufgaben"],
     [local.get("ws:did-ai", false), "Die KI etwas fragen", "Der Roboter oben rechts kennt deine Projekte.", null],

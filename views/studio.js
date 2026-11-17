@@ -28,6 +28,7 @@ const TOOLS = [
 ];
 
 export async function studioPage(sub, ctx = {}) {
+  if (sub) LS.set("ws:did-studio", true);
   const nav = h("div.tabs", { role: "tablist" }, h("button", { class: !sub ? "on" : "", onclick: () => (location.hash = "#/studio") }, "Übersicht"),
     ...TOOLS.map(([k, t]) => h("button", { class: sub === k ? "on" : "", onclick: () => (location.hash = `#/studio/${k}`) }, t)));
   const head = h("div.page-head", h("div", h("h1", sub ? TOOLS.find((x) => x[0] === sub)?.[1] || "KI-Studio" : "KI-Studio"),
@@ -125,7 +126,10 @@ async function bogen(ctx) {
     const aiBox = h("div");
     const lv = { muss: ["Pflicht", "b-bad"], wichtig: ["Wichtig", "b-warn"], tipp: ["Tipp", "b-idle"] };
     const extra = [];
-    clear(resBox,
+    const g = Number(st.answers.guests), bud = Number(st.answers.budget);
+    const calc = st.type === "event" && g > 0 && bud > 0 ? h("div.na-note", icon("wallet"), h("div", `Bei ${g} Gästen und ${bud.toLocaleString("de-DE")} € Kosten brauchst du mindestens `, h("b", `${(bud / g).toLocaleString("de-DE", { maximumFractionDigits: 2 })} € pro Ticket`),
+      ` zum Ausgleich (ohne Bar-Einnahmen und Gebühren). Bei 70 % Auslastung: ${(bud / (g * 0.7)).toLocaleString("de-DE", { maximumFractionDigits: 2 })} €.`)) : null;
+    clear(resBox, calc,
       h("section.card", h("div.card-head", h("h3", `Check: ${items.length} Punkte`), h("span.faint", { style: { fontSize: "12px" } }, "Orientierung, keine Rechtsberatung")),
         h("div.card-body", items.length ? h("div.list", items.map((i) => h("div.list-item", { style: { alignItems: "flex-start" } },
           i.task ? h("input", { type: "checkbox", checked: pick.has(i.id), "aria-label": `Als Aufgabe übernehmen: ${i.task}`, onchange: (e) => (e.target.checked ? pick.add(i.id) : pick.delete(i.id)) }) : h("span", { style: { width: "16px" } }),
@@ -445,6 +449,8 @@ async function summaries(ctx) {
   const res = h("div.stack");
   const show = (s) => res.replaceChildren(h("section.card", h("div.card-body.stack", md(s.text), h("div.faint", { style: { fontSize: "12px" } }, `Erstellt ${fmtAgo(s.at)} · ${s.model || ""}`),
     h("div.row.wrap", { style: { gap: "8px" } }, h("button.btn.sm", { onclick: () => copyText(s.text) }, "Kopieren"),
+      h("button.btn.sm", { onclick: () => { const t = list.find((x) => x.key === key); const name = t?.row?.name || "Alle Projekte";
+        download(`bericht-${slugify(name)}.html`, `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Bericht ${esc(name)}</title><style>body{font-family:Arial,sans-serif;max-width:760px;margin:30px auto;padding:0 20px;color:#111;line-height:1.55}h1{font-size:26px}h3{margin-top:22px}.meta{color:#666;font-size:13px}@media print{body{margin:0}}</style></head><body><h1>Bericht: ${esc(name)}</h1><div class="meta">Stand ${new Date().toLocaleString("de-DE")} · erstellt mit JOPML Nexus (KI-Zusammenfassung, bitte prüfen)</div>${md(s.text).innerHTML}</body></html>`); } }, icon("download"), "Als Bericht (zum Drucken/PDF)"),
       key.startsWith("np:") ? h("button.btn.sm", { onclick: async () => { const t = list.find((x) => x.key === key); try { await q(sb.from("nx_projects").update({ metadata: { ...(t.row.metadata || {}), ai_summary: { text: s.text.slice(0, 6000), at: s.at } } }).eq("id", t.row.id)); toast("Am Projekt gespeichert"); } catch (e) { toastErr(e); } } }, "Am Projekt speichern") : null))));
   const gen = async (force) => {
     const cached = LS.get(`sum:${key}`, null);
