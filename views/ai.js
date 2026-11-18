@@ -50,14 +50,14 @@ export default async function aiView({ query }) {
           : stat("Kosten", "", { ic: "wallet", na: "Keine Abrechnungsdaten", sub: "Es werden keine Kosten geschätzt" })),
       rows.length ? h("div.grid.dash",
         card("Tokenverbrauch pro Tag", "nach Anbieter", barChart(labels, byDay, { height: 230, yFmt: fmtCompact }), "w-8"),
-        card("Modellvergleich", null, donut(byModel.slice(0, 6).map(([n, v]) => ({ name: n, value: v })), { fmt: fmtCompact, center: fmtCompact(total) }), "w-4"),
-        card("Verbrauchstrend", "kumuliert", lineChart([{ name: "Tokens", values: cumulative }], { height: 200, yFmt: fmtCompact, xFmt: (v) => new Date(v).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }), tipX: (v) => new Date(v).toLocaleDateString("de-DE") }), "w-6"),
+        card("Modellvergleich", null, donut(byModel.slice(0, 6).map(([n, v]) => ({ name: String(n).replace(/^models\//, ""), value: v })), { fmt: fmtCompact, center: fmtCompact(total), stack: true, size: 140 }), "w-4"),
+        card("Verbrauchstrend", "kumuliert", lineChart([{ name: "Tokens", values: cumulative }], { height: 200, yFmt: fmtCompact, xFmt: (v) => new Date(v).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }), tipX: (v) => new Date(v).toLocaleDateString("de-DE") }), "w-8"),
+        card("Nach Quelle", null, donut(bySource.map(([n, v]) => ({ name: SOURCE[n] || n, value: v })), { fmt: fmtCompact, size: 120, stack: true }), "w-4"),
         card("Projektvergleich", null, h("div.table-wrap", h("table.table.responsive",
           h("thead", h("tr", h("th", "Projekt"), h("th.num", "Tokens"), h("th.num", "Input"), h("th.num", "Output"), h("th.num", "Anfragen"))),
           h("tbody", byProject.map(([pid, v]) => h("tr", h("td", { "data-l": "Projekt" }, pid === "_" ? h("span.faint", "ohne Projekt") : pname[pid] || "?"),
-            h("td.num", { "data-l": "Tokens" }, fmtNum(v.t)), h("td.num", { "data-l": "Input" }, v.i ? fmtNum(v.i) : "–"), h("td.num", { "data-l": "Output" }, v.o ? fmtNum(v.o) : "–"), h("td.num", { "data-l": "Anfragen" }, fmtNum(v.r))))))), "w-6"),
-        card("Nach Quelle", null, donut(bySource.map(([n, v]) => ({ name: SOURCE[n] || n, value: v })), { fmt: fmtCompact, size: 120 }), "w-6"),
-        card("Anbieter & Datenquellen", null, providerStatus(rows), "w-6"))
+            h("td.num", { "data-l": "Tokens" }, fmtNum(v.t)), h("td.num", { "data-l": "Input" }, v.i ? fmtNum(v.i) : "–"), h("td.num", { "data-l": "Output" }, v.o ? fmtNum(v.o) : "–"), h("td.num", { "data-l": "Anfragen" }, fmtNum(v.r))))))), "w-12"),
+        card("Anbieter & Datenquellen", null, providerStatus(rows), "w-12 ai-prov"))
         : h("div.card", empty("sparkles", "Keine KI-Nutzung im Zeitraum", "Verbrauch erscheint, sobald JOPML-Nutzer die KI verwenden, du hier den Assistenten nutzt, eine App über die API meldet oder Claude verbunden ist.")),
     );
     if (!rows.length) wrap.append(h("div.card.card-pad", { style: { marginTop: "16px" } }, providerStatus(rows)));

@@ -9,6 +9,7 @@ import { TEMPLATES, THEMES, buildSite, slugify } from "../lib/sitegen.js";
 import { qrSvg, qrPng } from "../lib/qr.js";
 import { broadcastDialog } from "../lib/broadcast.js";
 import { parentalForm, posterHtml } from "../lib/printables.js";
+import { kiLayout, modelCard, tipsCard, quickCard } from "../lib/kilayout.js";
 
 const BASE = `${location.origin}${location.pathname.replace(/[^/]*$/, "")}`;
 const LS = { get: (k, d) => { try { const v = localStorage.getItem("cc:" + k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem("cc:" + k, JSON.stringify(v)); } catch { /* voll/privat */ } } };
@@ -37,9 +38,13 @@ export async function studioPage(sub, ctx = {}) {
     h("p", "Ideen umsetzen mit KI – für Events, Websites, Schule, Business und alles andere.")));
   let body;
   try {
-    if (sub === "bogen") body = await bogen(ctx);
+    if (sub === "bogen") body = kiLayout(await bogen(ctx), modelCard(),
+      tipsCard("So läuft es ab", ["Art des Projekts wählen und die Fragen beantworten – dauert 2 Minuten.", "Der Rechts-Check läuft sofort im Browser, ohne KI-Anfrage.", "Auf Wunsch ergänzt die KI Tipps und legt Aufgaben mit Fristen an.", "Alles landet in deinem Projekt und lässt sich später ändern."], "check"),
+      tipsCard("Der Rechts-Check prüft", ["Jugendschutz, Uhrzeiten & Muttizettel", "Alkohol & Ausschank", "GEMA & Musik", "Impressum, Datenschutz & Fotos", "Gewerbe, Steuern & Versicherung", "Sicherheit, Sanitäter & Notausgänge"], "book"))
     else if (sub === "web") body = await webBuilder(ctx);
-    else if (sub === "marketing") body = await marketing(ctx);
+    else if (sub === "marketing") body = kiLayout(await marketing(ctx), modelCard(),
+      tipsCard("Druck-Tipps", ["QR-Code mindestens 2 × 2 cm, schwarz auf weiß, vor dem Druck mit dem Handy testen.", "Visitenkarten: 85 × 55 mm, Druckerei-Vorlage mit 2 mm Anschnitt.", "Plakate: A3 für Aushänge, A4/A5 für Flyer – Datum, Ort und Link groß.", "Merch: als SVG herunterladen, dann skaliert nichts."], "edit"),
+      tipsCard("Spart KI-Anfragen", ["QR-Codes, Visitenkarten, Plakate und Merch entstehen direkt im Browser.", "Nur Social-Posts und der Marketingplan fragen die KI."], "zap"))
     else if (sub === "summary") body = await summaries(ctx);
     else if (sub === "ki") body = await kiSettings(ctx);
     else body = hub();
@@ -48,8 +53,14 @@ export async function studioPage(sub, ctx = {}) {
 }
 
 function hub() {
-  return h("div.grid.g-3", TOOLS.map(([k, t, d, ic]) => h("a.card.studio-tile", { href: `#/studio/${k}` },
-    h("div.card-body", h("div.studio-ic", icon(ic)), h("h3", t), h("p.faint", d)))));
+  const tiles = [...TOOLS.map(([k, t, d, ic]) => [`#/studio/${k}`, t, d, ic]),
+    ["#/recht", "Recht & Formulare", "Rechtsfragen auf Basis aktueller Gesetzestexte, Events prüfen lassen, Muttizettel & Co. ausfüllen.", "book"]];
+  return h("div.stack",
+    h("div.grid.g-3.studio-grid", tiles.map(([href, t, d, ic]) => h("a.card.studio-tile", { href },
+      h("div.card-body", h("div.studio-ic", icon(ic)), h("h3", t), h("p.faint", d), h("span.studio-go", "Öffnen →"))))),
+    h("div.grid.g-3.studio-foot", modelCard(),
+      tipsCard("So holst du am meisten raus", ["Konkret fragen: Ort, Datum, Gästezahl und Alter nennen.", "Ergebnisse immer prüfen – die KI kann sich irren.", "Unter „KI-Einstellungen“ erzählst du der KI, was sie sich merken soll."], "sparkles"),
+      tipsCard("Deine Daten", ["Deine Projekte sieht nur dein Konto.", "Die KI bekommt nur, was für die Antwort nötig ist.", "Mit „Mein PC (lokale KI)“ bleibt alles auf deinem Rechner (nur Admin)."], "lock")));
 }
 
 // ---------- gemeinsame Datenquelle: eigene Projekte & Events ----------
@@ -525,12 +536,23 @@ async function summaries(ctx) {
       LS.set(`sum:${key}`, s); show(s);
     } catch (e) { res.replaceChildren(h("div.banner.bad", errMsg(e))); }
   };
-  return h("div.stack",
+  const pick = h("select.input", { onchange: (e) => { key = e.target.value; res.replaceChildren(); } }, h("option", { value: "all" }, "Alles (Wochenüberblick)"), list.map((t) => h("option", { value: t.key, selected: t.key === key }, t.label)));
+  const choose = (k) => { key = k; pick.value = k; gen(false); };
+  const hist = [];
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!k?.startsWith("cc:sum:")) continue; const v = JSON.parse(localStorage.getItem(k)); const kk = k.slice(7); hist.push({ k: kk, at: v.at, label: kk === "all" ? "Alles (Wochenüberblick)" : list.find((x) => x.key === kk)?.label }); } } catch { /* privat */ }
+  hist.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const placeholder = h("section.card.ki-empty", h("div.card-body", h("div.studio-ic", icon("book")), h("h3", "Noch keine Zusammenfassung"),
+    h("p.faint", "Wähle oben ein Projekt oder „Alles“ und tippe auf „Zusammenfassen“. Du bekommst Stand, Erledigtes, nächste Schritte, Risiken und Zahlen – als Text zum Teilen oder als Bericht zum Drucken.")));
+  res.replaceChildren(placeholder);
+  return kiLayout(h("div.stack",
     h("section.card", h("div.card-body.stack",
-      field("Was zusammenfassen?", h("select.input", { onchange: (e) => { key = e.target.value; res.replaceChildren(); } }, h("option", { value: "all" }, "Alles (Wochenüberblick)"), list.map((t) => h("option", { value: t.key, selected: t.key === key }, t.label)))),
+      field("Was zusammenfassen?", pick),
       h("div.row.wrap", { style: { gap: "8px" } }, h("button.btn.primary", { onclick: () => gen(false) }, icon("sparkles"), "Zusammenfassen"), h("button.btn", { onclick: () => gen(true) }, icon("refresh"), "Neu erstellen")),
       h("div.faint", { style: { fontSize: "12.5px" } }, "Zusammenfassungen werden 6 Stunden auf diesem Gerät gemerkt – das spart KI-Anfragen."))),
-    res);
+    res),
+  modelCard(),
+  quickCard("Schnell zusammenfassen", [["Alles (Wochenüberblick)", () => choose("all"), "Projekte, Aufgaben, Events"], ...list.slice(0, 5).map((t) => [t.row?.name || t.label, () => choose(t.key), t.src === "ce" || t.src === "ne" ? "Event" : "Projekt"])]),
+  hist.length ? quickCard("Zuletzt erstellt", hist.slice(0, 5).map((x) => [x.label || "Zusammenfassung", () => choose(x.k), fmtAgo(x.at)]), "clock") : null);
 }
 
 // =====================================================================
@@ -552,21 +574,24 @@ async function kiSettings(ctx) {
   };
   const factIn = h("input.input", { placeholder: "z. B. Ich plane Partys für 16–18-Jährige in Berlin", maxlength: 300, "aria-label": "Neuer Fakt" });
   const simple = document.documentElement.classList.contains("simple");
-  return h("div.grid.g-2",
-    h("section.card", h("div.card-head", h("h3", "KI-Modell")), h("div.card-body.list", models.map((m) => h("label.list-item", { style: { opacity: m.available === false ? 0.5 : 1 } },
+  const styleCard = h("section.card", h("div.card-head", h("h3", "Antwort-Stil")), h("div.card-body.stack",
+      h("div.seg.seg-wrap", [["normal", "Normal"], ["kurz", "Kurz"], ["ausfuehrlich", "Ausführlich"], ["einfach", "Einfache Sprache"]].map(([k, t]) => h("button", { class: prefs.tone === k ? "on" : "", onclick: (e) => { e.currentTarget.parentNode.querySelectorAll("button").forEach((x) => x.classList.remove("on")); e.currentTarget.classList.add("on"); savePrefs({ tone: k }); } }, t))),
+      h("label.check", h("input", { type: "checkbox", checked: prefs.learn !== false, onchange: (e) => savePrefs({ learn: e.target.checked }) }), "KI darf sich Dinge merken, die ich ihr erzähle (Vorlieben, Projekte)"),
+      h("label.check", h("input", { type: "checkbox", checked: simple, onchange: (e) => { document.documentElement.classList.toggle("simple", e.target.checked); LS.set("simple", e.target.checked); } }), "Einfach-Modus (größere Schrift, weniger Details, klare Schritte)")));
+  const avail = models.filter((m) => m.available !== false).length;
+  return kiLayout(h("div.stack",
+    h("section.card", h("div.card-head", h("h3", "KI-Modell"), h("span.faint", { style: { fontSize: "12px" } }, `${avail} von ${models.length} verfügbar`)), h("div.card-body.list.ki-models", models.map((m) => h("label.list-item", { style: { opacity: m.available === false ? 0.5 : 1 } },
       h("input", { type: "radio", name: "aimodel", checked: cur === m.id, disabled: m.available === false, onchange: () => { LS.set("ai:model", m.id); savePrefs({}); } }),
       h("div.li-main", h("div.li-title", m.label, m.own ? h("span.badge.b-ok", { style: { marginLeft: "6px" } }, "eigener Schlüssel") : null), h("div.li-sub", m.note || "")))),
-      models.length === 1 ? h("div.faint", { style: { fontSize: "12.5px", padding: "8px 0" } }, "Weitere Modelle (Gemini Flash/Pro, Llama, GPT-OSS, OpenAI) erscheinen nach der nächsten Freischaltung.") : null)),
-    h("section.card", h("div.card-head", h("h3", "Antwort-Stil")), h("div.card-body.stack",
-      h("div.seg", [["normal", "Normal"], ["kurz", "Kurz"], ["ausfuehrlich", "Ausführlich"], ["einfach", "Einfache Sprache"]].map(([k, t]) => h("button", { class: prefs.tone === k ? "on" : "", onclick: (e) => { e.currentTarget.parentNode.querySelectorAll("button").forEach((x) => x.classList.remove("on")); e.currentTarget.classList.add("on"); savePrefs({ tone: k }); } }, t))),
-      h("label.check", h("input", { type: "checkbox", checked: prefs.learn !== false, onchange: (e) => savePrefs({ learn: e.target.checked }) }), "KI darf sich Dinge merken, die ich ihr erzähle (Vorlieben, Projekte)"),
-      h("label.check", h("input", { type: "checkbox", checked: simple, onchange: (e) => { document.documentElement.classList.toggle("simple", e.target.checked); LS.set("simple", e.target.checked); } }), "Einfach-Modus (größere Schrift, weniger Details, klare Schritte)"))),
-    h("section.card", { style: { gridColumn: "1 / -1" } }, h("div.card-head", h("h3", "Was die KI über dich weiß"), h("span.faint", { style: { fontSize: "12px" } }, `${facts.length} / 80`)),
+      models.length === 1 ? h("div.faint", { style: { fontSize: "12.5px", padding: "8px 0" } }, "Weitere Modelle (Gemini, Llama, GPT-OSS, NVIDIA, OpenAI) erscheinen, sobald die KI-Schnittstelle erreichbar ist.") : null)),
+    h("section.card", h("div.card-head", h("h3", "Was die KI über dich weiß"), h("span.faint", { style: { fontSize: "12px" } }, `${facts.length} / 80`)),
       h("div.card-body.stack",
         prefsOk ? null : h("div.banner.warn", "Das persönliche KI-Gedächtnis wird mit der nächsten Freischaltung aktiv."),
         prefsOk ? h("form.row", { style: { gap: "8px" }, onsubmit: async (e) => { e.preventDefault(); const t = factIn.value.trim(); if (t.length < 3) return; try { await q(sb.from("nx_ai_facts").insert({ owner_id: uid, fact: t, source: "user" })); location.reload(); } catch (er) { toastErr(er); } } }, factIn, h("button.btn", { type: "submit" }, "Merken")) : null,
         facts.length ? h("div.list", facts.map((f) => h("div.list-item", h("div.li-main", h("div.li-title", { style: { whiteSpace: "normal" } }, f.fact), h("div.li-sub", `${f.source === "chat" ? "aus dem Chat gelernt" : f.source === "bogen" ? "aus dem Projekt-Bogen" : "von dir"} · ${fmtAgo(f.created_at)}`)),
-          h("button.btn.sm.ghost", { "aria-label": "Vergessen", onclick: async (e) => { await q(sb.from("nx_ai_facts").delete().eq("id", f.id)); e.currentTarget.closest(".list-item").remove(); } }, icon("trash"))))) : prefsOk ? empty("sparkles", "Noch nichts gelernt", "Erzähl der KI im Chat von deinen Projekten – sie merkt sich Wichtiges automatisch.") : null)));
+          h("button.btn.sm.ghost", { "aria-label": "Vergessen", onclick: async (e) => { await q(sb.from("nx_ai_facts").delete().eq("id", f.id)); e.currentTarget.closest(".list-item").remove(); } }, icon("trash"))))) : prefsOk ? empty("sparkles", "Noch nichts gelernt", "Erzähl der KI im Chat von deinen Projekten – sie merkt sich Wichtiges automatisch.") : null))),
+  styleCard,
+  tipsCard("Wo laufen deine Daten?", ["Gemini, Groq und NVIDIA: Cloud-KI, bekommt nur den Text deiner Anfrage.", "Eigener Schlüssel: ohne Tageslimit, Abrechnung über dein Konto beim Anbieter.", "Mein PC (lokale KI): nur für den Admin, nichts verlässt deinen Rechner.", "Gemerktes kannst du hier jederzeit einzeln löschen."], "lock"));
 }
 
 export default async function ({ args, user } = {}) {

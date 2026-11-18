@@ -5,6 +5,7 @@ import { h, icon, toast, toastErr, errMsg, md, copyText } from "../lib/ui.js";
 import { aiGen } from "../lib/aigen.js";
 import { LAWS, LAWS_FETCHED, findLaws } from "../lib/laws.js";
 import { FORMS } from "../lib/forms.js";
+import { kiLayout, modelCard, tipsCard, quickCard } from "../lib/kilayout.js";
 
 const TABS = [["frage", "Frag die KI", "sparkles"], ["pruefen", "Prüfen lassen", "check"], ["formulare", "Formulare", "edit"], ["gesetze", "Gesetzestexte", "book"]];
 const DISCLAIMER = "Allgemeine Information auf Basis der angezeigten Gesetzestexte – keine Rechtsberatung. Bei Unsicherheit: Ordnungsamt, Jugendamt, IHK oder eine Anwältin/ein Anwalt.";
@@ -17,12 +18,15 @@ Stütze dich NUR auf die mitgegebenen GESETZESTEXTE. Wenn sie die Frage nicht ab
     input: `GESETZESTEXTE (Stand laut Quelle):\n${laws.map((l) => `### ${l.z} – ${l.t} (Stand ${l.stand}, ${l.url})\n${l.text}`).join("\n\n")}\n\n${extra ? `ZU PRÜFEN:\n${extra.slice(0, 9000)}\n\n` : ""}FRAGE: ${question}` });
   return { text: r.text, laws };
 }
-const answerView = (r) => h("div.stack", { style: { gap: "10px" } }, h("div.md", md(r.text)),
+const answerView = (r) => h("section.card", h("div.card-body.stack", { style: { gap: "10px" } }, h("div.md", md(r.text)),
   h("div.faint", { style: { fontSize: "12.5px" } }, "Verwendete Gesetzestexte: ", ...r.laws.flatMap((l, i) => [i ? " · " : "", h("a", { href: l.url, target: "_blank", rel: "noopener" }, l.z)])),
-  h("div.banner", icon("info"), h("div", DISCLAIMER)));
+  h("div.banner", icon("info"), h("div", DISCLAIMER))));
 
+const howto = (title, text) => h("section.card.ki-empty", h("div.card-body", h("div.studio-ic", icon("book")), h("h3", title), h("p.faint", text),
+  h("div.ki-howto", h("div", h("b", "Kurz gesagt"), "Die Antwort in 1–3 Sätzen."), h("div", h("b", "Was das Gesetz sagt"), "Paragraph mit Link zum Nachlesen."),
+    h("div", h("b", "Was du tun solltest"), "Konkrete Schritte als Liste."), h("div", h("b", "Achtung / unklar"), "Was vom Bundesland oder Einzelfall abhängt."))));
 function frage() {
-  const out = h("div");
+  const out = h("div", howto("Stell deine Frage", "Tippe oben eine Frage ein oder nimm ein Beispiel. Die Antwort ist immer gleich aufgebaut:"));
   const ta = h("textarea.input", { rows: 3, maxlength: 1500, "aria-label": "Rechtsfrage", placeholder: "z. B. „Dürfen 16-Jährige bis 1 Uhr auf meiner Party bleiben?“, „Brauche ich ein Impressum auf Instagram?“, „Darf ich Fotos von Gästen posten?“" });
   const go = async () => {
     if (ta.value.trim().length < 6) return toast("Bitte eine Frage eingeben.", "info");
@@ -35,7 +39,7 @@ function frage() {
 }
 
 function pruefen(ctx) {
-  const out = h("div");
+  const out = h("div", howto("Text oder Event prüfen", "Füge einen Text ein oder übernimm ein Event. Die KI prüft ihn gegen die passenden Gesetze und antwortet so:"));
   const ta = h("textarea.input", { rows: 7, maxlength: 9000, "aria-label": "Text zum Prüfen", placeholder: "Text einfügen: Event-Beschreibung, Website-Text, Impressum, Hausordnung, Social-Post, Vertragsentwurf …" });
   const sel = h("select.input", { "aria-label": "Event übernehmen", onchange: async (e) => {
     const id = e.target.value; if (!id) return;
@@ -100,7 +104,14 @@ function gesetze() {
 
 export async function rechtPage(sub = "", ctx = {}) {
   const tab = TABS.some((t) => t[0] === sub) ? sub : "frage";
-  const body = { frage, pruefen, formulare, gesetze }[tab](ctx);
+  let body = { frage, pruefen, formulare, gesetze }[tab](ctx);
+  if (tab === "frage" || tab === "pruefen") {
+    body = kiLayout(body, modelCard(),
+      quickCard("Weiter mit", [["Formulare ausfüllen", () => { location.hash = "#/recht/formulare"; }, "Muttizettel, Foto-Einwilligung, Hausordnung"],
+        ["Gesetzestexte nachlesen", () => { location.hash = "#/recht/gesetze"; }, `${LAWS.length} Normen, Stand ${LAWS_FETCHED}`],
+        tab === "frage" ? ["Text prüfen lassen", () => { location.hash = "#/recht/pruefen"; }, "Event, Website-Text, Impressum"] : ["Frage stellen", () => { location.hash = "#/recht/frage"; }, "z. B. Jugendschutz, Impressum"]], "book"),
+      tipsCard("So arbeitet die KI hier", ["Sie sucht passende Paragraphen aus amtlichen Gesetzestexten heraus.", "Jede Antwort nennt die Norm mit Link zum Nachlesen.", "Deckt der Text die Frage nicht ab, sagt sie das und nennt eine Stelle zum Nachfragen.", DISCLAIMER], "check"));
+  }
   const base = ctx.admin === undefined || ctx.adminRoute ? "#/recht" : "#/recht";
   return h("div",
     h("div.page-head", h("div", h("h1", "Recht & Formulare"), h("p.sub", "Rechtsfragen mit KI auf Basis aktueller Gesetzestexte, Events prüfen lassen, Formulare wie den Muttizettel direkt ausfüllen."))),
