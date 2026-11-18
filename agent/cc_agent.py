@@ -25,6 +25,13 @@ Geräte-Cloud (Dateien und Live-Daten des Geräts auf der Website):
   CC_FILES_WRITE     1 = zusätzlich Dateien von der Website auf das Gerät legen und Ordner anlegen (Standard aus)
   CC_FILE_ROOTS      kommagetrennte Ordner, die sichtbar sein dürfen (Standard: Benutzerordner)
 Versteckte Dateien und Ordner (.ssh, .env …) sowie Schlüsseldateien sind nie sichtbar.
+
+Eigene KI auf diesem Gerät (z. B. NVIDIA NIM, Ollama, LM Studio – alles mit OpenAI-kompatibler Schnittstelle):
+  CC_AI_URL      Adresse der lokalen KI, z. B. http://127.0.0.1:8000/v1 (NIM) oder http://127.0.0.1:11434/v1 (Ollama)
+  CC_AI_MODEL    Modellname (optional; sonst das erste, das die KI meldet)
+  CC_AI_KEY      Schlüssel der lokalen KI (optional, meist nicht nötig)
+Nur der Besitzer des Geräts kann es im Nexus als KI wählen. Anfragen laufen über die Website zum Agenten,
+es wird kein Port nach außen geöffnet.
 Statische Seiten liefern nie versteckte Dateien (.env, .git …) oder Schlüsseldateien aus.
 Abhängigkeit: psutil empfohlen (pip install psutil). Ohne psutil funktioniert der Agent unter Linux über /proc.
 """
@@ -39,7 +46,7 @@ try:
 except ImportError:  # Linux-Rückfall über /proc
     psutil = None
 
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 API = os.environ.get("CC_API_URL", "").rstrip("/")
 KEY = os.environ.get("CC_AGENT_KEY", "")
 INTERVAL = max(10, int(os.environ.get("CC_INTERVAL", "30")))
@@ -58,6 +65,11 @@ FILES = os.environ.get("CC_FILES", "").lower() in ON
 FILES_WRITE = FILES and os.environ.get("CC_FILES_WRITE", "").lower() in ON
 FILE_ROOTS = [Path(p.strip()).expanduser().resolve() for p in os.environ.get("CC_FILE_ROOTS", "").split(",") if p.strip()] or [HOME.resolve()]
 TUNNEL_TOKEN = os.environ.get("CC_TUNNEL_TOKEN", "")
+AI_URL = os.environ.get("CC_AI_URL", "").strip().rstrip("/")
+AI_MODEL = os.environ.get("CC_AI_MODEL", "").strip()
+AI_KEY = os.environ.get("CC_AI_KEY", "").strip()
+if AI_URL and not re.match(r"^https?://", AI_URL):
+    AI_URL = ""
 MAX_FILE = 50 * 1024 * 1024
 
 
@@ -288,7 +300,68 @@ def cloud_mkdir(path, _args):
     return {"path": str(d)}
 
 
+def _ai_req(path, body=None, timeout=10):
+    headers = {"Content-Type": "application/json", "User-Agent": f"cc-agent/{VERSION}"}
+    if AI_KEY:
+        headers["Authorization"] = f"Bearer {AI_KEY}"
+    req = urllib.request.Request(f"{AI_URL}{path}", data=json.dumps(body).encode() if body is not None else None,
+                                 method="POST" if body is not None else "GET", headers=headers)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read() or b"{}")
+
+
+_AI_MODELS = {"at": 0.0, "list": []}
+
+
+def ai_models():
+    """Modelle der lokalen KI (zwischengespeichert, 5 Min.)."""
+    if not AI_URL:
+        return []
+    if time.time() - _AI_MODELS["at"] > 300:
+        try:
+            d = _ai_req("/models", timeout=5)
+            _AI_MODELS["list"] = [str(m.get("id"))[:120] for m in (d.get("data") or []) if isinstance(m, dict) and m.get("id")][:30]
+        except (urllib.error.URLError, OSError, ValueError, TimeoutError):
+            _AI_MODELS["list"] = []
+        _AI_MODELS["at"] = time.time()
+    return _AI_MODELS["list"]
+
+
+def ai_chat(args):
+    if not AI_URL:
+        raise RuntimeError("Auf diesem Gerät ist keine KI eingerichtet (CC_AI_URL setzen und Agent neu starten).")
+    msgs = [m for m in (args.get("messages") or []) if isinstance(m, dict) and m.get("role") in ("system", "user", "assistant")][:30]
+    if not msgs:
+        raise RuntimeError("Leere Anfrage.")
+    model = str(args.get("model") or AI_MODEL or (ai_models() or [""])[0])
+    if not model:
+        raise RuntimeError("Die lokale KI meldet kein Modell – CC_AI_MODEL setzen.")
+    body = {"model": model, "messages": [{"role": m["role"], "content": str(m.get("content") or "")[:60000]} for m in msgs],
+            "temperature": 0.3, "max_tokens": max(64, min(8000, int(args.get("max_tokens") or 2000)))}
+    if args.get("json"):
+        body["response_format"] = {"type": "json_object"}
+    try:
+        d = _ai_req("/chat/completions", body, timeout=170)
+    except urllib.error.HTTPError as e:
+        if e.code == 400 and "response_format" in body:   # manche lokalen Server kennen kein JSON-Format
+            body.pop("response_format")
+            d = _ai_req("/chat/completions", body, timeout=170)
+        else:
+            raise RuntimeError(f"Lokale KI antwortet mit Fehler {e.code}.")
+    except urllib.error.URLError:
+        raise RuntimeError(f"Lokale KI unter {AI_URL} nicht erreichbar – läuft sie?")
+    text = str(((d.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+    if not text:
+        raise RuntimeError("Lokale KI hat keine Antwort geliefert.")
+    return {"text": text[:200000], "model": model, "tokens": int((d.get("usage") or {}).get("total_tokens") or 0)}
+
+
 def cloud_handle(r):
+    if r.get("kind") == "ai":
+        try:
+            return {"id": r["id"], "result": ai_chat(r.get("args") or {})}
+        except (RuntimeError, OSError, ValueError, KeyError, TimeoutError) as e:
+            return {"id": r.get("id"), "error": str(e)[:300]}
     try:
         if not FILES:
             raise RuntimeError("Dateizugriff ist auf dem Gerät nicht freigeschaltet (CC_FILES=1 setzen und Agent neu starten).")
@@ -707,11 +780,19 @@ class App:
 class Host:
     def __init__(self):
         self.apps, self.first, self.boot_rev = {}, True, {}
+        self.done, self.busy, self.lock = [], 0, threading.Lock()
+
+    def _ai_job(self, r):
+        res = cloud_handle(r)
+        with self.lock:
+            self.done.append(res)
+            self.busy -= 1
 
     def caps(self):
         return {"version": VERSION, "commands": ALLOW_CMD, "docker": bool(shutil.which("docker")), "git": bool(shutil.which("git")),
                 "cloudflared": bool(os.environ.get("CC_CLOUDFLARED") or shutil.which("cloudflared")), "python": platform.python_version(),
-                "os": f"{platform.system()} {platform.release()}", "lan_ip": lan_ip()}
+                "os": f"{platform.system()} {platform.release()}", "lan_ip": lan_ip(),
+                "ai": bool(AI_URL), "ai_models": ai_models()}
 
     def start_tunnel(self):
         """Fester Cloudflare-Tunnel (ein Tunnel je Gerät, Adressen werden im Cloudflare-Konto zugeordnet)."""
@@ -744,6 +825,8 @@ class Host:
                 a.tick()
             if tunnel and tunnel.poll() is not None:
                 tunnel = self.start_tunnel()
+            with self.lock:
+                results, self.done = results + self.done, []
             payload = {"apps": [a.report() for a in self.apps.values()], "need_manifest": need, "results": results}
             if n % 60 == 0:
                 payload["caps"] = dict(self.caps(), hosting=HOSTING, files=FILES, write=FILES_WRITE)
@@ -756,9 +839,17 @@ class Host:
                 wait = min(60, max(2, int(res.get("poll") or 15)))
                 need = self.apply(res.get("apps") or [], res.get("manifests") or {}) if HOSTING else []
                 for r in (res.get("requests") or [])[:5]:
-                    results.append(cloud_handle(r))
+                    if r.get("kind") == "ai":   # KI-Antworten dauern – im Hintergrund, Ergebnis kommt mit der nächsten Runde
+                        with self.lock:
+                            self.busy += 1
+                        threading.Thread(target=self._ai_job, args=(r,), daemon=True).start()
+                    else:
+                        results.append(cloud_handle(r))
                 if results:
                     wait = 0
+                with self.lock:
+                    if self.busy or self.done:
+                        wait = 1
             except urllib.error.HTTPError as e:
                 if e.code in (401, 403):
                     log(f"Hosting: Schlüssel abgelehnt ({e.code}) – Hosting pausiert 10 Min.")
@@ -770,7 +861,7 @@ class Host:
                 wait = 30
             n += 1
             for _ in range(wait):
-                if not RUN:
+                if not RUN or self.done:
                     break
                 time.sleep(1)
         for a in self.apps.values():
@@ -829,9 +920,9 @@ def main():
         psutil.cpu_percent(interval=None)  # erste Messung initialisieren
     else:
         _proc_cpu()
-    log(f"gestartet v{VERSION} (Intervall {INTERVAL}s, psutil={'ja' if psutil else 'nein'}, Dienste={len(SERVICES)}, Hosting={'an' if HOSTING else 'aus'}, Dateien={'an' if FILES else 'aus'})")
+    log(f"gestartet v{VERSION} (Intervall {INTERVAL}s, psutil={'ja' if psutil else 'nein'}, Dienste={len(SERVICES)}, Hosting={'an' if HOSTING else 'aus'}, Dateien={'an' if FILES else 'aus'}, KI={AI_URL or 'aus'})")
     host_thread = None
-    if HOSTING or FILES:
+    if HOSTING or FILES or AI_URL:
         host_thread = threading.Thread(target=Host().loop, name="hosting", daemon=True)
         host_thread.start()
     backoff, info_every, n = INTERVAL, max(1, 600 // INTERVAL), 0
