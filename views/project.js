@@ -2,7 +2,7 @@ import { projectCopilot } from "../lib/aiassist.js";
 import { sb, q, rpc, invalidateProjects, downloadFile, removeFile, api } from "../lib/api.js";
 import { h, icon, badge, catIcon, empty, naNote, md, fmtAgo, fmtDate, fmtDateTime, fmtBytes, fmtNum, CATEGORIES, PROJECT_STATUS, SERVER_STATUS,
   formModal, confirmDialog, toast, toastErr, modal, errMsg, meter, fmtPct } from "../lib/ui.js";
-import { MODULE_TYPES, timeline, lazy } from "../lib/modules.js";
+import { MODULE_TYPES, timeline, lazy, masonryGrid, moduleSpan } from "../lib/modules.js";
 import { newModule, uploadDialog, syncHelp, openAssistant } from "../lib/actions.js";
 import { openShareDialog } from "../lib/share.js";
 import { webCockpit, siteFor } from "../lib/web.js";
@@ -76,9 +76,16 @@ export default async function projectView({ args: [id], query }) {
         h("div.li-icon", icon("layers")), h("div", { style: { flex: 1 } }, h("div.li-title", "Launcher-Steuerung"), h("div.li-sub", "Nutzer, Fehlercodes, Support-Tickets, KI-Verbrauch und Release-Checkliste")), icon("chevronR", "faint")) : null,
       webSlot(),
       enabled.length >= 4 ? moduleJump(enabled) : null,
-      enabled.length ? enabled.map(moduleCard) : isWeb ? null : empty("layers", "Noch keine Module", "Module sind die Bausteine dieser Projektseite – z. B. Dateien, Roblox-Spiel, Server oder Notizen.",
+      enabled.length ? moduleBoard(enabled) : isWeb ? null : empty("layers", "Noch keine Module", "Module sind die Bausteine dieser Projektseite – z. B. Dateien, Roblox-Spiel, Server oder Notizen.",
         h("button.btn.primary", { onclick: () => newModule(id) }, icon("plus"), "Modul hinzufügen")),
       modules.length > enabled.length ? h("div.faint", { style: { fontSize: "12.5px" } }, `${modules.length - enabled.length} ausgeblendete(s) Modul(e) – unter „Einstellungen“ einblendbar.`) : null);
+  }
+  // Module als Masonry: kleine Module nebeneinander, was darunter liegt rutscht hoch
+  function moduleBoard(list) {
+    const spans = list.map(moduleSpan);
+    // das Raster füllt Lücken neben kurzen Modulen mit späteren halben Modulen auf („grid-auto-flow: dense“); gibt es nur ein halbes, wird es ganz
+    if (spans.filter((x) => x === 6).length === 1) spans[spans.indexOf(6)] = 12;
+    return masonryGrid("mod-board", list.map((m, i) => h("div.mb", { class: `mb-${spans[i]}` }, moduleCard(m))));
   }
   // Sprungleiste: bei vielen Modulen direkt hinspringen, alle ein-/ausklappen
   function moduleJump(list) {
