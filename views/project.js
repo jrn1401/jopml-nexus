@@ -83,8 +83,9 @@ export default async function projectView({ args: [id], query }) {
   // Module als Masonry: kleine Module nebeneinander, was darunter liegt rutscht hoch
   function moduleBoard(list) {
     const spans = list.map(moduleSpan);
-    // das Raster füllt Lücken neben kurzen Modulen mit späteren halben Modulen auf („grid-auto-flow: dense“); gibt es nur ein halbes, wird es ganz
-    if (spans.filter((x) => x === 6).length === 1) spans[spans.indexOf(6)] = 12;
+    // das Raster füllt Lücken neben kurzen Modulen mit späteren halben Modulen auf („grid-auto-flow: dense“);
+    // bei ungerader Anzahl hätte das letzte halbe keinen Partner → ganze Breite
+    if (spans.filter((x) => x === 6).length % 2) spans[spans.lastIndexOf(6)] = 12;
     return masonryGrid("mod-board", list.map((m, i) => h("div.mb", { class: `mb-${spans[i]}` }, moduleCard(m))));
   }
   // Sprungleiste: bei vielen Modulen direkt hinspringen, alle ein-/ausklappen
