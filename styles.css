@@ -985,3 +985,42 @@ button.ov-tile { cursor: pointer; } button.ov-tile:hover { border-color: var(--p
 .ki-howto div { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface-2); font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
 .ki-howto b { display: block; color: var(--text); font-size: 13px; margin-bottom: 2px; }
 @media (max-width: 560px) { .ki-howto { grid-template-columns: 1fr; } }
+
+/* ---------- Projekt-Module: Masonry-Kachelraster ---------- */
+.mod-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 4px; column-gap: 16px; grid-auto-flow: row dense; align-items: start; }
+.mw { min-width: 0; grid-column: span 6; }
+.mw-4 { grid-column: span 4; } .mw-6 { grid-column: span 6; } .mw-8 { grid-column: span 8; } .mw-12 { grid-column: span 12; }
+.mw-box { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+.mw-title { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-2); margin-bottom: 10px; font-weight: 600; }
+.mw-body { min-width: 0; }
+.mw-body .table-wrap { overflow-x: auto; }
+.mw-box .md > :first-child { margin-top: 0; } .mw-box .md > :last-child { margin-bottom: 0; }
+.mw-stats .mw-body > .grid > div, .mw-stats .mw-body .stat-tile { background: var(--surface) !important; }
+@media (max-width: 1180px) {
+  .mw-4 { grid-column: span 6; } .mw-8 { grid-column: span 12; }
+}
+@media (max-width: 760px) {
+  .mw-4, .mw-6, .mw-8, .mw-12 { grid-column: span 12; }
+  .mw-box { padding: 12px 13px; }
+}
+.mod-jump { position: sticky; top: 60px; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(8px); }
+.mod-jump-l { font-size: 12px; color: var(--text-2); white-space: nowrap; font-weight: 600; }
+.mod-jump-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; flex: 1; min-width: 0; padding-bottom: 2px; }
+.mod-jump-chips .chip { white-space: nowrap; flex: none; }
+.mod-jump-act { display: flex; gap: 4px; flex: none; }
+.mod-card { scroll-margin-top: 130px; }
+.mod-toggle { gap: 10px; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; min-width: 0; }
+.mod-toggle h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-chev { display: inline-grid; place-items: center; color: var(--text-2); transition: transform .15s; transform: rotate(90deg); }
+.mod-chev svg { width: 15px; height: 15px; }
+.mod-card.mod-closed .mod-chev { transform: rotate(0deg); }
+.mod-card.mod-closed > .card-body { display: none; }
+@media (max-width: 760px) {
+  .mod-jump { top: 56px; flex-wrap: wrap; } .mod-jump-chips { order: 3; flex-basis: 100%; } .mod-jump-act { margin-left: auto; }
+  .mod-toggle .tag { display: none; }
+}
+@media (max-width: 760px) {
+  .mw-table .mw-body { overflow-x: auto; margin: 0 -13px; padding: 0 13px; }
+  .mw-table th, .mw-table td { min-width: 92px; }
+}

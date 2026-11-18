@@ -75,14 +75,26 @@ export default async function projectView({ args: [id], query }) {
       project.category === "jopml" ? h("a.card.card-pad.row.clickable", { href: `#/projects/${id}?tab=launcher`, style: { gap: "12px", textDecoration: "none", color: "inherit" } },
         h("div.li-icon", icon("layers")), h("div", { style: { flex: 1 } }, h("div.li-title", "Launcher-Steuerung"), h("div.li-sub", "Nutzer, Fehlercodes, Support-Tickets, KI-Verbrauch und Release-Checkliste")), icon("chevronR", "faint")) : null,
       webSlot(),
+      enabled.length >= 4 ? moduleJump(enabled) : null,
       enabled.length ? enabled.map(moduleCard) : isWeb ? null : empty("layers", "Noch keine Module", "Module sind die Bausteine dieser Projektseite – z. B. Dateien, Roblox-Spiel, Server oder Notizen.",
         h("button.btn.primary", { onclick: () => newModule(id) }, icon("plus"), "Modul hinzufügen")),
       modules.length > enabled.length ? h("div.faint", { style: { fontSize: "12.5px" } }, `${modules.length - enabled.length} ausgeblendete(s) Modul(e) – unter „Einstellungen“ einblendbar.`) : null);
   }
+  // Sprungleiste: bei vielen Modulen direkt hinspringen, alle ein-/ausklappen
+  function moduleJump(list) {
+    const setAll = (closed) => { list.forEach((m) => { try { localStorage.setItem(`cc:modc:${m.id}`, closed ? "1" : "0"); } catch { /* privat */ } document.getElementById(`mod-${m.id}`)?.classList.toggle("mod-closed", closed); }); };
+    return h("nav.mod-jump", { "aria-label": "Module" },
+      h("span.mod-jump-l", `${list.length} Module`),
+      h("div.mod-jump-chips", list.map((m) => h("button.chip", { type: "button", onclick: () => { const el = document.getElementById(`mod-${m.id}`); if (!el) return; el.classList.remove("mod-closed"); try { localStorage.setItem(`cc:modc:${m.id}`, "0"); } catch { /* */ } el.scrollIntoView({ behavior: "smooth", block: "start" }); } }, m.name))),
+      h("div.mod-jump-act", h("button.btn.sm.ghost", { type: "button", onclick: () => setAll(true) }, "Alle zu"), h("button.btn.sm.ghost", { type: "button", onclick: () => setAll(false) }, "Alle auf")));
+  }
   function moduleCard(m) {
     const T = MODULE_TYPES[m.module_type] || { label: m.module_type, icon: "box", render: () => naNote("Unbekannter Modultyp.") };
-    return h("section.card",
-      h("div.card-head", h("div.row", h("div.li-icon", { style: { width: "30px", height: "30px" } }, icon(T.icon)), h("h3", m.name), h("span.tag", T.label)),
+    let closed = false; try { closed = localStorage.getItem(`cc:modc:${m.id}`) === "1"; } catch { /* */ }
+    const toggle = (e) => { const card = e.currentTarget.closest(".mod-card"); const c = card.classList.toggle("mod-closed"); try { localStorage.setItem(`cc:modc:${m.id}`, c ? "1" : "0"); } catch { /* */ } };
+    return h("section.card.mod-card", { id: `mod-${m.id}`, class: closed ? "mod-closed" : "" },
+      h("div.card-head", h("button.row.mod-toggle", { type: "button", title: "Ein-/ausklappen", "aria-label": `${m.name} ein- oder ausklappen`, onclick: toggle },
+        h("span.mod-chev", icon("chevronR")), h("div.li-icon", { style: { width: "30px", height: "30px" } }, icon(T.icon)), h("h3", m.name), h("span.tag", T.label)),
         h("div.row", { style: { gap: "2px" } },
           h("button.icon-btn", { title: "Mit KI ändern", "aria-label": `${m.name} mit KI ändern`, onclick: () => aiEditModule(m) }, icon("sparkles")),
           h("button.icon-btn", { title: "Als Website teilen", "aria-label": `${m.name} als Website teilen`, onclick: async () => { const x = await import("../lib/modshare.js"); x.shareWidgetsDialog({ key: `mod:${m.id}`, title: m.name, subtitle: project.name, widgets: x.moduleWidgets(m) }); } }, icon("globe")),
