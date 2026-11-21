@@ -72,9 +72,9 @@ export async function renderWorkspace(root, who) {
 
   let seq = 0;
   async function show() {
-    if (location.hash === "#/tasks") { location.replace("#/aufgaben"); return; }
+    if (location.hash.split("?")[0] === "#/tasks") { location.replace("#/aufgaben" + (location.hash.includes("?") ? "?" + location.hash.split("?")[1] : "")); return; }
     if (location.hash === "#/neues-event") { location.replace("#/events"); setTimeout(() => Promise.resolve().then(() => Promise.all([import("../lib/eventwizard.js"), import("./wsevents.js")]).then(([w, e]) => w.eventWizard({ admin: false, quick: () => e.eventForm(null, (x) => { location.hash = `#/events/${x.id}`; }) }))), 500); return; }
-    const hash = location.hash || "#/";
+    const hash = (location.hash || "#/").split("?")[0];
     const s = ++seq;
     root.querySelectorAll(".ws-nav a, .ws-tabbar a").forEach((a) => { const on = a.dataset.r === hash || (a.dataset.r === "#/geteilt" && hash.startsWith("#/g/")) || (a.dataset.r === "#/websites" && hash.startsWith("#/web/")) || (a.dataset.r === "#/events" && hash.startsWith("#/events/")); a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
     body.replaceChildren(h("div.skel", { style: { height: "160px" } }));

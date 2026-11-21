@@ -8,8 +8,12 @@ const PRIO = [["2", "Wichtig"], ["1", "Normal"], ["0", "Irgendwann"]];
 
 // ---------- Aufgaben ----------
 export async function tasksPage() {
+  // aus einer Mitteilung gekommen (#/aufgaben?t=<id>) → Aufgabe hervorheben
+  const focusId = new URLSearchParams(location.hash.split("?")[1] || "").get("t");
+  if (focusId) setTimeout(() => document.querySelector(`[data-task="${focusId}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 400);
   let rows = await q(sb.from("nx_tasks").select("*").order("done").order("due", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false }).limit(500));
   let filter = local.get("ws:tf", "open"), term = "";
+  if (focusId) filter = "all";
   const list = h("div.list", { role: "list", "aria-live": "polite" });
   const counter = h("span.faint");
   const tabs = h("div.seg", { role: "tablist", "aria-label": "Filter" }, [["open", "Offen"], ["today", "Heute & überfällig"], ["done", "Erledigt"], ["all", "Alle"]].map(([k, t]) =>
@@ -56,12 +60,15 @@ export async function tasksPage() {
     list.replaceChildren(...(vis.length ? vis.map((t) => {
       const late = !t.done && t.due && new Date(t.due) < now;
       const cb = h("input", { type: "checkbox", checked: t.done, "aria-label": `${t.title} ${t.done ? "wieder öffnen" : "erledigt"}`, onchange: (e) => { t.done = e.target.checked; draw(); save({ done: t.done }, t.id); } });
-      return h("div.list-item.task-row", { role: "listitem", class: t.done ? "done" : "" },
+      return h("div.list-item.task-row", { role: "listitem", "data-task": t.id, class: [t.done ? "done" : "", focusId === t.id ? "flash" : ""].join(" ").trim() },
         h("label.check", { style: { margin: 0 } }, cb),
         h("span.prio", { class: `p${t.priority}`, title: PRIO.find(([k]) => k === String(t.priority))?.[1] }),
         h("div.li-main", h("div.li-title", t.title),
           h("div.li-sub", [t.due ? (late ? "Überfällig · " : "Fällig ") + fmtDateTime(t.due) : null, t.note ? t.note.slice(0, 80) : null].filter(Boolean).join(" · ") || "Keine Frist")),
+        t.status === "doing" && !t.done ? h("span.badge.b-pri", "in Bearbeitung") : null,
         late ? h("span.badge.b-bad", "überfällig") : null,
+        !t.done ? h("button.btn.sm.ghost", { "aria-label": t.status === "doing" ? `„${t.title}“ nicht mehr in Bearbeitung` : `„${t.title}“ in Bearbeitung setzen`, title: t.status === "doing" ? "Nicht mehr in Bearbeitung" : "In Bearbeitung", "aria-pressed": String(t.status === "doing"),
+          onclick: () => save({ status: t.status === "doing" ? null : "doing" }, t.id) }, icon(t.status === "doing" ? "stop" : "play")) : null,
         !t.done ? h("button.btn.sm.ghost", { "aria-label": `„${t.title}“ in Schritte zerlegen`, title: "KI: in Schritte zerlegen", onclick: () => breakDownDialog(t, async (steps) => {
           await q(sb.from("nx_tasks").insert(steps.map((x, i) => ({ title: `${t.title.slice(0, 100)} › ${x}`.slice(0, 300), due: t.due, priority: t.priority, note: `Schritt ${i + 1}` })))); rows = await q(sb.from("nx_tasks").select("*").order("done").order("due", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false }).limit(500)); draw(); }) }, icon("sparkles")) : null,
         h("button.btn.sm.ghost", { "aria-label": `„${t.title}“ bearbeiten`, title: "Bearbeiten", onclick: () => edit(t) }, icon("edit")));

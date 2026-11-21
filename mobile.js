@@ -4,6 +4,7 @@ import { sb, rpc, nx, q, aiModel } from "./lib/api.js";
 import { h, clear, toast, toastErr, errMsg, md, fmtEUR, fmtNum, fmtAgo, copyText, confirmDialog, modal } from "./lib/ui.js";
 import { qrSvg } from "./lib/qr.js";
 import { installErrorLog } from "./lib/errlog.js";
+import { isTaskNote, resolveTask, setTaskDone, setTaskDoing, deleteTask, taskState } from "./lib/notetask.js";
 installErrorLog("mobile", (p) => rpc("nx_log_error", { p }));
 import { micButton, speak, canSpeak } from "./lib/voice.js";
 import { broadcastDialog } from "./lib/broadcast.js";
@@ -32,6 +33,9 @@ const SVG = {
   folder: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
   ext: "M14 3h7v7M21 3l-9 9M19 14v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6",
   lock: "M5 11h14v10H5zM8 11V7a4 4 0 1 1 8 0v4",
+  trash: "M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14",
+  play: "M8 5v14l11-7z",
+  chev: "M9 6l6 6-6 6",
 };
 const ic = (n, s = 22) => { const el = document.createElementNS("http://www.w3.org/2000/svg", "svg"); el.setAttribute("viewBox", "0 0 24 24"); el.setAttribute("width", s); el.setAttribute("height", s);
   el.setAttribute("fill", "none"); el.setAttribute("stroke", "currentColor"); el.setAttribute("stroke-width", "1.8"); el.setAttribute("stroke-linecap", "round"); el.setAttribute("stroke-linejoin", "round"); el.setAttribute("aria-hidden", "true");
@@ -276,11 +280,66 @@ async function bellView() {
   const tbl = data?.admin ? "cc_notifications" : "nx_notifications";
   const rows = await q(sb.from(tbl).select("*").order("created_at", { ascending: false }).limit(50));
   const lv = { error: "bad", warning: "warn", success: "ok" };
+  const markRead = async (n) => { if (n.read) return; n.read = true; await sb.from(tbl).update({ read: true }).eq("id", n.id); data.unread = Math.max(0, (data.unread || 1) - 1); drawBar(); };
+  // Schnellknöpfe direkt unter Aufgaben-Mitteilungen
+  const quick = (n, el) => {
+    const bar = h("div.m-note-act");
+    resolveTask(n, !!data?.admin).then((t) => {
+      if (!t) return;
+      const [label, cls] = taskState(t);
+      bar.replaceChildren(h("span.m-st", { class: cls }, label),
+        t.done ? null : h("button.btn.sm", { onclick: async (e) => { e.stopPropagation(); try { await setTaskDone(t, true); await markRead(n); toast("Erledigt ✓"); draw(); } catch (er) { toastErr(er); } } }, ic("check", 15), "Erledigt"),
+        t.done || t.status === "doing" ? null : h("button.btn.sm.ghost", { onclick: async (e) => { e.stopPropagation(); try { await setTaskDoing(t, true); await markRead(n); toast("In Bearbeitung"); draw(); } catch (er) { toastErr(er); } } }, ic("play", 15), "In Arbeit"));
+      el.classList.add("is-task");
+    }).catch(() => {});
+    return bar;
+  };
+  const item = (n) => {
+    const el = h("button.m-note", { type: "button", class: n.read ? "" : "new", "aria-label": `${n.title} – Details`, onclick: () => noteSheet(n, tbl, markRead) },
+      h("i.m-lv", { class: lv[n.level] || "" }),
+      h("div.m-note-b", h("div.m-task-t", n.title), n.body ? h("div.m-row-s", n.body) : null, h("div.m-row-s", fmtAgo(n.created_at))),
+      h("span.m-note-chev", ic("chev", 16)));
+    return h("div.m-note-w", el, isTaskNote(n) ? quick(n, el) : null);
+  };
   return h("div.m-pad",
     h("div.m-head", h("h1", "Mitteilungen"), rows.some((n) => !n.read) ? h("button.btn.sm", { onclick: async () => { await sb.from(tbl).update({ read: true }).eq("read", false); data.unread = 0; drawBar(); draw(); } }, "Alle gelesen") : null),
-    rows.length ? h("div.m-list", rows.map((n) => h("div.m-note", { class: n.read ? "" : "new" }, h("i.m-lv", { class: lv[n.level] || "" }),
-      h("div", h("div.m-task-t", n.title), n.body ? h("div.m-row-s", n.body) : null, h("div.m-row-s", fmtAgo(n.created_at))))))
-      : h("div.m-empty", "Keine Mitteilungen."));
+    rows.length ? h("div.m-list", rows.map(item)) : h("div.m-empty", "Keine Mitteilungen."),
+    rows.length ? h("button.btn.ghost.m-wide.m-mt", { onclick: async () => { if (await confirmDialog("Alle Mitteilungen löschen?", "Die Liste wird geleert. Aufgaben bleiben erhalten.", { ok: "Löschen" })) { try { await q(sb.from(tbl).delete().in("id", rows.map((r) => r.id))); data.unread = 0; drawBar(); draw(); } catch (er) { toastErr(er); } } } }, ic("trash", 16), "Alle Mitteilungen löschen") : null);
+}
+
+// Detailansicht: ganze Mitteilung, zugehörige Aufgabe mit Status-Knöpfen, Sprung zur passenden Seite
+function noteSheet(n, tbl, markRead) {
+  markRead(n).catch(() => {});
+  const admin = !!data?.admin;
+  const taskBox = h("div.m-sheet-task", isTaskNote(n) ? h("div.m-row-s", "Aufgabe wird gesucht …") : null);
+  const openHref = (route) => admin ? `./${route || n.link || "#/"}` : `./${route || "#/"}`;
+  const openBtn = h("a.btn.m-wide", { href: openHref(n.link && !/^#\/tasks\?/.test(n.link) ? n.link.split("?")[0] : n.link?.startsWith("#/tasks") ? "#/tasks" : null) }, ic("ext", 16), "In der Vollversion öffnen");
+  const body = h("div.stack", { style: { gap: "12px" } },
+    n.body ? h("p", { style: { margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.5 } }, n.body) : null,
+    h("div.m-row-s", new Date(n.created_at).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) + " Uhr"),
+    taskBox, openBtn);
+  const m = modal(n.title, body, { foot: [
+    h("button.btn.ghost", { onclick: async () => { try { await q(sb.from(tbl).delete().eq("id", n.id)); m.close(); toast("Mitteilung gelöscht"); draw(); } catch (er) { toastErr(er); } } }, ic("trash", 16), "Mitteilung löschen"),
+    h("button.btn", { onclick: () => m.close() }, "Schließen")] });
+  if (!isTaskNote(n)) return;
+  const drawTask = (t) => {
+    if (!t) { taskBox.replaceChildren(h("div.m-row-s", "Die zugehörige Aufgabe gibt es nicht mehr.")); return; }
+    openBtn.href = openHref(t.route);
+    openBtn.lastChild.textContent = t.src === "event" ? "Zum Event" : "Zur Aufgabenseite";
+    const [label, cls] = taskState(t);
+    const act = (fn, msg) => async (e) => { const b = e.currentTarget; b.disabled = true; try { await fn(); toast(msg); drawTask(t); draw(); } catch (er) { toastErr(er); b.disabled = false; } };
+    taskBox.replaceChildren(
+      h("div.m-sheet-th", h("b", t.title), h("span.m-st", { class: cls }, label)),
+      t.due ? h("div.m-row-s", `Fällig: ${new Date(t.due).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} Uhr`) : null,
+      t.note ? h("div.m-row-s", { style: { whiteSpace: "pre-wrap" } }, t.note) : null,
+      h("div.m-sheet-btns",
+        t.done ? h("button.btn", { onclick: act(() => setTaskDone(t, false), "Wieder offen") }, "Wieder öffnen")
+          : h("button.btn.primary", { onclick: act(() => setTaskDone(t, true), "Erledigt ✓") }, ic("check", 16), "Erledigt"),
+        t.done ? null : t.status === "doing" ? h("button.btn", { onclick: act(() => setTaskDoing(t, false), "Wieder offen") }, "Nicht mehr in Arbeit")
+          : h("button.btn", { onclick: act(() => setTaskDoing(t, true), "In Bearbeitung") }, ic("play", 16), "In Bearbeitung"),
+        h("button.btn.ghost.m-danger", { onclick: async () => { if (await confirmDialog("Aufgabe löschen?", `„${t.title}“ wird endgültig entfernt.`, { ok: "Löschen" })) { try { await deleteTask(t); await q(sb.from(tbl).delete().eq("id", n.id)); m.close(); toast("Aufgabe gelöscht"); draw(); } catch (er) { toastErr(er); } } } }, ic("trash", 16), "Aufgabe löschen")));
+  };
+  resolveTask(n, admin).then(drawTask).catch((e) => taskBox.replaceChildren(h("div.m-row-s", errMsg(e))));
 }
 
 async function shareView() {

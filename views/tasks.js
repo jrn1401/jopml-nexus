@@ -4,6 +4,7 @@ import { h, icon, clear, fmtDateTime, empty, formModal, confirmDialog, toast, to
 import { CONFIG } from "../config.js";
 import { parseQuickTask, breakDownDialog, prioritize } from "../lib/aiassist.js";
 import { md } from "../lib/ui.js";
+import { setTaskDoing } from "../lib/notetask.js";
 
 const PRIO = { 0: ["Niedrig", "b-idle"], 1: ["Normal", "b-pri"], 2: ["Wichtig", "b-bad"] };
 const toLocal = (iso) => { const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
@@ -13,6 +14,9 @@ export default async function tasksView() {
   const root = h("div");
   let all = [], filter = local.get("taskFilter", "open"), view = local.get("taskView", "list"), month = new Date();
   const projs = await projects();
+  // aus einer Mitteilung gekommen (#/tasks?t=<id>) → Aufgabe hervorheben
+  const focusId = new URLSearchParams(location.hash.split("?")[1] || "").get("t");
+  if (focusId) filter = "all";
 
   async function load() { all = await rpc("cc_tasks_all"); draw(); }
   function edit(t) {
@@ -51,11 +55,14 @@ export default async function tasksView() {
 
   function row(t) {
     const over = !t.done && t.due && new Date(t.due) < Date.now();
-    return h("div.list-item",
+    return h("div.list-item", { "data-task": t.id, class: focusId === t.id ? "flash" : "" },
       h("input", { type: "checkbox", checked: t.done, "aria-label": "Erledigt", style: { width: "18px", height: "18px", accentColor: "var(--primary)", flex: "none" }, onchange: (e) => toggle(t, e.target.checked) }),
       h("div.li-main", h("div.li-title", { style: t.done ? { textDecoration: "line-through", color: "var(--text-3)" } : null }, t.title),
         h("div.li-sub", [t.context, t.due ? `fällig ${fmtDateTime(t.due)}` : null, t.assignee ? `zuständig: ${t.assignee}` : null, t.note].filter(Boolean).join(" · "))),
+      t.status === "doing" && !t.done ? h("span.badge.b-pri", "in Bearbeitung") : null,
       over ? h("span.badge.b-bad", "überfällig") : null,
+      !t.done && (t.src === "task" || t.src === "event") ? h("button.icon-btn", { title: t.status === "doing" ? "Nicht mehr in Bearbeitung" : "In Bearbeitung setzen", "aria-label": t.status === "doing" ? "Nicht mehr in Bearbeitung" : "In Bearbeitung setzen", "aria-pressed": String(t.status === "doing"),
+        onclick: async () => { try { await setTaskDoing(t, t.status !== "doing"); draw(); } catch (e) { toastErr(e); } } }, icon(t.status === "doing" ? "stop" : "play")) : null,
       t.src === "task" && t.priority !== 1 ? h("span.badge", { class: PRIO[t.priority][1] }, PRIO[t.priority][0]) : null,
       !t.done ? h("button.icon-btn", { title: "KI: in Schritte zerlegen", "aria-label": `„${t.title}“ in Schritte zerlegen`, onclick: () => breakDownDialog(t, async (steps) => {
         await q(sb.from("cc_tasks").insert(steps.map((x, i) => ({ title: `${t.title.slice(0, 80)} › ${x}`.slice(0, 200), project_id: t.project_id || null, due: t.due || null, priority: t.priority ?? 1, note: `Schritt ${i + 1}` })))); load(); }) }, icon("sparkles")) : null,
@@ -108,5 +115,6 @@ export default async function tasksView() {
             h("button.btn.primary", { onclick: () => edit() }, icon("plus"), "Neue Aufgabe"))));
   }
   await load();
+  if (focusId) setTimeout(() => root.querySelector(`[data-task="${focusId}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 150);
   return root;
 }

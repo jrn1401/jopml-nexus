@@ -1072,3 +1072,6 @@ button.ov-tile { cursor: pointer; } button.ov-tile:hover { border-color: var(--p
 .dc-h { margin: 0 0 8px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3, var(--muted)); font-weight: 650; }
 .ev-panel .card-head { gap: 10px; }
 .ev-panel .ov-strip { margin: 0; }
+/* aus Mitteilung angesprungene Aufgabe */
+.list-item.flash { animation: nxflash 2.4s ease-out 1; border-radius: 10px; }
+@keyframes nxflash { 0%, 40% { background: color-mix(in srgb, var(--primary) 22%, transparent); } 100% { background: transparent; } }
