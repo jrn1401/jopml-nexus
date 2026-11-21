@@ -420,3 +420,11 @@ function openSearch() {
 }
 
 boot().catch((e) => { console.error(e); renderLogin(errMsg(e)); });
+
+// App sichtbar → Zähler am App-Symbol und alte Mitteilungen löschen
+function clearBadge() {
+  try { navigator.clearAppBadge?.(); } catch { /* egal */ }
+  navigator.serviceWorker?.ready.then((r) => r.active?.postMessage("clear-badge")).catch(() => {});
+}
+clearBadge();
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") clearBadge(); });

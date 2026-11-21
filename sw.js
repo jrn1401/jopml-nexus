@@ -1,5 +1,5 @@
 // Service Worker: cached nur die App-Hülle (statische Dateien). Daten (Supabase) werden nie gecacht.
-const VERSION = "cc-v85";
+const VERSION = "cc-v86";
 const SHELL = [
   "./", "index.html", "styles.css", "theme.js", "app.js", "config.js", "manifest.webmanifest",
   "lib/api.js", "lib/ui.js", "lib/charts.js", "lib/modules.js", "lib/actions.js",
@@ -50,9 +50,19 @@ self.addEventListener("push", (e) => {
     try { const n = (await self.registration.getNotifications()).length; if (self.navigator.setAppBadge) await self.navigator.setAppBadge(n); } catch { /* nicht überall */ }
   })());
 });
+// Zähler am App-Symbol = Mitteilungen, die noch in der Mitteilungszentrale liegen
+async function syncBadge() {
+  try { const n = (await self.registration.getNotifications()).length; n ? await self.navigator.setAppBadge?.(n) : await self.navigator.clearAppBadge?.(); } catch { /* nicht überall */ }
+}
+self.addEventListener("notificationclose", (e) => e.waitUntil(syncBadge()));
+// App geöffnet → alles gesehen: Mitteilungen wegräumen, Zähler auf 0
+self.addEventListener("message", (e) => {
+  if (e.data !== "clear-badge") return;
+  e.waitUntil((async () => { try { (await self.registration.getNotifications()).forEach((n) => n.close()); } catch { /* egal */ } await syncBadge(); })());
+});
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  try { self.navigator.clearAppBadge?.(); } catch { /* egal */ }
+  e.waitUntil(syncBadge());
   const url = e.notification.data?.url || "./";
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
     for (const c of list) if ("focus" in c) { c.navigate?.(url); return c.focus(); }
