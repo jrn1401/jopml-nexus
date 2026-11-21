@@ -17,6 +17,7 @@ import { viewToggle, charts } from "../lib/viewmode.js";
 import { donut, PALETTE } from "../lib/charts.js";
 import { tasksPage, tasksCard, firstSteps, helpPage, interestsCard, aiCommand } from "./wsextra.js";
 import { eventsPage, eventPage, aiPlan } from "./wsevents.js";
+import { eventPanel, pickEvents } from "../lib/evpanel.js";
 import { projectPage, importDialog } from "./wsproject.js";
 
 const KINDS = { all: ["Alle", "dashboard"], website: ["Websites", "globe"], repo: ["Repositories", "code"], event: ["Events", "calendar"], ai: ["KI", "sparkles"], database: ["Datenbanken", "server"], app: ["Apps", "box"], other: ["Sonstiges", "folder"] };
@@ -107,11 +108,12 @@ export async function renderWorkspace(root, who) {
 
   // ---------- Übersicht ----------
   async function overview() {
-    const [projects, conns, shared, usage] = await Promise.all([
+    const [projects, conns, shared, usage, myEvents] = await Promise.all([
       q(sb.from("nx_projects").select("*").order("pinned", { ascending: false }).order("updated_at", { ascending: false }).limit(500)),
       q(sb.from("cc_connections").select("id,provider,status,last_sync")),
       rpc("cc_guest_list").catch(() => []),
-      nx("usage").catch(() => null)]);
+      nx("usage").catch(() => null),
+      feat("events") ? q(sb.from("nx_events").select("id,name,event_date,tickets").gte("event_date", new Date(Date.now() - 86400_000).toISOString()).order("event_date").limit(30)).catch(() => []) : []]);
     let kind = local.get("ws:kind", "all"), term = "";
     const grid = h("div.grid.ws-grid");
     const counts = projects.reduce((a, p) => ((a[p.kind] = (a[p.kind] || 0) + 1), a), {});
@@ -149,12 +151,38 @@ export async function renderWorkspace(root, who) {
     const live = web.reduce((a, w) => a + (w.live || 0), 0);
     // Startseite anpassen: Bereiche ein-/ausblenden (pro Gerät)
     const hide = local.get("ws:hide", {});
+    const evCfg = local.get("ws:ev", null);
+    const statSel = local.get("ws:stats", null) || ["projects", "conns", "web", "ai"];
     const customize = () => {
-      const opts = [["stats", "Kennzahlen"], ["ai", "KI-Eingabe"], ["brief", "KI-Briefing"], ["quick", "„Was möchtest du tun?“"], ["steps", "Erste Schritte"], ["tasks", "Aufgaben & Schnellzugriff"]];
-      const m = modal("Startseite anpassen", h("div.stack", h("p.faint", { style: { margin: 0 } }, "Was soll auf deiner Startseite stehen?"),
-        ...opts.map(([k, t]) => h("label.check", h("input", { type: "checkbox", checked: !hide[k], onchange: (e) => { hide[k] = !e.target.checked; local.set("ws:hide", hide); } }), t)),
-        h("button.btn.primary", { onclick: () => { m.close(); show(); } }, "Fertig")));
+      const opts = [["stats", "Kennzahlen"], ["events", "Event-Prognose"], ["ai", "KI-Eingabe"], ["brief", "KI-Briefing"], ["quick", "„Was möchtest du tun?“"], ["steps", "Erste Schritte"], ["tasks", "Aufgaben & Schnellzugriff"]];
+      const st = new Set(statSel);
+      let ev = Array.isArray(evCfg) ? [...evCfg] : null;
+      const box = h("div.stack", { style: { gap: "14px" } });
+      const chip = (on, l, fn) => h("button.chip", { type: "button", class: on ? "on" : "", "aria-pressed": String(on), onclick: fn }, l);
+      const draw2 = () => box.replaceChildren(
+        h("div", h("h4.dc-h", "Bereiche"), ...opts.map(([k, t]) => h("label.check", h("input", { type: "checkbox", checked: !hide[k], onchange: (e) => { hide[k] = !e.target.checked; } }), t))),
+        h("div", h("h4.dc-h", "Kennzahlen oben"), h("div.row.wrap", { style: { gap: "6px" } }, ...WS_STATS.map(([k, l]) => chip(st.has(k), l, () => { st.has(k) ? st.delete(k) : st.add(k); draw2(); })))),
+        h("div", h("h4.dc-h", "Event-Prognose – welche Events?"),
+          h("label.check", h("input", { type: "checkbox", checked: ev === null, onchange: (e) => { ev = e.target.checked ? null : myEvents.slice(0, 1).map((x) => x.id); draw2(); } }), "Automatisch das nächste Event"),
+          ev === null ? null : myEvents.length ? h("div.row.wrap", { style: { gap: "6px", marginTop: "6px" } }, ...myEvents.map((x) => chip(ev.includes(x.id), x.name, () => { ev = ev.includes(x.id) ? ev.filter((y) => y !== x.id) : [...ev, x.id]; draw2(); }))) : h("p.faint", "Noch keine anstehenden Events."),
+          h("p.faint", { style: { fontSize: "12.5px", margin: "6px 0 0" } }, "Welche Zahlen und Prognosen je Event (Ergebnis, Break-even, Pro Gast …) erscheinen, wählst du am Zahnrad der Event-Leiste.")));
+      draw2();
+      const m = modal("Startseite anpassen", box, { foot: [
+        h("button.btn.ghost", { onclick: () => { local.set("ws:hide", {}); local.set("ws:stats", null); local.set("ws:ev", null); m.close(); show(); } }, icon("refresh"), "Standard"),
+        h("button.btn.primary", { onclick: () => { local.set("ws:hide", hide); local.set("ws:stats", WS_STATS.map(([k]) => k).filter((k) => st.has(k))); local.set("ws:ev", ev && ev.length ? ev : null); m.close(); show(); } }, icon("check"), "Speichern")] });
     };
+    const tk = myEvents.reduce((a, e) => { a.sold += Number(e.tickets?.sold) || 0; a.rev += Number(e.tickets?.revenue) || 0; return a; }, { sold: 0, rev: 0 });
+    const STATB = {
+      projects: () => statBox("Projekte", projects.length, "folder"),
+      conns: () => statBox("Verbindungen", conns.length, "link", err ? `${err} mit Fehler` : null),
+      web: () => web.length ? statBox("Websites live", h("span.row", { style: { gap: "10px" } }, h("span.live-dot", { class: live ? "on" : "" }), String(live)), "globe", `${web.reduce((a, w) => a + (w.today_uv || 0), 0)} Besucher heute`) : statBox("Mit dir geteilt", shared.length, "users"),
+      ai: () => statBox("KI-Fragen heute", usage ? `${usage.requests_today}${usage.limit ? ` / ${usage.limit}` : ""}` : "–", "sparkles", usage?.limit ? "eigener KI-Schlüssel = ohne Limit" : null),
+      events: () => statBox("Anstehende Events", myEvents.length, "calendar", myEvents[0] ? `nächstes: ${myEvents[0].name}` : null),
+      tickets: () => statBox("Tickets verkauft", tk.sold, "ticket", "alle anstehenden Events"),
+      revenue: () => statBox("Ticket-Einnahmen", fmtEUR(tk.rev), "zap", "alle anstehenden Events"),
+      shared: () => statBox("Mit dir geteilt", shared.length, "users"),
+    };
+    const shownEvents = feat("events") && !hide.events ? pickEvents(myEvents, evCfg, 1) : [];
     return h("div",
       guest ? h("div.banner", { style: { marginBottom: "14px", alignItems: "center" } }, icon("info"),
         h("div", { style: { flex: 1 } }, "Du bist als Gast angemeldet – alles wird nach 7 Tagen gelöscht. Sichere dein Konto mit Google: deine Projekte und das KI-Wissen bleiben erhalten, und du kannst Dienste verbinden, Websites live sehen und teilen."),
@@ -163,9 +191,8 @@ export async function renderWorkspace(root, who) {
         h("div", h("h1", `${hour < 11 ? "Guten Morgen" : hour < 18 ? "Hallo" : "Guten Abend"}${first ? `, ${first}` : ""}`),
           h("p", conns.length ? `${projects.length} Projekte aus ${conns.length} Verbindung${conns.length === 1 ? "" : "en"} · stündlich aktualisiert` : "Füge einen API-Schlüssel ein – dein Bereich füllt sich automatisch.")),
         h("div.row.wrap", { style: { gap: "8px" } }, h("button.btn.ghost", { title: "Startseite anpassen", "aria-label": "Startseite anpassen", onclick: customize }, icon("settings")), guest ? h("button.btn.primary", { onclick: () => editProject() }, icon("plus"), "Projekt anlegen") : h("button.btn.primary", { onclick: () => connect(show) }, icon("link"), "Verbinden"), h("button.btn", { onclick: () => aiDrawer() }, icon("bot"), "KI fragen"))),
-      hide.stats ? null : h("div.grid.g-4", { style: { marginBottom: "18px" } },
-        statBox("Projekte", projects.length, "folder"), statBox("Verbindungen", conns.length, "link", err ? `${err} mit Fehler` : null),
-        web.length ? statBox("Websites live", h("span.row", { style: { gap: "10px" } }, h("span.live-dot", { class: live ? "on" : "" }), String(live)), "globe", `${web.reduce((a, w) => a + (w.today_uv || 0), 0)} Besucher heute`) : statBox("Mit dir geteilt", shared.length, "users"), statBox("KI-Fragen heute", usage ? `${usage.requests_today}${usage.limit ? ` / ${usage.limit}` : ""}` : "–", "sparkles", usage?.limit ? "eigener KI-Schlüssel = ohne Limit" : null)),
+      hide.stats ? null : h("div.grid.g-4", { style: { marginBottom: "18px" } }, ...statSel.filter((k) => STATB[k]).map((k) => STATB[k]())),
+      ...shownEvents.map((e) => h("div", { style: { marginBottom: "16px" } }, eventPanel(e.id, { admin: false, name: e.name }))),
       feat("ai") && !hide.ai ? aiCommand({ ask: (t) => aiDrawer(t), planEvent: async (t) => (await aiPlan(null, t)).id }) : null,
       feat("ai") && !hide.brief && projects.length ? h("div", { style: { marginBottom: "16px" } }, dailyBriefing({ key: "brief-ws", onOpen: () => aiDrawer("Was soll ich heute als Erstes tun – und warum?") })) : null,
       hide.quick ? null : h("section.card.quick-studio", h("div.card-head", h("h3", "Was möchtest du tun?"), h("a.faint", { href: "#/studio", style: { fontSize: "13px" } }, "KI-Studio →")),
@@ -188,6 +215,7 @@ export async function renderWorkspace(root, who) {
       h("div.row.wrap", { style: { justifyContent: "space-between", gap: "10px", marginBottom: "4px" } }, tabs, h("div.row", { style: { gap: "8px" } }, viewToggle(), search, h("button.btn", { onclick: () => editProject() }, icon("plus"), "Projekt"))),
       grid);
   }
+  const WS_STATS = [["projects", "Projekte"], ["conns", "Verbindungen"], ["web", "Websites live"], ["ai", "KI-Fragen heute"], ["events", "Anstehende Events"], ["tickets", "Tickets verkauft"], ["revenue", "Ticket-Einnahmen"], ["shared", "Mit dir geteilt"]];
   const statBox = (label, v, ic, sub) => stat(label, typeof v === "object" ? v : String(v), { ic, sub });
 
   function editProject(p = null) {

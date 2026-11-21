@@ -356,10 +356,13 @@ async function gearView() {
     h("section.m-card", h("div.m-card-h", ic("bell", 18), h("span", "Benachrichtigungen")),
       pushNote ? h("div.m-row-s", pushNote) : sub
         ? h("div.m-rowbtn", h("span.m-ok", "Auf diesem Handy aktiv"),
-          h("button.btn.sm", { onclick: async (e) => { const b = e.currentTarget; b.disabled = true; try { await rpc("nx_push_test"); toast("Test gesendet"); } catch (er) { toastErr(er); } b.disabled = false; } }, "Test"),
+          h("button.btn.sm", { onclick: (e) => pushTest(e.currentTarget, sub) }, "Test"),
           h("button.btn.sm.ghost", { onclick: async () => { await disablePush(); draw(); } }, "Aus"))
         : h("button.btn.primary.m-wide", { onclick: async (e) => { const b = e.currentTarget; b.disabled = true; try { await enablePush(); toast("Benachrichtigungen aktiv"); draw(); } catch (er) { toastErr(er); b.disabled = false; } } }, "Benachrichtigungen aktivieren")),
     sub && mine ? topicsCard(sub, mine) : null,
+    sub ? h("section.m-card", h("div.m-card-h", h("span", "Kommt nichts oder zu spät an?")),
+      h("div.m-row-s", "Drück „Test“: Die App misst, wie schnell der Server die Nachricht an dein Handy übergibt. Kommt sie trotzdem nicht oder spät:"),
+      h("div.m-row-s.m-mt", isIOS() ? "iPhone: Einstellungen → Mitteilungen → Nexus → „Mitteilungen erlauben“ an, Zustellung „Sofort“ (nicht „Geplante Zusammenfassung“), Sperrbildschirm + Banner an. Fokus/„Nicht stören“ hält Mitteilungen zurück. Stromsparmodus kann verzögern." : "Android: In den App-Infos des Browsers Benachrichtigungen erlauben und Akku-Optimierung für den Browser ausschalten.")) : null,
     await invitesCard(),
     h("section.m-card", h("a.m-li.m-link-row", { href: "./" }, h("span", "Vollversion öffnen"), ic("ext", 16)),
       h("button.m-li.m-link-row", { onclick: async () => { if (await confirmDialog("Abmelden?", "Du wirst nur auf diesem Gerät abgemeldet.", { ok: "Abmelden", danger: false })) { await sb.auth.signOut({ scope: "local" }); renderLogin(); } } }, h("span", "Abmelden"), ic("lock", 16))),
@@ -367,9 +370,26 @@ async function gearView() {
 }
 
 // ---------- Was soll auf dieses Handy kommen? ----------
+// Test mit Messung: Server-Übergabe an Apple/Google wird über „last_ok“ des Geräts sichtbar
+async function pushTest(b, sub) {
+  b.disabled = true;
+  const t0 = Date.now();
+  try {
+    const before = (await q(sb.from("cc_push_subs").select("last_ok").eq("endpoint", sub.endpoint)).catch(() => []))[0]?.last_ok || null;
+    await rpc("nx_push_test");
+    toast("Test gesendet – warte auf Zustellung …");
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      const now = (await q(sb.from("cc_push_subs").select("last_ok").eq("endpoint", sub.endpoint)).catch(() => []))[0]?.last_ok || null;
+      if (now && now !== before) { toast(`Server hat nach ${Math.max(1, Math.round((Date.now() - t0) / 1000))} s an dein Handy übergeben. Kommt nichts, liegt es an den Handy-Einstellungen.`, "ok", 7000); b.disabled = false; return; }
+    }
+    toast("Der Server konnte nicht zustellen. Schalte Benachrichtigungen aus und wieder ein.", "err", 7000);
+  } catch (er) { toastErr(er); }
+  b.disabled = false;
+}
 const TOPICS = [["tickets", "Ticketverkäufe"], ["sites", "Website-Ausfälle"], ["hosting", "Hosting & Deploys"], ["tasks", "Fällige Aufgaben"], ["digest", "Überblick (Admin täglich, sonst wöchentlich)"], ["security", "Anmeldungen & Sicherheit"], ["other", "Sonstiges (neue Module, Sync …)"]];
 function topicsCard(sub, mine) {
-  const list = data?.admin ? TOPICS : TOPICS.filter(([k]) => ["sites", "tasks", "digest", "other"].includes(k));
+  const list = data?.admin ? TOPICS : TOPICS.filter(([k]) => ["tickets", "sites", "tasks", "digest", "other"].includes(k));
   const set = new Set(mine.topics || []);
   const save = async () => { try { await rpc("cc_push_topics_set", { p_endpoint: sub.endpoint, p_topics: [...set] }); toast("Gespeichert"); } catch (e) { toastErr(e); } };
   return h("section.m-card", h("div.m-card-h", h("span", "Benachrichtigen bei")),
@@ -380,7 +400,7 @@ function topicsCard(sub, mine) {
 const INV_TOPICS = [["tickets", "Ticketverkäufe"], ["sites", "Website-Ausfälle"], ["hosting", "Hosting & Deploys"], ["tasks", "Fällige Aufgaben"]];
 const inviteUrl = (c) => `${BASE}i.html?c=${c}`;
 async function invitesCard() {
-  const invTopics = data?.admin ? INV_TOPICS : INV_TOPICS.filter(([k]) => ["sites", "tasks"].includes(k));
+  const invTopics = data?.admin ? INV_TOPICS : INV_TOPICS.filter(([k]) => ["tickets", "sites", "tasks"].includes(k));
   const [inv, subs] = await Promise.all([q(sb.from("cc_push_invites").select("*").is("revoked_at", null).order("created_at", { ascending: false })).catch(() => []),
     q(sb.from("cc_push_subs").select("id,invite_id,device,created_at").not("invite_id", "is", null)).catch(() => [])]);
   const shareIt = (i) => navigator.share ? navigator.share({ title: i.label, text: `Hol dir die Benachrichtigungen „${i.label}“ aufs Handy (kein Konto nötig):`, url: inviteUrl(i.code) }).catch(() => {}) : copyText(inviteUrl(i.code));
@@ -457,6 +477,8 @@ if ("serviceWorker" in navigator) {
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
   }).catch(() => {});
   let reloaded = false;
+  // Push kam an → offene App sofort aktualisieren (Mitteilungen, Startseite)
+  navigator.serviceWorker.addEventListener("message", (e) => { if (e.data?.type === "nx-push" && document.visibilityState === "visible") { drawBar(); if (["home", "bell"].includes(tab)) draw(); } });
   navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloaded) { reloaded = true; location.reload(); } });
 }
 sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") renderLogin(); });

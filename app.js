@@ -241,6 +241,8 @@ function renderShell() {
   let lastVis = Date.now();
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Date.now() - lastVis > 60_000) poll(); lastVis = Date.now(); });
   document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && poll());
+  // Push kam an → Glocke sofort aktualisieren
+  navigator.serviceWorker?.addEventListener("message", (e) => { if (e.data?.type === "nx-push") poll(); });
 }
 
 async function refreshPinned() {

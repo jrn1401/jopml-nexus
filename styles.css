@@ -1068,3 +1068,7 @@ button.ov-tile { cursor: pointer; } button.ov-tile:hover { border-color: var(--p
 .err-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
 .err-ai > .md .md { border: 0; padding: 0; background: none; }
 @media (max-width: 600px) { .err-kpis .card-pad { padding: 10px 12px; } .err-big { font-size: 20px; } .err-kpis small { font-size: 11px; } }
+/* Übersicht anpassen */
+.dc-h { margin: 0 0 8px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3, var(--muted)); font-weight: 650; }
+.ev-panel .card-head { gap: 10px; }
+.ev-panel .ov-strip { margin: 0; }

@@ -35,7 +35,7 @@ export default async function settingsView({ query }) {
     let order = [...(cfg.order || []).filter((k) => WIDGETS[k]), ...Object.keys(WIDGETS).filter((k) => !(cfg.order || []).includes(k))];
     const hidden = new Set(cfg.hidden || []);
     const listEl = h("div.list");
-    const save = async () => { try { await setSetting("dashboard", { order, hidden: [...hidden] }); toast("Dashboard gespeichert"); } catch (e) { toastErr(e); } };
+    const save = async () => { try { await setSetting("dashboard", { ...(await getSetting("dashboard", {})), order, hidden: [...hidden] }); toast("Dashboard gespeichert"); } catch (e) { toastErr(e); } };
     const move = (i, d) => { const j = i + d; if (j < 0 || j >= order.length) return; [order[i], order[j]] = [order[j], order[i]]; draw(); save(); };
     let dragFrom = null;
     function draw() {

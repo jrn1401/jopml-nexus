@@ -1,5 +1,5 @@
-import { sb, q, rpc, getSetting, local } from "../lib/api.js";
-import { h, icon, stat, fmtNum, fmtCompact, fmtBytes, fmtPct, fmtAgo, fmtDateTime, badge, SERVER_STATUS, meter, empty} from "../lib/ui.js";
+import { sb, q, rpc, getSetting, setSetting, local } from "../lib/api.js";
+import { h, icon, stat, modal, toast, toastErr, fmtEUR, fmtNum, fmtCompact, fmtBytes, fmtPct, fmtAgo, fmtDateTime, badge, SERVER_STATUS, meter, empty} from "../lib/ui.js";
 import { barChart } from "../lib/charts.js";
 import { timeline } from "../lib/modules.js";
 import { newProject, newModule, uploadDialog, connectServer, newEvent, syncHelp, openAssistant } from "../lib/actions.js";
@@ -9,9 +9,10 @@ import { viewToggle, charts } from "../lib/viewmode.js";
 import { nextUp } from "../lib/nextup.js";
 import { dailyBriefing } from "../lib/aiassist.js";
 import { donut, lineChart, PALETTE } from "../lib/charts.js";
+import { eventPanel, pickEvents } from "../lib/evpanel.js";
 
 export const WIDGETS = {
-  health: "Systemzustand", next: "Nächstes Event", tasks: "Offene Aufgaben", stats: "Kennzahlen", servers: "Serverstatus", ai: "KI-Nutzung", activity: "Letzte Aktivitäten",
+  prognose: "Event-Prognose", health: "Systemzustand", next: "Nächstes Event", tasks: "Offene Aufgaben", stats: "Kennzahlen", servers: "Serverstatus", ai: "KI-Nutzung", activity: "Letzte Aktivitäten",
   jopml: "JOPML", events: "Nächste Events", quick: "Schnellaktionen", web: "Websites live", sync: "Sync-Zentrale",
 };
 
@@ -20,7 +21,7 @@ export default async function dashboard({ user }) {
     rpc("cc_overview"),
     getSetting("dashboard", { order: Object.keys(WIDGETS), hidden: [] }),
     q(sb.from("cc_servers").select("id,name,hostname,status,kind,cpu_usage,memory_usage,disk_usage,last_heartbeat,metadata").order("kind").order("name").limit(8)),
-    q(sb.from("cc_events").select("id,name,event_date,location,status").gte("event_date", new Date().toISOString()).not("status", "in", "(done,cancelled)").order("event_date").limit(4)),
+    q(sb.from("cc_events").select("id,name,event_date,location,status,metadata").gte("event_date", new Date(Date.now() - 86400_000).toISOString()).not("status", "in", "(done,cancelled)").order("event_date").limit(30)),
     rpc("cc_web_overview").catch(() => []),
   ]);
   const legal = await rpc("cc_legal").catch(() => ({}));
@@ -41,6 +42,20 @@ export default async function dashboard({ user }) {
   if (legalMiss.length) checks.push(["Rechtstexte", "warn", `Impressum unvollständig: ${legalMiss.join(", ")} fehlt – Einstellungen › Rechtliches`]);
   const worst = checks.some((c) => c[1] === "bad") ? "bad" : checks.some((c) => c[1] === "warn") ? "warn" : "ok";
   const ne = o.next_event;
+  const tk = events.reduce((a, e) => { const t = e.metadata?.tickets || {}; a.sold += Number(t.sold) || 0; a.rev += Number(t.revenue) || 0; return a; }, { sold: 0, rev: 0 });
+  const STAT = {
+    projects: () => stat("Projekte", fmtNum(o.projects_total), { ic: "folder", sub: `${fmtNum(o.projects_active)} aktiv · ${fmtNum(o.modules_active)} Module` }),
+    servers: () => o.servers_total ? stat("Server online", `${o.servers_online}`, { ic: "server", unit: `/ ${o.servers_total}`, sub: o.servers_load?.cpu !== null && o.servers_load?.cpu !== undefined ? `Ø CPU ${fmtPct(o.servers_load.cpu)} · RAM ${fmtPct(o.servers_load.mem)}` : "Keine Live-Werte" })
+      : stat("Server", "", { ic: "server", na: "Nicht verbunden", sub: "Server über „Server verbinden“ anlegen" }),
+    tokens: () => stat("Tokens heute", fmtCompact(o.ai_tokens_today), { ic: "sparkles", sub: `${fmtNum(o.ai_requests_today)} Anfragen · gemessene Quellen` }),
+    files: () => stat("Dateien", fmtNum(o.files_count), { ic: "file", sub: `${fmtBytes(o.files_bytes)} belegt (dedupliziert)` }),
+    tickets: () => stat("Tickets verkauft", fmtNum(tk.sold), { ic: "ticket", sub: `${events.length} anstehende Event(s)` }),
+    revenue: () => stat("Ticket-Einnahmen", fmtEUR(tk.rev), { ic: "zap", sub: "alle anstehenden Events" }),
+    tasks: () => stat("Offene Aufgaben", fmtNum(o.open_tasks?.length || 0), { ic: "check", sub: (o.open_tasks || []).some((t) => t.due && new Date(t.due) < Date.now()) ? "davon welche überfällig" : "nichts überfällig" }),
+    web: () => stat("Websites live", fmtNum(web.reduce((a, w) => a + (w.live || 0), 0)), { ic: "globe", sub: `${fmtNum(web.reduce((a, w) => a + (w.today_uv || 0), 0))} Besucher heute` }),
+    jopml: () => stat("JOPML online", fmtNum(o.jopml.online_now), { ic: "users", sub: `${fmtNum(o.jopml.online_24h)} heute · ${fmtNum(o.jopml.errors_24h)} Fehler` }),
+  };
+  const statKeys = (layout.stats || DEFAULT_STATS).filter((k) => STAT[k]);
   const W = {
     sync: () => card("Sync-Zentrale", "#/settings?tab=integrations", syncCenter(), "w-12"),
     web: () => card("Websites live", "#/web", web.length ? h("div.list", web.slice(0, 6).map((r) => h("a.list-item", { href: r.source === "cc" ? `#/projects/${r.source_id}` : `#/web/${r.id}` },
@@ -64,12 +79,9 @@ export default async function dashboard({ user }) {
       h("div.li-main", h("div.li-title", t.title), h("div.li-sub", [t.event, t.due ? `fällig ${fmtDateTime(t.due)}` : null].filter(Boolean).join(" · "))),
       t.due && new Date(t.due) < Date.now() ? h("span.badge.b-bad", "überfällig") : null)))
       : empty("check", "Keine offenen Aufgaben", "Aufgaben aus Events erscheinen hier."), "w-12"),
-    stats: () => charts() ? chartsRow() : h("div.grid.g-4.w-12",
-      stat("Projekte", fmtNum(o.projects_total), { ic: "folder", sub: `${fmtNum(o.projects_active)} aktiv · ${fmtNum(o.modules_active)} Module` }),
-      o.servers_total ? stat("Server online", `${o.servers_online}`, { ic: "server", unit: `/ ${o.servers_total}`, sub: o.servers_load?.cpu !== null && o.servers_load?.cpu !== undefined ? `Ø CPU ${fmtPct(o.servers_load.cpu)} · RAM ${fmtPct(o.servers_load.mem)}` : "Keine Live-Werte" })
-        : stat("Server", "", { ic: "server", na: "Nicht verbunden", sub: "Server über „Server verbinden“ anlegen" }),
-      stat("Tokens heute", fmtCompact(o.ai_tokens_today), { ic: "sparkles", sub: `${fmtNum(o.ai_requests_today)} Anfragen · gemessene Quellen` }),
-      stat("Dateien", fmtNum(o.files_count), { ic: "file", sub: `${fmtBytes(o.files_bytes)} belegt (dedupliziert)` })),
+    stats: () => charts() ? chartsRow() : h("div.grid.g-4.w-12", ...statKeys.map((k) => STAT[k]?.()).filter(Boolean)),
+    prognose: () => { const evs = pickEvents(events, layout.events ?? null, 1); return evs.length ? h("div.w-12.stack", { style: { gap: "12px" } }, ...evs.map((e) => eventPanel(e.id, { admin: true, name: e.name })))
+      : card("Event-Prognose", "#/events", empty("calendar", "Kein Event ausgewählt", "Unter „Anpassen“ Events auswählen."), "w-12"); },
     servers: () => card("Serverstatus", "#/servers", servers.length
       ? h("div.list", servers.map((s) => h("a.list-item", { href: `#/servers/${s.id}` },
           h("div.li-icon", icon(s.kind === "cloud" ? "globe" : "server")),
@@ -103,9 +115,11 @@ export default async function dashboard({ user }) {
   };
 
   const order = [...new Set(["sync", ...Object.keys(W).filter((k) => !(layout.order || []).includes(k)), ...(layout.order || []).filter((k) => W[k])])];
+  // neue Karte „Event-Prognose“: solange sie nie einsortiert wurde, direkt nach der Sync-Zentrale
+  if (!(layout.order || []).includes("prognose")) { order.splice(order.indexOf("prognose"), 1); order.splice(1, 0, "prognose"); }
   const hidden = new Set(layout.hidden || []);
   // Modus: blendet je nach Aufgabe nur die passenden Karten ein (pro Gerät gespeichert)
-  const MODES = { all: null, event: ["next", "events", "tasks", "quick", "stats"], tech: ["health", "sync", "servers", "web", "jopml", "ai", "activity"] };
+  const MODES = { all: null, event: ["prognose", "next", "events", "tasks", "quick", "stats"], tech: ["health", "sync", "servers", "web", "jopml", "ai", "activity"] };
   let mode = local.get("dashmode", "all");
   const grid = h("div.grid.dash");
   const drawGrid = () => grid.replaceChildren(...order.filter((k) => !hidden.has(k) && (!MODES[mode] || MODES[mode].includes(k))).map((k) => W[k]()));
@@ -120,10 +134,38 @@ export default async function dashboard({ user }) {
       h("button.btn.primary", { type: "submit" }, icon("bot"), "Los")),
     limitBanner(),
     h("div.page-head", h("div", h("h1", `${hello}${name ? ", " + name : ""}`), h("p", `${fmtNum(o.projects_total)} Projekte · ${o.servers_online}/${o.servers_total} Server online${o.events_upcoming ? ` · ${o.events_upcoming} Event(s) geplant` : ""} · ${fmtNum(o.notifications_unread)} ungelesene Hinweise`)),
-      h("div.actions", modeSeg, viewToggle(), h("a.btn.ghost", { href: "#/settings?tab=dashboard" }, icon("dashboard"), "Anpassen"), h("button.btn.primary", { onclick: () => newProject() }, icon("plus"), "Neues Projekt"))),
+      h("div.actions", modeSeg, viewToggle(), h("button.btn.ghost", { onclick: () => customizeDash(layout, events, order) }, icon("dashboard"), "Anpassen"), h("button.btn.primary", { onclick: () => newProject() }, icon("plus"), "Neues Projekt"))),
     h("div", { style: { marginBottom: "14px" } }, dailyBriefing({ key: "brief-admin", onOpen: () => openAssistant(null, "Erkläre mir das heutige Briefing genauer und was ich zuerst tun soll.") })),
     nextUp(),
     grid);
+}
+
+// ---------- Übersicht anpassen: Karten (an/aus, Reihenfolge), Kennzahlen und Events mit Prognose ----------
+const DEFAULT_STATS = ["projects", "servers", "tokens", "files"];
+const STAT_NAMES = [["projects", "Projekte"], ["servers", "Server online"], ["tokens", "KI-Tokens heute"], ["files", "Dateien"], ["tickets", "Tickets verkauft"], ["revenue", "Ticket-Einnahmen"], ["tasks", "Offene Aufgaben"], ["web", "Websites live"], ["jopml", "JOPML online"]];
+function customizeDash(layout, events, order0) {
+  const order = [...order0];
+  const hidden = new Set(layout.hidden || []);
+  const stats = new Set(layout.stats || DEFAULT_STATS);
+  let evSel = Array.isArray(layout.events) ? [...layout.events] : null;
+  const box = h("div.stack", { style: { gap: "16px" } });
+  const chip = (on, label, fn) => h("button.chip", { type: "button", class: on ? "on" : "", "aria-pressed": String(on), onclick: fn }, label);
+  const draw = () => box.replaceChildren(
+    h("div", h("h4.dc-h", "Kennzahlen oben"), h("div.row.wrap", { style: { gap: "6px" } }, ...STAT_NAMES.map(([k, l]) => chip(stats.has(k), l, () => { stats.has(k) ? stats.delete(k) : stats.add(k); draw(); })))),
+    h("div", h("h4.dc-h", "Event-Prognose – welche Events?"),
+      h("label.check", h("input", { type: "checkbox", checked: evSel === null, onchange: (e) => { evSel = e.target.checked ? null : events.slice(0, 1).map((x) => x.id); draw(); } }), "Automatisch das nächste Event"),
+      evSel === null ? null : events.length ? h("div.row.wrap", { style: { gap: "6px", marginTop: "6px" } }, ...events.map((e) => chip(evSel.includes(e.id), e.name, () => { evSel = evSel.includes(e.id) ? evSel.filter((x) => x !== e.id) : [...evSel, e.id]; draw(); })))
+        : h("p.faint", "Keine anstehenden Events."),
+      h("p.faint", { style: { fontSize: "12.5px", margin: "6px 0 0" } }, "Welche Zahlen und Prognosen pro Event erscheinen (Ergebnis, Break-even, Pro Gast …), stellst du direkt am Zahnrad der Event-Leiste ein – das gilt dann überall, auch auf dem Handy.")),
+    h("div", h("h4.dc-h", "Karten auf der Übersicht"), h("div.list", ...order.map((k, i) => h("div.list-item",
+      h("input", { type: "checkbox", checked: !hidden.has(k), "aria-label": `${WIDGETS[k]} anzeigen`, style: { width: "18px", height: "18px", accentColor: "var(--primary)" }, onchange: (e) => { e.target.checked ? hidden.delete(k) : hidden.add(k); } }),
+      h("div.li-main", h("div.li-title", WIDGETS[k] || k)),
+      h("button.icon-btn", { type: "button", "aria-label": "Nach oben", disabled: i === 0, onclick: () => { [order[i - 1], order[i]] = [order[i], order[i - 1]]; draw(); } }, icon("chevronU")),
+      h("button.icon-btn", { type: "button", "aria-label": "Nach unten", disabled: i === order.length - 1, onclick: () => { [order[i + 1], order[i]] = [order[i], order[i + 1]]; draw(); } }, icon("chevronD")))))));
+  draw();
+  const m = modal("Übersicht anpassen", box, { foot: [
+    h("button.btn.ghost", { onclick: async () => { try { await setSetting("dashboard", { order: Object.keys(WIDGETS), hidden: [] }); m.close(); toast("Standard wiederhergestellt"); location.reload(); } catch (e) { toastErr(e); } } }, icon("refresh"), "Standard"),
+    h("button.btn.primary", { onclick: async () => { try { await setSetting("dashboard", { ...layout, order, hidden: [...hidden], stats: STAT_NAMES.map(([k]) => k).filter((k) => stats.has(k)), events: evSel && evSel.length ? evSel : null }); m.close(); toast("Übersicht gespeichert"); window.dispatchEvent(new window.HashChangeEvent("hashchange")); } catch (e) { toastErr(e); } } }, icon("check"), "Speichern")] });
 }
 
 // Diagramm-Ansicht der Kennzahlen: Projekte nach Status/Kategorie, Ticketverkauf je Event, Website-Besucher 7 Tage
