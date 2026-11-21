@@ -3,6 +3,8 @@
 import { sb, rpc, nx, q, aiModel } from "./lib/api.js";
 import { h, clear, toast, toastErr, errMsg, md, fmtEUR, fmtNum, fmtAgo, copyText, confirmDialog, modal } from "./lib/ui.js";
 import { qrSvg } from "./lib/qr.js";
+import { installErrorLog } from "./lib/errlog.js";
+installErrorLog("mobile", (p) => rpc("nx_log_error", { p }));
 import { micButton, speak, canSpeak } from "./lib/voice.js";
 import { broadcastDialog } from "./lib/broadcast.js";
 import { enablePush, disablePush, currentSub, isIOS, isStandalone, supported as pushSupported } from "./lib/webpush.js";
@@ -27,6 +29,7 @@ const SVG = {
   send: "M22 2 11 13M22 2l-7 20-4-9-9-4z",
   copy: "M9 9h11v11H9zM5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1",
   spark: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 17l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z",
+  folder: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
   ext: "M14 3h7v7M21 3l-9 9M19 14v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6",
   lock: "M5 11h14v10H5zM8 11V7a4 4 0 1 1 8 0v4",
 };
@@ -108,7 +111,7 @@ const tile = (label, value, sub, onclick) => h(onclick ? "button.m-tile" : "div.
 const daysTo = (d) => Math.ceil((new Date(d) - Date.now()) / 864e5);
 
 // Überblick des nächsten Events – dieselbe Leiste wie in der Vollversion (Ergebnis, Prognose, Aufgaben, Gäste …)
-function eventOverview(next) {
+function eventOverview(next, tilesOverride = null) {
   const box = h("section.m-card.m-ov", h("div.m-card-h", ic("ticket", 18), h("span", next.name)), h("div.m-row-s", "Lädt Überblick …"));
   (async () => {
     try {
@@ -125,7 +128,7 @@ function eventOverview(next) {
       const url = `./#/events/${ev.id}`;
       box.replaceChildren(h("div.m-card-h", ic("ticket", 18), h("span", ev.name)),
         overviewStrip({ name: ev.name, calc, tickets, eventDate: ev.event_date, capacity: tickets.capacity || ev.expected_guests || ev.capacity, tasks, guests, spent, budget: ev.budget,
-          tiles: admin ? meta.overview : ev.calc?.overview, onTasks: () => document.getElementById("m-tasks")?.scrollIntoView({ behavior: "smooth" }) }),
+          tiles: tilesOverride || (admin ? meta.overview : ev.calc?.overview), onTasks: () => document.getElementById("m-tasks")?.scrollIntoView({ behavior: "smooth" }) }),
         R && R.result < 0 ? h("button.btn.sm.m-wide", { onclick: () => breakdownModal(calc, ev.name) }, "Wo kommt das Minus her?") : null,
         h("div.m-ov-btns", h("a.btn.sm.primary", { href: url }, "Ganzes Event öffnen"), h("a.btn.sm", { href: url, onclick: () => { try { sessionStorage.setItem("cc:open-form", ev.id); } catch { /* */ } } }, "Event-Formular")));
     } catch (e) { box.lastChild.textContent = errMsg(e); }
@@ -133,13 +136,103 @@ function eventOverview(next) {
   return box;
 }
 
+// ---------- Startseite anpassen: welche Bereiche, Events (mit welchen Zahlen) und Projekte ----------
+const SECTIONS = [["kpis", "Kennzahlen oben"], ["events", "Events & Tickets"], ["projects", "Projekte"], ["tasks", "Aufgaben"], ["sites", "Websites"], ["shares", "Geteilte Links"], ["studio", "KI-Studio-Knöpfe"]];
+function homeCfg() {
+  const old = store.get("tiles", null);
+  const c = store.get("mhome", null) || { sections: { kpis: true, events: true, projects: true, tasks: true, sites: old?.sites !== false, shares: old?.shares !== false, studio: true }, events: null, projects: [], evTiles: {} };
+  if (old && old.events === false) c.sections.events = false;
+  if (old && old.tasks === false) c.sections.tasks = false;
+  c.sections ||= {}; c.evTiles ||= {}; c.projects ||= [];
+  return c;
+}
+const on = (c, k) => c.sections[k] !== false;
+// Auswahl-Listen: Admin sieht das Control Center, alle anderen ihren eigenen Bereich
+async function pickLists() {
+  if (data?.admin) {
+    const [evs, prs] = await Promise.all([
+      q(sb.from("cc_events").select("id,name,event_date,status").neq("status", "cancelled").order("event_date", { ascending: true, nullsFirst: false }).limit(60)).catch(() => []),
+      q(sb.from("cc_projects").select("id,name,category,status,updated_at").order("updated_at", { ascending: false }).limit(150)).catch(() => [])]);
+    return { evs, prs };
+  }
+  const [evs, prs] = await Promise.all([
+    q(sb.from("nx_events").select("id,name,event_date,status").neq("status", "cancelled").order("event_date", { ascending: true, nullsFirst: false }).limit(60)).catch(() => []),
+    q(sb.from("nx_projects").select("id,name,kind,status,updated_at").order("updated_at", { ascending: false }).limit(150)).catch(() => [])]);
+  return { evs, prs };
+}
+function projectCard(id) {
+  const box = h("section.m-card", h("div.m-row-s", "Lädt Projekt …"));
+  (async () => {
+    try {
+      let p, url, open = null;
+      if (data?.admin) {
+        p = await q(sb.from("cc_projects").select("id,name,category,status,description,updated_at").eq("id", id).maybeSingle());
+        if (p) open = (await q(sb.from("cc_tasks").select("id").eq("project_id", id).eq("done", false).limit(200)).catch(() => [])).length;
+        url = `./#/projects/${id}`;
+      } else {
+        p = await q(sb.from("nx_projects").select("id,name,kind,status,description,updated_at,url").eq("id", id).maybeSingle());
+        url = `./#/p/${id}`;
+      }
+      if (!p) { box.remove(); return; }
+      box.replaceChildren(h("div.m-card-h", ic("folder", 18), h("span", p.name)),
+        h("div.m-row-s", [p.status === "active" ? "aktiv" : p.status, p.category || p.kind, `aktualisiert ${fmtAgo(p.updated_at)}`].filter(Boolean).join(" · ")),
+        p.description ? h("div.m-proj-d", String(p.description).replace(/[#*_`>]/g, "").slice(0, 220)) : null,
+        open !== null ? h("div.m-row-s", open ? `${open} offene Aufgabe(n)` : "Keine offenen Aufgaben") : null,
+        h("div.m-ov-btns", h("a.btn.sm.primary", { href: url }, "Projekt öffnen"), p.url ? h("a.btn.sm", { href: p.url, target: "_blank", rel: "noopener" }, "Link") : null));
+    } catch (e) { box.lastChild.textContent = errMsg(e); }
+  })();
+  return box;
+}
+async function customizeHome() {
+  const c = homeCfg();
+  const { evs, prs } = await pickLists();
+  const { OV_TILES, OV_DEFAULT } = await import("./lib/eventcalc.js");
+  const body = h("div.m-cust");
+  const evSel = new Set(c.events || (evs[0] ? [evs[0].id] : []));
+  const prSel = new Set(c.projects);
+  let pq = "";
+  const draw2 = () => {
+    const prList = prs.filter((p) => !pq || p.name.toLowerCase().includes(pq)).slice(0, 40);
+    body.replaceChildren(
+      h("div.m-cust-h", "Bereiche"),
+      ...SECTIONS.filter(([k]) => k !== "sites" || data?.admin).map(([k, l]) => h("label.m-switch", h("span", l), h("input", { type: "checkbox", checked: on(c, k), onchange: (e) => { c.sections[k] = e.target.checked; } }))),
+      h("div.m-cust-h", "Events"),
+      h("label.m-switch", h("span", "Automatisch das nächste Event"), h("input", { type: "checkbox", checked: c.events === null, onchange: (e) => { c.events = e.target.checked ? null : [...evSel]; draw2(); } })),
+      c.events === null ? h("div.m-row-s", "Es wird immer das nächste anstehende Event gezeigt. Haken weg, um selbst auszuwählen.") : null,
+      ...(c.events === null ? [] : evs.map((ev) => {
+        const sel = evSel.has(ev.id);
+        const tiles = c.evTiles[ev.id] || OV_DEFAULT;
+        return h("div.m-cust-ev", { class: sel ? "on" : "" },
+          h("label.m-switch", h("span", h("b", ev.name), h("small.m-row-s", ev.event_date ? ` · ${new Date(ev.event_date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}` : "")),
+            h("input", { type: "checkbox", checked: sel, onchange: (e) => { e.target.checked ? evSel.add(ev.id) : evSel.delete(ev.id); c.events = [...evSel]; draw2(); } })),
+          sel ? h("div.m-cust-tiles", h("div.m-row-s", "Welche Zahlen und Prognosen?"),
+            h("div.m-chips", OV_TILES.map(([k, l]) => h("button.m-chip", { type: "button", class: tiles.includes(k) ? "on" : "", onclick: () => {
+              const cur = new Set(c.evTiles[ev.id] || OV_DEFAULT); cur.has(k) ? cur.delete(k) : cur.add(k);
+              c.evTiles[ev.id] = OV_TILES.map(([x]) => x).filter((x) => cur.has(x)); draw2(); } }, l)))) : null);
+      })),
+      !evs.length ? h("div.m-row-s", "Noch keine Events.") : null,
+      h("div.m-cust-h", "Projekte"),
+      prs.length > 8 ? h("input.input.m-cust-q", { type: "search", placeholder: "Projekt suchen …", value: pq, "aria-label": "Projekt suchen", oninput: (e) => { pq = e.target.value.toLowerCase(); const pos = e.target.selectionStart; draw2(); const f = body.querySelector(".m-cust-q"); f?.focus(); f?.setSelectionRange(pos, pos); } }) : null,
+      ...prList.map((p) => h("label.m-switch", h("span", p.name, h("small.m-row-s", ` · ${p.category || p.kind || ""}`)),
+        h("input", { type: "checkbox", checked: prSel.has(p.id), onchange: (e) => { e.target.checked ? prSel.add(p.id) : prSel.delete(p.id); c.projects = [...prSel]; } }))),
+      !prs.length ? h("div.m-row-s", "Noch keine Projekte.") : null);
+  };
+  draw2();
+  const m = modal("Startseite anpassen", body, { foot: [
+    h("button.btn.ghost", { onclick: () => { store.set("mhome", null); store.set("tiles", null); m.close(); draw(); toast("Zurückgesetzt"); } }, "Standard"),
+    h("button.btn.primary", { onclick: () => { if (c.events !== null) c.events = [...evSel]; c.projects = [...prSel]; store.set("mhome", c); m.close(); draw(); toast("Startseite gespeichert"); } }, "Speichern")] });
+}
+
 async function homeView() {
   await load(); drawBar();
-  const show = store.get("tiles", { events: true, tasks: true, sites: true, shares: true });
+  const cfg = homeCfg();
+  const show = { events: on(cfg, "events"), tasks: on(cfg, "tasks"), sites: on(cfg, "sites"), shares: on(cfg, "shares") };
   const ev = data.events || [];
   const next = ev[0];
   const sub = next ? (next.date ? `${next.name} · in ${daysTo(next.date)} Tagen` : next.name) : "Alles ruhig.";
-  const parts = [hero(sub)];
+  const hr = hero(sub);
+  hr.append(h("button.m-hero-cust", { type: "button", "aria-label": "Startseite anpassen", title: "Startseite anpassen", onclick: () => customizeHome().catch(toastErr) }, ic("gear", 18), h("span", "Anpassen")));
+  const parts = [hr];
   const kpis = h("div.m-kpis");
   if (show.events && next && next.sold !== null && next.sold !== undefined) {
     kpis.append(tile("Tickets", `${fmtNum(next.sold)}${next.capacity ? ` / ${fmtNum(next.capacity)}` : ""}`, next.today ? `+${next.today} heute` : next.tickets_at ? `Stand ${fmtAgo(next.tickets_at)}` : null));
@@ -147,9 +240,15 @@ async function homeView() {
   }
   if (show.tasks) kpis.append(tile("Offen", fmtNum(next?.open_tasks ?? (data.tasks || []).length), "Aufgaben", () => document.getElementById("m-tasks")?.scrollIntoView({ behavior: "smooth" })));
   if (show.sites && data.sites?.total) kpis.append(tile("Websites", data.sites.down ? `${data.sites.down} down` : "alle online", `${data.sites.total} überwacht`));
-  if (kpis.childElementCount) parts.push(kpis);
-  if (show.events && next?.id) parts.push(eventOverview(next));
-  if (show.events && next?.capacity && next.sold !== null && next.sold !== undefined) {
+  if (kpis.childElementCount && on(cfg, "kpis")) parts.push(kpis);
+  if (show.events) {
+    const ids = cfg.events === null ? (next?.id ? [next.id] : []) : cfg.events;
+    for (const id of ids) parts.push(eventOverview({ id, name: (ev.find((x) => x.id === id) || {}).name || "Event" }, cfg.evTiles[id] || null));
+  }
+  if (on(cfg, "projects") && cfg.projects.length) parts.push(h("div.m-sec-h", "Meine Projekte"), ...cfg.projects.map(projectCard));
+  if (on(cfg, "projects") && !cfg.projects.length && !store.get("mhome-hint", false)) parts.push(h("section.m-card.m-hint", h("div.m-row-s", "Tipp: Unter „Startseite anpassen“ wählst du Projekte und Events aus, die hier erscheinen – und welche Zahlen du pro Event sehen willst."),
+    h("button.btn.sm.ghost.m-mt", { onclick: (e) => { store.set("mhome-hint", true); e.currentTarget.closest(".m-hint").remove(); } }, "Verstanden")));
+  if (show.events && cfg.events === null && next?.capacity && next.sold !== null && next.sold !== undefined) {
     const pct = Math.min(100, Math.round((next.sold / next.capacity) * 100));
     parts.push(h("section.m-card", h("div.m-card-h", ic("ticket", 18), h("span", next.name)),
       h("div.m-bar", h("i", { style: { width: `${pct}%` } })), h("div.m-row-s", `${pct} % verkauft${next.location ? ` · ${next.location.split(",")[0]}` : ""}`)));
@@ -168,7 +267,7 @@ async function homeView() {
     h("div.m-row-s", `${data.shares.length} Link(s) · zusammen ${fmtNum(data.shares.reduce((a, s) => a + (s.opens || 0), 0))}× geöffnet`),
     h("button.btn.sm.m-mt", { onclick: () => { tab = "share"; store.set("tab", tab); drawBar(); draw(); } }, "Ansehen")));
   parts.push(h("button.m-ask", { onclick: () => { tab = "chat"; store.set("tab", tab); drawBar(); draw(); } }, ic("spark", 18), "KI fragen: „Was ist heute wichtig?“"));
-  parts.push(h("section.m-card", h("div.m-card-h", ic("spark", 18), h("span", "KI-Studio")),
+  if (on(cfg, "studio")) parts.push(h("section.m-card", h("div.m-card-h", ic("spark", 18), h("span", "KI-Studio")),
     h("div.m-tools", [["#/neues-event", "Event mit KI"], ["#/studio/bogen", "Projekt planen"], ["#/studio/web", "Website bauen"], ["#/studio/marketing", "QR & Werbung"], ["#/studio/summary", "Zusammenfassen"]].map(([k, t]) => h("a.m-toolbtn", { href: `./${k}` }, t)))));
   return h("div", ...parts);
 }
@@ -236,7 +335,6 @@ function chatView() {
 async function gearView() {
   const sub = await currentSub().catch(() => null);
   const mine = sub ? (await q(sb.from("cc_push_subs").select("id,topics").eq("endpoint", sub.endpoint)).catch(() => []))[0] : null;
-  const tiles = store.get("tiles", { events: true, tasks: true, sites: true, shares: true });
   const artBtn = (k) => h("button.m-art", { class: store.get("art", "nexus") === k ? "on" : "", "aria-label": `Titelbild ${ART[k].name}`,
     style: { backgroundImage: `url("${artSvg(k)}")` }, onclick: () => { store.set("art", k); applyLook(); draw(); } }, h("span", ART[k].name));
   const photoIn = h("input", { type: "file", accept: "image/*", hidden: true, onchange: async (e) => {
@@ -244,7 +342,6 @@ async function gearView() {
     try { const { url, accent } = await shrink(f); store.set("photo", url); store.set("photoAccent", accent); store.set("art", "photo"); applyLook(); draw(); toast("Eigenes Titelbild gesetzt"); }
     catch (er) { toastErr(er); }
   } });
-  const toggle = (k, label) => h("label.m-switch", h("span", label), h("input", { type: "checkbox", checked: tiles[k] !== false, onchange: (e) => { tiles[k] = e.target.checked; store.set("tiles", tiles); } }));
   const pushNote = !pushSupported() ? (isIOS() && !isStandalone() ? "Zuerst in Safari „Teilen → Zum Home-Bildschirm“, dann Nexus vom Home-Bildschirm öffnen." : "Dieser Browser kann keine Push-Nachrichten.") : null;
   return h("div.m-pad",
     h("div.m-head", h("h1", "Einstellungen")),
@@ -254,8 +351,8 @@ async function gearView() {
       h("div.m-row-s.m-mt", "Die Farbe der App passt sich dem Bild an. Eigene Fotos bleiben nur auf diesem Gerät.")),
     h("section.m-card", h("div.m-card-h", h("span", "Darstellung")),
       h("div.m-seg", [["dark", "Dunkel"], ["light", "Hell"], ["system", "System"]].map(([k, l]) => h("button", { class: store.get("theme", "dark") === k ? "on" : "", onclick: () => { store.set("theme", k); applyLook(); draw(); } }, l)))),
-    h("section.m-card", h("div.m-card-h", h("span", "Auf dem Start zeigen")),
-      toggle("events", "Events & Tickets"), toggle("tasks", "Aufgaben"), data?.admin ? toggle("sites", "Websites") : null, toggle("shares", "Geteilte Links")),
+    h("section.m-card", h("div.m-card-h", h("span", "Startseite")), h("div.m-row-s", "Bereiche, Events (mit welchen Zahlen und Prognosen) und Projekte auswählen."),
+      h("button.btn.primary.m-wide.m-mt", { onclick: () => customizeHome().catch(toastErr) }, "Startseite anpassen")),
     h("section.m-card", h("div.m-card-h", ic("bell", 18), h("span", "Benachrichtigungen")),
       pushNote ? h("div.m-row-s", pushNote) : sub
         ? h("div.m-rowbtn", h("span.m-ok", "Auf diesem Handy aktiv"),

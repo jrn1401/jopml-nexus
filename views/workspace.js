@@ -46,7 +46,10 @@ export async function renderWorkspace(root, who) {
   const NAV = [["#/", "Übersicht", null, "dashboard", null], ["#/events", "Events", "events", "calendar", "events"], ["#/aufgaben", "Aufgaben", "tasks", "check", "tasks"],
     ["#/websites", "Websites", "websites", "globe", "web"], ["#/verbindungen", "Verbindungen", "connections", "link", "web"], ["#/geteilt", "Geteilt", "shares", "users", null],
     ["#/studio", "KI-Studio", "ai", "sparkles", null], ["#/recht", "Recht & Formulare", null, "book", null], ["#/hilfe", "Hilfe", "help", "info", null], ["#/einstellungen", "Einstellungen", null, "settings", null]]
-    .filter(([r, , f, , int]) => !(guest && ["#/verbindungen", "#/websites"].includes(r)) && (!f || feat(f)) && (!interests || !int || interests.includes(int)));
+    .filter(([r, , f]) => !(guest && ["#/verbindungen"].includes(r)) && (!f || feat(f)))
+    // alle Bereiche bleiben sichtbar – gewählte Interessen („Wofür nutzt du Nexus?“) rücken nur nach vorne
+    .map((x, i) => [x, i]).sort((a, b) => ((interests && a[0][4] && interests.includes(a[0][4]) ? 0 : 1) - (interests && b[0][4] && interests.includes(b[0][4]) ? 0 : 1)) || a[1] - b[1]).map(([x]) => x)
+    .sort((a, b) => (a[0] === "#/" ? -1 : b[0] === "#/" ? 1 : 0));
   // Handy: Leiste unten mit den 4 wichtigsten Bereichen + „Mehr“
   const MAIN = NAV.filter(([r]) => r !== "#/einstellungen").slice(0, 4);
   const tabbar = h("nav.ws-tabbar", { "aria-label": "Bereiche" },

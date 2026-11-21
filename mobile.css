@@ -111,3 +111,23 @@
 .m-ov .ov-strip { position: static; display: flex; overflow-x: auto; margin: 8px -4px 10px; padding: 0 4px; background: transparent; scrollbar-width: none; }
 .m-ov .ov-tile { flex: 0 0 auto; min-width: 116px; }
 .m-ov-btns { display: flex; gap: 8px; margin-top: 8px; } .m-ov-btns .btn { flex: 1; justify-content: center; }
+
+/* Startseite anpassen */
+.m-custbar { display: flex; justify-content: flex-end; padding: 0 16px; margin-top: -6px; }
+.m-custbar .btn { display: inline-flex; align-items: center; gap: 6px; }
+.m-sec-h { padding: 6px 18px 0; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; opacity: .7; font-weight: 600; }
+.m-proj-d { font-size: 13.5px; line-height: 1.45; margin-top: 6px; opacity: .9; }
+.m-cust { display: flex; flex-direction: column; gap: 4px; }
+.m-cust-h { margin: 14px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; opacity: .7; font-weight: 600; }
+.m-cust-h:first-child { margin-top: 0; }
+.m-cust-ev { border: 1px solid transparent; border-radius: 12px; padding: 2px 8px; }
+.m-cust-ev.on { border-color: var(--line, rgba(255,255,255,.12)); background: var(--surface-2, rgba(255,255,255,.03)); padding-bottom: 10px; }
+.m-cust-tiles { display: flex; flex-direction: column; gap: 6px; }
+.m-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.m-chip { border: 1px solid var(--line, rgba(255,255,255,.16)); background: transparent; color: inherit; border-radius: 999px; padding: 6px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+.m-chip.on { background: var(--m-accent, #7c6cff); border-color: transparent; color: #fff; }
+.m-cust-q { margin: 2px 0 6px; }
+.m-switch small { font-weight: 400; }
+.m-hero { position: relative; }
+.m-hero-cust { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 12px); right: 12px; display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.25); background: rgba(0,0,0,.35); color: #fff; font: inherit; font-size: 13px; backdrop-filter: blur(6px); cursor: pointer; z-index: 2; }

@@ -4,6 +4,8 @@ import { sb, rpc, projects, local } from "./lib/api.js";
 import { h, icon, clear, toast, toastErr, fmtAgo, modal, debounce, errMsg } from "./lib/ui.js";
 import { newProject, newModule, connectServer, newEvent, uploadDialog, openAssistant, syncHelp } from "./lib/actions.js";
 import { CONFIG } from "./config.js";
+import { installErrorLog } from "./lib/errlog.js";
+installErrorLog("web", (p) => rpc("nx_log_error", { p }));
 
 const root = document.getElementById("root");
 const ROUTES = [
@@ -12,14 +14,14 @@ const ROUTES = [
   [/^\/events$/, "events"], [/^\/events\/([\w-]+)$/, "event"], [/^\/jopml$/, "jopml"],
   [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"], [/^\/shares$/, "shares"], [/^\/web(?:\/([0-9a-f-]{36}))?$/, "web"],
   [/^\/(impressum|datenschutz|nutzung|agb|inhalte|ki|cookies|barrierefreiheit|veranstalter|sicherheit|melden)$/, "legal"], [/^\/connections$/, "connections"], [/^\/hosting$/, "hosting"],
-  [/^\/tasks$/, "tasks"], [/^\/door\/([\w-]+)$/, "door"], [/^\/links$/, "links"], [/^\/security$/, "security"], [/^\/help$/, "help"], [/^\/users$/, "users"], [/^\/studio(?:\/(\w+))?$/, "studio"], [/^\/recht(?:\/(\w+))?$/, "recht"],
+  [/^\/tasks$/, "tasks"], [/^\/door\/([\w-]+)$/, "door"], [/^\/links$/, "links"], [/^\/security$/, "security"], [/^\/errors$/, "errors"], [/^\/help$/, "help"], [/^\/users$/, "users"], [/^\/studio(?:\/(\w+))?$/, "studio"], [/^\/recht(?:\/(\w+))?$/, "recht"],
 ];
 const NAV_GROUPS = [
   ["Übersicht", [["#/", "dashboard", "Dashboard"], ["#/studio", "sparkles", "KI-Studio"], ["#/recht", "book", "Recht & Formulare"]]],
   ["Planung", [["#/tasks", "check", "Aufgaben"], ["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"], ["#/shares", "users", "Teilen & Team"]]],
   ["Online", [["#/web", "globe", "Websites"], ["#/links", "link", "Marketing-Links"], ["#/jopml", "layers", "JOPML"]]],
   ["Geräte", [["#/servers", "server", "Geräte & Server"], ["#/hosting", "rocket", "Hosting"]]],
-  ["System", [["#/users", "users", "Benutzer & Rollen"], ["#/security", "lock", "Sicherheit & Push"], ["#/ai", "sparkles", "KI & Tokens"], ["#/connections", "link", "Verbindungen"], ["#/activity", "activity", "Aktivitäten"], ["#/system", "check", "Systemprüfung"], ["#/help", "book", "Handbuch"]]],
+  ["System", [["#/users", "users", "Benutzer & Rollen"], ["#/security", "lock", "Sicherheit & Push"], ["#/ai", "sparkles", "KI & Tokens"], ["#/connections", "link", "Verbindungen"], ["#/activity", "activity", "Aktivitäten"], ["#/errors", "alert", "Fehlerzentrale"], ["#/system", "check", "Systemprüfung"], ["#/help", "book", "Handbuch"]]],
 ];
 const NAV = NAV_GROUPS.flatMap(([, items]) => items);
 const MOBILE = [["#/", "dashboard", "Start"], ["#/tasks", "check", "Aufgaben"], ["#/events", "calendar", "Events"], ["#/web", "globe", "Websites"], ["#/servers", "server", "Geräte"]];
