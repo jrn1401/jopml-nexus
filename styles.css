@@ -1030,3 +1030,16 @@ button.ov-tile { cursor: pointer; } button.ov-tile:hover { border-color: var(--p
 .mb-6 { grid-column: span 6; }
 .mb > .card { margin: 0; }
 @media (max-width: 1100px) { .mb-6 { grid-column: span 12; } }
+/* Live-Kalkulation */
+.live-sw { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); cursor: pointer; font-size: 13.5px; }
+.live-sw input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.live-sw-ui { flex: none; width: 38px; height: 22px; border-radius: 22px; background: var(--surface-3); position: relative; transition: background .15s; }
+.live-sw-ui::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.live-sw input:checked + .live-sw-ui { background: var(--ok, #22c55e); }
+.live-sw input:checked + .live-sw-ui::after { transform: translateX(16px); }
+.live-sw input:focus-visible + .live-sw-ui { outline: 2px solid var(--primary); outline-offset: 2px; }
+.live-sw small { font-size: 12.5px; }
+.lcalc-box { min-width: 0; border: 1px solid color-mix(in srgb, var(--ok, #22c55e) 40%, var(--line)); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; background: color-mix(in srgb, var(--ok, #22c55e) 6%, transparent); }
+.live-t td, .live-t th { white-space: nowrap; }
+.tk-now { max-width: 320px; margin-top: 6px; }
+.lcalc-box .table-wrap { overflow-x: auto; }
