@@ -205,3 +205,4 @@ button.m-note:active { transform: scale(.99); }
 .g-arten { display: flex; flex-wrap: wrap; gap: 6px; }
 .g-field { display: grid; gap: 4px; font-size: 13px; color: var(--text-2); }
 .g-need { display: grid; gap: 4px; font-size: 14px; padding: 10px 12px; border-radius: 12px; background: var(--surface-3); }
+.g-warnt { color: #fbbf24; font-weight: 600; }
