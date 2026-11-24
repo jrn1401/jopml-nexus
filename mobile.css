@@ -221,3 +221,6 @@ button.m-note:active { transform: scale(.99); }
 .g-rangerow { display: flex; justify-content: space-between; align-items: baseline; margin-top: 10px; font-size: 14px; }
 .g-rangev { font-size: 20px; }
 .g-ww select { min-width: 0; }
+.g-annahmen { display: grid; gap: 6px; margin-top: 6px; }
+.g-annahme { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; align-items: center; }
+.g-annahme select { min-width: 0; }
