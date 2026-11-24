@@ -36,6 +36,7 @@ const SVG = {
   trash: "M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14",
   play: "M8 5v14l11-7z",
   chev: "M9 6l6 6-6 6",
+  grad: "M2 9l10-5 10 5-10 5zM6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5M22 9v6",
 };
 const ic = (n, s = 22) => { const el = document.createElementNS("http://www.w3.org/2000/svg", "svg"); el.setAttribute("viewBox", "0 0 24 24"); el.setAttribute("width", s); el.setAttribute("height", s);
   el.setAttribute("fill", "none"); el.setAttribute("stroke", "currentColor"); el.setAttribute("stroke-width", "1.8"); el.setAttribute("stroke-linecap", "round"); el.setAttribute("stroke-linejoin", "round"); el.setAttribute("aria-hidden", "true");
@@ -89,7 +90,7 @@ async function renderLogin(msg) {
 
 // ---------- App ----------
 let data = null, tab = store.get("tab", "home");
-const TABS = [["home", "home", "Start"], ["bell", "bell", "Mitteilungen"], ["share", "share", "Geteilt"], ["chat", "chat", "KI"], ["gear", "gear", "Einstellungen"]];
+const TABS = [["home", "home", "Start"], ["grades", "grad", "Noten"], ["bell", "bell", "Mitteilungen"], ["share", "share", "Geteilt"], ["chat", "chat", "KI"], ["gear", "gear", "Einstellungen"]];
 const main = h("main.m-main");
 const bar = h("nav.m-tabbar", { "aria-label": "Bereiche" });
 
@@ -101,8 +102,15 @@ function drawBar() {
 async function load() { data = await rpc("cc_mobile_home"); }
 async function draw() {
   main.scrollTop = 0;
-  const v = { home: homeView, bell: bellView, share: shareView, chat: chatView, gear: gearView }[tab] || homeView;
+  const v = { home: homeView, grades: gradesTab, bell: bellView, share: shareView, chat: chatView, gear: gearView }[tab] || homeView;
   try { clear(main, await v()); } catch (e) { clear(main, h("div.m-pad", h("div.banner.bad", errMsg(e)))); }
+}
+
+// Notenrechner: lädt erst beim Öffnen; nach Änderungen neu zeichnen, ohne nach oben zu springen
+async function gradesTab() {
+  const { gradesView } = await import("./lib/grades.js");
+  const rerender = async () => { const y = window.scrollY, t = main.scrollTop; clear(main, await gradesView(rerender)); window.scrollTo(0, y); main.scrollTop = t; };
+  return gradesView(rerender);
 }
 
 function hero(sub) {
