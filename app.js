@@ -14,11 +14,11 @@ const ROUTES = [
   [/^\/events$/, "events"], [/^\/events\/([\w-]+)$/, "event"], [/^\/jopml$/, "jopml"],
   [/^\/files$/, "files"], [/^\/activity$/, "activity"], [/^\/settings$/, "settings"], [/^\/system$/, "system"], [/^\/shares$/, "shares"], [/^\/web(?:\/([0-9a-f-]{36}))?$/, "web"],
   [/^\/(impressum|datenschutz|nutzung|agb|inhalte|ki|cookies|barrierefreiheit|veranstalter|sicherheit|melden)$/, "legal"], [/^\/connections$/, "connections"], [/^\/hosting$/, "hosting"],
-  [/^\/tasks$/, "tasks"], [/^\/door\/([\w-]+)$/, "door"], [/^\/links$/, "links"], [/^\/security$/, "security"], [/^\/errors$/, "errors"], [/^\/help$/, "help"], [/^\/users$/, "users"], [/^\/studio(?:\/(\w+))?$/, "studio"], [/^\/recht(?:\/(\w+))?$/, "recht"],
+  [/^\/tasks$/, "tasks"], [/^\/door\/([\w-]+)$/, "door"], [/^\/links$/, "links"], [/^\/security$/, "security"], [/^\/errors$/, "errors"], [/^\/help$/, "help"], [/^\/users$/, "users"], [/^\/studio(?:\/(\w+))?$/, "studio"], [/^\/recht(?:\/(\w+))?$/, "recht"], [/^\/schule(?:\/([0-9a-f-]{36}))?$/, "schule"],
 ];
 const NAV_GROUPS = [
   ["Übersicht", [["#/", "dashboard", "Dashboard"], ["#/studio", "sparkles", "KI-Studio"], ["#/recht", "book", "Recht & Formulare"]]],
-  ["Planung", [["#/tasks", "check", "Aufgaben"], ["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"], ["#/shares", "users", "Teilen & Team"]]],
+  ["Planung", [["#/tasks", "check", "Aufgaben"], ["#/schule", "book", "Schule"], ["#/events", "calendar", "Events"], ["#/projects", "folder", "Projekte"], ["#/files", "file", "Dateien"], ["#/shares", "users", "Teilen & Team"]]],
   ["Online", [["#/web", "globe", "Websites"], ["#/links", "link", "Marketing-Links"], ["#/jopml", "layers", "JOPML"]]],
   ["Geräte", [["#/servers", "server", "Geräte & Server"], ["#/hosting", "rocket", "Hosting"]]],
   ["System", [["#/users", "users", "Benutzer & Rollen"], ["#/security", "lock", "Sicherheit & Push"], ["#/ai", "sparkles", "KI & Tokens"], ["#/connections", "link", "Verbindungen"], ["#/activity", "activity", "Aktivitäten"], ["#/errors", "alert", "Fehlerzentrale"], ["#/system", "check", "Systemprüfung"], ["#/help", "book", "Handbuch"]]],
