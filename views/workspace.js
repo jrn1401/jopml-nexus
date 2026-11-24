@@ -141,7 +141,7 @@ export async function renderWorkspace(root, who) {
           p.kind === "website" && p.url && !guest ? h("button.btn.sm.primary", { onclick: async (e) => { const ct = e.currentTarget; ct.disabled = true; try { const s2 = await siteFor("nx", p.id); location.hash = `#/web/${s2.id}`; } catch (er) { toastErr(er); ct.disabled = false; } } }, icon("activity"), "Live") : null,
           p.url ? h("a.btn.sm", { href: p.url, target: "_blank", rel: "noopener noreferrer", title: "Öffnen", "aria-label": "Öffnen" }, icon("external")) : null,
           !guest ? h("button.btn.sm.ghost", { "aria-label": "Teilen", title: "Teilen", onclick: () => openShareDialog("nx_project", p.id, p.name, { tickets: !!p.metadata?.tickets }) }, icon("users")) : null,
-          h("button.btn.sm.ghost", { "aria-label": "KI fragen", title: "KI zu diesem Projekt fragen", onclick: () => aiDrawer(`Wie steht es um „${p.name}“ und was sollte ich als Nächstes tun?`) }, icon("sparkles")),
+          h("button.btn.sm.ghost", { "aria-label": "KI fragen", title: "KI zu diesem Projekt fragen", onclick: () => aiDrawer(`Wie steht es um „${p.name}“ und was sollte ich als Nächstes tun?`, { type: "project", id: p.id, name: p.name }) }, icon("sparkles")),
           h("button.btn.sm.ghost", { "aria-label": "Bearbeiten", title: "Bearbeiten", onclick: () => editProject(p) }, icon("edit"))));
     };
     draw();
@@ -296,7 +296,18 @@ export async function renderWorkspace(root, who) {
   }
 
   // ---------- KI-Assistent ----------
-  function aiDrawer(prefill = "") { if (!feat("ai")) return toast("Der KI-Assistent ist derzeit ausgeschaltet.", "info"); local.set("ws:did-ai", true); openAiDrawer({ prefill, guest, storeKey: "ws:chat", onAction: show }); }
+  // Auf einer Projekt- oder Event-Seite ist die KI automatisch auf genau dieses Projekt/Event spezialisiert
+  function aiDrawer(prefill = "", focus = null) {
+    if (!feat("ai")) return toast("Der KI-Assistent ist derzeit ausgeschaltet.", "info");
+    local.set("ws:did-ai", true);
+    if (!focus) {
+      const hs = (location.hash || "").split("?")[0];
+      const nm = document.querySelector(".ws-body h1, main h1")?.textContent?.trim() || "";
+      const mp = hs.match(/^#\/p\/([0-9a-f-]{36})$/), me = hs.match(/^#\/events\/([0-9a-f-]{36})$/);
+      focus = mp ? { type: "project", id: mp[1], name: nm } : me ? { type: "event", id: me[1], name: nm } : null;
+    }
+    openAiDrawer({ prefill, guest, focus, storeKey: focus ? `ws:chat:${focus.type}:${focus.id}` : "ws:chat", onAction: show });
+  }
 
   window.addEventListener("hashchange", show);
   document.addEventListener("keydown", (e) => {

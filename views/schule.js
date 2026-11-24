@@ -1,7 +1,7 @@
 // Schule: alle Fächer mit ihren Lernatlanten (vom Skill „schule-sync“ aus dem Schulordner übertragen)
 //   #/schule        Übersicht nach Fach
 //   #/schule/<id>   ein Thema als Lernatlas (Aufbau wie die Vorlage), Kapitel über ?k=<kapitel>
-import { sb, q } from "../lib/api.js";
+import { sb, q, rpc } from "../lib/api.js";
 import { h, icon, toast, toastErr, fmtAgo, empty, stat, modal } from "../lib/ui.js";
 import { renderAtlas, shrinkImage, STAND } from "../lib/lernatlas.js";
 
@@ -51,7 +51,7 @@ async function overview() {
 
   return h("div",
     h("div.page-head", h("div", h("h1", "Schule"), h("p.page-sub", "Jedes Fach mit seinen Themen als Lernatlas – Regeln, Beispiele, Aufgaben mit Lösung, Fotos aus dem Unterricht.")),
-      h("div.actions", h("button.btn", { onclick: howTo }, icon("info"), "So kommt ein Thema hierher"))),
+      h("div.actions", importBtn(), h("button.btn", { onclick: howTo }, icon("info"), "So kommt ein Thema hierher"))),
     h("div.grid.g-3", { style: { marginBottom: "18px" } },
       stat("Fächer", String(faecher.filter((f) => f.atlases.length || f.other.length).length), { ic: "book" }), stat("Lernatlanten", String(mods.length), { ic: "layers" }), stat("Kapitel", String(totalCh), { ic: "check" })),
     faecher.length ? h("div.sch-grid", faecher.map((f) => h("section.card",
@@ -61,6 +61,24 @@ async function overview() {
         f.other.length ? h("div", { style: { marginTop: "10px" } }, h("div.faint", { style: { fontSize: "12px", textTransform: "uppercase", letterSpacing: ".06em", margin: "0 0 6px" } }, "Weitere Lernseiten"),
           h("div.list", f.other.map((p) => h("a.list-item", { href: `#/projects/${p.id}` }, h("div.li-icon", icon("folder")), h("div.li-main", h("div.li-title", p.name), h("div.li-sub", `Projekt · ${fmtAgo(p.updated_at)}`)), icon("chevronR"))))) : null)))) :
       h("section.card.card-pad", empty("book", "Noch keine Fächer", "Öffne in Claude deinen Schulordner und sag „Schule syncen“ – der Skill legt das Fach und das Thema hier an."), h("div", { style: { textAlign: "center" } }, h("button.btn.primary", { onclick: howTo }, "Anleitung"))));
+}
+
+// Lernatlas-JSON (vom Skill als Datei ausgegeben) direkt importieren
+function importBtn() {
+  const input = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: async (e) => {
+    const f = e.target.files?.[0]; e.target.value = "";
+    if (!f) return;
+    try {
+      if (f.size > 1_500_000) throw new Error("Datei zu groß (max. 1,5 MB).");
+      let data; try { data = JSON.parse(await f.text()); } catch { throw new Error("Keine gültige JSON-Datei."); }
+      const list = Array.isArray(data) ? data : [data];
+      let last = null;
+      for (const a of list) last = await rpc("cc_school_upsert", { p: a });
+      toast(`${list.length} Lernatlas importiert`, "ok");
+      if (last?.module_id) location.hash = `#/schule/${last.module_id}`; else window.dispatchEvent(new window.HashChangeEvent("hashchange"));
+    } catch (er) { toastErr(er); }
+  } });
+  return h("span", input, h("button.btn", { onclick: () => input.click() }, icon("upload"), "JSON importieren"));
 }
 
 function howTo() {
@@ -128,7 +146,7 @@ async function atlasPage(id, query) {
         toast(stand ? `Stand: ${STAND[stand][1]}` : "Stand entfernt");
       } catch (e) { toastErr(e); throw e; }
     },
-    toolbar: h("div.la-tools", input, upBtn, h("a.btn.sm.ghost", { href: `#/projects/${mod.project_id}` }, "Projekt")),
+    toolbar: h("div.la-tools", input, h("button.btn.sm", { type: "button", onclick: () => import("../lib/actions.js").then((m) => m.openAssistant(null, "", { type: "atlas", id, name: `${cfg.fach || ""} › ${cfg.thema || mod.name}` })) }, icon("bot"), "KI-Nachhilfe"), upBtn, h("a.btn.sm.ghost", { href: `#/projects/${mod.project_id}` }, "Projekt")),
   });
   return h("div",
     h("div.row", { style: { gap: "8px", margin: "0 0 12px", flexWrap: "wrap" } },

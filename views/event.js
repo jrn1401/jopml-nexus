@@ -2,7 +2,7 @@ import { sb, q, api, projects as loadProjects, uploadFile } from "../lib/api.js"
 import { h, icon, badge, EVENT_STATUS, fmtDateTime, fmtEUR, fmtNum, fmtAgo, empty, formModal, confirmDialog, toast, toastErr, meter, md } from "../lib/ui.js";
 import { donut, barChart, lineChart, PALETTE } from "../lib/charts.js";
 import { timeline, fileRow, lazy } from "../lib/modules.js";
-import { uploadDialog, download } from "../lib/actions.js";
+import { uploadDialog, download, openAssistant } from "../lib/actions.js";
 import { openShareDialog } from "../lib/share.js";
 import { aiCleanup } from "../lib/aidedupe.js";
 import { importDialog } from "../lib/eventfrog.js";
@@ -106,7 +106,7 @@ export default async function eventView({ args: [id] }) {
       h("div.page-head", h("div", h("h1", ev.name), h("div.row.wrap", { style: { gap: "8px", marginTop: "8px" } }, badge(EVENT_STATUS, ev.status),
         h("span.faint", { style: { fontSize: "13px" } }, [ev.event_date ? `${fmtDateTime(ev.event_date)} (${fmtAgo(ev.event_date)})` : "ohne Datum", ev.location].filter(Boolean).join(" · ")),
         proj ? h("a.tag", { href: `#/projects/${proj.id}` }, icon("folder", ""), " ", proj.name) : null)),
-        h("div.actions", h("button.btn.primary", { onclick: () => openShareDialog("event", id, ev.name) }, icon("users"), "Teilen"), h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("bogen", `ce:${id}`)) }, icon("check"), "Rechts-Check"), h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("web", `ce:${id}`)) }, icon("external"), "Event-Website"), h("button.btn", { onclick: () => aiCleanup({ items, table: "cc_event_items", context: `${ev.name}, ${ev.location || ""}`, onDone: reload }) }, icon("sparkles"), "KI-Aufräumen"), h("button.btn", { onclick: edit }, icon("edit"), "Bearbeiten"),
+        h("div.actions", h("button.btn.primary", { onclick: () => openShareDialog("event", id, ev.name) }, icon("users"), "Teilen"), h("button.btn", { onclick: () => openAssistant(null, "", { type: "event", id, name: ev.name }) }, icon("bot"), "KI fragen"), h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("bogen", `ce:${id}`)) }, icon("check"), "Rechts-Check"), h("button.btn", { onclick: () => import("./studio.js").then((m) => m.openStudio("web", `ce:${id}`)) }, icon("external"), "Event-Website"), h("button.btn", { onclick: () => aiCleanup({ items, table: "cc_event_items", context: `${ev.name}, ${ev.location || ""}`, onDone: reload }) }, icon("sparkles"), "KI-Aufräumen"), h("button.btn", { onclick: edit }, icon("edit"), "Bearbeiten"),
           h("button.btn.primary", { title: "Ein Formular für alles: Infos, Tickets, Kosten, Bar, Garderobe, Notfall, Links, eigene Felder", onclick: () => eventSheet({ name: ev.name, tiers: ev.metadata?.tickets?.tiers || [], calc: ev.metadata?.calc || deriveCalc({ guests: ev.expected_guests, price: ev.metadata?.ticket_price, tiers: ev.metadata?.tickets?.tiers || [], costs: items.filter((i) => ["cost", "tech"].includes(i.kind)).map((i) => ({ name: i.title, amount: i.actual ?? i.amount })) }), details: ev.metadata?.details || {}, onSave: saveAll }) }, icon("edit"), "Event-Formular"),
           h("a.btn", { href: `#/door/${id}`, title: "Barverkauf, Wechselgeld, Gästeliste und Auslastung am Abend" }, icon("ticket"), "Abendkasse"),
           h("button.btn", { onclick: () => importDialog(ev, () => dispatchEvent(new Event("hashchange"))), title: "Ticketverkäufe aus Eventfrog-Export übernehmen" }, icon("ticket"), "Eventfrog-Import"),

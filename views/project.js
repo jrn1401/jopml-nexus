@@ -73,7 +73,7 @@ export default async function projectView({ args: [id], query }) {
         return { rows: tk.map((t) => ({ kind: "task", title: t.title, done: t.done, at: t.due, note: t.note })), html: `<h2>Module</h2>${modules.map((m) => `<h3>${String(m.name).replace(/</g, "&lt;")}</h3><pre style="white-space:pre-wrap;font-family:inherit">${mods.widgetText({ type: "markdown", content: "" }) || ""}${(Array.isArray(m.config?.widgets) ? m.config.widgets.map(mods.widgetText).join("\n\n") : JSON.stringify(m.config || {}, null, 1)).replace(/</g, "&lt;")}</pre>`).join("")}` }; } }); } catch { cop = null; }
     return h("div.stack", enabled.length ? h("div.row", { style: { justifyContent: "flex-end" } }, viewToggle()) : null, cop, linkedEvents(id),
       project.category === "jopml" ? h("a.card.card-pad.row.clickable", { href: `#/projects/${id}?tab=launcher`, style: { gap: "12px", textDecoration: "none", color: "inherit" } },
-        h("div.li-icon", icon("layers")), h("div", { style: { flex: 1 } }, h("div.li-title", "Launcher-Steuerung"), h("div.li-sub", "Nutzer, Fehlercodes, Support-Tickets, KI-Verbrauch und Release-Checkliste")), icon("chevronR", "faint")) : null,
+        h("div.li-icon", icon("layers")), h("div", { style: { flex: 1, minWidth: 0 } }, h("div.li-title", "Launcher-Steuerung"), h("div.li-sub", "Nutzer, Fehlercodes, Support-Tickets, KI-Verbrauch und Release-Checkliste")), icon("chevronR", "faint")) : null,
       webSlot(),
       enabled.length >= 4 ? moduleJump(enabled) : null,
       enabled.length ? moduleBoard(enabled) : isWeb ? null : empty("layers", "Noch keine Module", "Module sind die Bausteine dieser Projektseite – z. B. Dateien, Roblox-Spiel, Server oder Notizen.",
@@ -282,7 +282,7 @@ export default async function projectView({ args: [id], query }) {
             h("span.faint", { style: { fontSize: "12.5px" } }, `aktualisiert ${fmtAgo(project.updated_at)}`)))),
       h("div.actions",
         h("button.btn", { onclick: () => openShareDialog("project", id, project.name) }, icon("users"), "Teilen"),
-        h("button.btn", { onclick: () => openAssistant(id) }, icon("bot"), "Fragen"),
+        h("button.btn", { onclick: () => openAssistant(null, "", { type: "project", id, name: project.name }), title: `KI, die dieses Projekt kennt` }, icon("bot"), "KI fragen"),
         h("button.btn", { onclick: () => uploadDialog({ projectId: id, onDone: () => show("files") }) }, icon("upload"), "Hochladen"),
         h("button.btn.primary", { onclick: () => newModule(id) }, icon("plus"), "Modul"))),
     tabBar, body);

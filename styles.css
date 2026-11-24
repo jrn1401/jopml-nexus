@@ -1251,3 +1251,7 @@ button.ov-tile { cursor: pointer; } button.ov-tile:hover { border-color: var(--p
 .la .lab-tog { display: flex; flex-wrap: wrap; gap: 14px; font-size: .92rem; margin: 2px 0 6px; }
 .la .lab-tog label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
 .la .lab svg { width: 100%; height: auto; display: block; }
+/* KI-Assistent mit Fokus auf ein Projekt/Event/Thema */
+.drawer.assistant .modal-head > div:first-child { flex: 1 1 0; min-width: 0; }
+.ai-focus { display: inline-flex; min-width: 0; gap: 6px; align-items: baseline; margin-top: 4px; font-size: 12.5px; padding: 3px 10px; border-radius: 99px; background: color-mix(in srgb, var(--primary) 16%, transparent); max-width: 100%; overflow: hidden; }
+.ai-focus b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

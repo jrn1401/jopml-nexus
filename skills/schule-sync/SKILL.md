@@ -14,7 +14,7 @@ Grundregeln:
 
 ## 0. Voraussetzung
 
-Ein Supabase-Werkzeug zum Ausführen von SQL (meist `execute_sql`, per ToolSearch „supabase execute_sql“). Projekt-ID: `qeomooxbfpwvcprvmows`. Fehlt es: dem Nutzer sagen, er soll in Claude unter Einstellungen › Connectors Supabase verbinden – oder das fertige JSON als Datei ausgeben, damit er es in einem Chat mit Verbindung übertragen kann.
+Ein Supabase-Werkzeug zum Ausführen von SQL (meist `execute_sql`, per ToolSearch „supabase execute_sql“). Projekt-ID: `qeomooxbfpwvcprvmows`. Fehlt es: das fertige JSON als Datei `<fach>-<thema>.json` ausgeben (bei mehreren Themen eine Datei mit einer JSON-Liste). Der Nutzer importiert sie auf der Seite Schule mit **„JSON importieren“**. Abgleich (Schritt 1) entfällt dann – Fach- und Themennamen genau so schreiben wie auf der Seite Schule.
 
 ## 1. Abgleichen (Pflicht, zuerst)
 
