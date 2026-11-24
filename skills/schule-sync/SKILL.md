@@ -1,106 +1,56 @@
 ---
 name: schule-sync
-description: "Überträgt einen Schulordner bzw. ein Schul-Projekt als Lernatlas (Thema mit Kapiteln, Regeln, Aufgaben mit Lösung, Unterrichtsfotos, Links) in JOPML Nexus › Schule, nach Fach sortiert. Nutzen bei „Schule syncen“, „Thema ins Nexus“, „Lernatlas“."
+description: "Baut aus einem Schulordner bzw. Schul-Projekt eine Lernseite als Claude-Artefakt und trägt den Link mit Thema, Fach und Halbjahr in JOPML Nexus › Schule ein. Nutzen bei „Schule syncen“, „Thema ins Nexus“."
 ---
 
-# schule-sync – Schulordner → Lernatlas im JOPML Nexus
+# schule-sync – Schulordner → Lernseite (Artefakt) → Link im JOPML Nexus
 
-Ziel: Aus dem Material eines Schul-Projekts (Arbeitsblätter, Tafelfotos, Hefteinträge, Notizen, Klausurhinweise) entsteht **ein Lernatlas pro Thema** auf der Nexus-Seite **Schule** (https://jrn1401.github.io/jopml-nexus/#/schule). Jedes Fach ist dort ein Projekt, jedes Thema ein Modul. Gleiches Thema erneut übertragen = aktualisieren; der Lernstand („sitzt / unsicher / prüfen“), den der Nutzer auf der Seite setzt, bleibt erhalten.
+Ziel: Für jedes Thema gibt es **eine Lernseite als Claude-Artefakt**. Der Link dazu steht im Nexus auf der Seite **Schule** (https://jrn1401.github.io/jopml-nexus/#/schule), mit Thema, Fach, Halbjahr (und optional Klasse, Klausurdatum, Kurzbeschreibung). Dort lässt sich nach Fach, Halbjahr, Thema und Klausur sortieren und filtern. Gleiches Fach + Thema erneut übertragen = der Link wird aktualisiert, nicht doppelt angelegt.
 
 Grundregeln:
-- **Nichts erfinden.** Inhalte kommen aus dem Material. Was du selbst ergänzt (Erklärung, Beispiel, Aufgabe), muss fachlich korrekt und auf dem Niveau des Kurses sein. Rechne jede Lösung nach.
+- **Nichts erfinden.** Inhalte kommen aus dem Material. Was du ergänzt (Erklärung, Beispiel, Aufgabe), muss fachlich korrekt und auf dem Niveau des Kurses sein. Jede Lösung nachrechnen.
 - Keine Namen von Mitschülern, keine Noten anderer, keine Passwörter.
-- Sprache: Deutsch, kurze klare Sätze, für jemanden, der bei null anfängt.
+- Deutsch, kurze klare Sätze, für jemanden, der bei null anfängt.
 
 ## 0. Voraussetzung
 
-Ein Supabase-Werkzeug zum Ausführen von SQL (meist `execute_sql`, per ToolSearch „supabase execute_sql“). Projekt-ID: `qeomooxbfpwvcprvmows`. Fehlt es: das fertige JSON als Datei `<fach>-<thema>.json` ausgeben (bei mehreren Themen eine Datei mit einer JSON-Liste). Der Nutzer importiert sie auf der Seite Schule mit **„JSON importieren“**. Abgleich (Schritt 1) entfällt dann – Fach- und Themennamen genau so schreiben wie auf der Seite Schule.
+Supabase-Werkzeug zum Ausführen von SQL (meist `execute_sql`, per ToolSearch „supabase execute_sql“). Projekt-ID: `qeomooxbfpwvcprvmows`. Fehlt es: Lernseite trotzdem bauen und veröffentlichen, dann dem Nutzer Thema, Fach, Halbjahr und Link nennen – er trägt sie auf der Seite Schule mit **„Link hinzufügen“** ein.
 
-## 1. Abgleichen (Pflicht, zuerst)
+## 1. Abgleichen (zuerst)
 
-`select public.cc_school_context();`
-Liefert vorhandene Fächer, je Fach die Themen mit `module_id` und den Kapitel-IDs, plus ältere Schulprojekte.
-- Gibt es das Fach schon, **genau diesen Fachnamen** verwenden (z. B. „Mathematik“, nicht „Mathe“).
-- Gibt es das Thema schon, **genau diesen Themennamen** und **dieselben Kapitel-IDs** verwenden – sonst geht der Lernstand verloren.
-- Fachnamen ausschreiben: Mathematik, Deutsch, Englisch, Französisch, Spanisch, Biologie, Chemie, Physik, Informatik, Geschichte, Politische Bildung, Geografie, Psychologie, Sporttheorie, Kunst, Musik, LER, Wirtschaftswissenschaften.
+`select public.cc_school_context();` → vorhandene Fächer und Einträge (Fach, Thema, Halbjahr, Link).
+- Fach schon vorhanden → **genau diesen Fachnamen** verwenden (z. B. „Mathematik“, nicht „Mathe“). Fachnamen ausschreiben: Mathematik, Deutsch, Englisch, Französisch, Spanisch, Biologie, Chemie, Physik, Informatik, Geschichte, Politische Bildung, Geografie, Psychologie, Sporttheorie, Kunst, Musik, LER, Wirtschaftswissenschaften.
+- Thema schon vorhanden → **gleichen Themennamen** verwenden; gibt es schon ein Artefakt dazu, dieses aktualisieren statt ein neues zu bauen.
 
 ## 2. Material sammeln
 
-- claude.ai-Projekt: `project_info`, dann jedes Dokument mit `project_read` lesen (Bilder ansehen: `original: true`). Ordner auf dem Rechner: auflisten und lesen (Geräte-Werkzeuge), keine Zugangsdaten öffnen.
-- Für jedes Foto/Blatt notieren: **exakter Dateiname** (mit Endung, so wie er im Ordner heißt), was darauf ist, zu welchem Kapitel es gehört.
-- Klausurtermin, Klausuraufbau (z. B. Teil A ohne / Teil B mit Hilfsmitteln), Lehrbuchseiten.
-- Mehrere Themen im Ordner → mehrere Lernatlanten (je ein Aufruf).
+- claude.ai-Projekt: `project_info`, dann jedes Dokument mit `project_read` lesen (Bilder ansehen: `original: true`). Ordner auf dem Rechner: auflisten und lesen, keine Zugangsdaten öffnen.
+- Notieren: Thema, Fach, **Halbjahr** (Schreibweise wie in der Schule, z. B. `11/1`, `11/2`, `Q1`), Klasse, Klausurtermin, Klausuraufbau, Lehrbuchseiten, welche Fotos/Blätter zu welchem Kapitel gehören.
+- Mehrere Themen im Ordner → je Thema eine Lernseite und ein Eintrag.
 
-## 3. Lernatlas bauen (JSON)
+## 3. Lernseite als Artefakt bauen
 
-```json
-{
-  "fach": "Mathematik", "kurs": "Grundkurs", "klasse": "11", "halbjahr": "Q1", "land": "Brandenburg",
-  "thema": "Funktionsuntersuchung",
-  "lead": "1–2 Sätze: wofür der Atlas ist und wie man ihn durchgeht.",
-  "exam": {"title": "Die Klausur hat zwei Teile", "parts": [
-    {"teil": "A", "label": "Teil A · ohne Hilfsmittel", "text": "Kein Taschenrechner. Kurze Aufgaben: …"},
-    {"teil": "B", "label": "Teil B · mit Hilfsmitteln", "text": "Taschenrechner und Formelsammlung. …"}]},
-  "timeline": [{"date": "2026-12-10", "title": "Klausur", "note": "Kapitel 1–10", "done": false}],
-  "chapters": [
-    {"id": "extrema", "title": "Monotonie und Extrempunkte", "nav": "Monotonie und Extrempunkte",
-     "group": "Teil A · ohne Hilfsmittel", "teil": "A", "done": true,
-     "lead": "Ein Satz, worum es geht.",
-     "kurz": ["2–4 Merksätze für „Kurz gesagt“"],
-     "html": "… Kapitelinhalt, siehe unten …",
-     "links": [{"title": "Extremwerte berechnen", "url": "https://studyflix.de/…"}],
-     "photos": [{"file": "tafel-extrema.jpg", "caption": "Tafel: Extrema", "sub": "Lb. S. 114"}, {"file": "ab-blatt2.jpg", "caption": "Arbeitsblatt 2", "doc": true}]}
-  ],
-  "sources": [{"title": "Rahmenlehrplan …", "url": "https://…"}]
-}
-```
+Aufbau wie die Vorlage „Lernatlas Funktionsuntersuchung“ (https://claude.ai/artifact/W72QDhb9AhCqfWSfq5H7uz):
+- Kopfzeile mit Titel und „Fach Kurs · Klasse · Halbjahr“, links ein Register mit allen Kapiteln, auf dem Handy eine Kapitel-Auswahl.
+- Startseite: kurze Einleitung, Klausuraufbau (z. B. Teil A ohne / Teil B mit Hilfsmitteln), Tabelle „Lernweg und Materialien“ (# · Thema · Teil · Fotos · Internet).
+- Je Kapitel: „Kurz gesagt“ (2–4 Merksätze), Merke-Kästen, Rechenweg an einem Beispiel aus dem Unterricht, Tabellen/Graphen, typische Fehler, **Aufgaben mit aufklappbarer Lösung** (ohne/mit Taschenrechner), „Erklärung im Internet“ (nur echte, geprüfte Links), „Aus dem Unterricht“ (Fotos zum Vergrößern), Zurück/Weiter.
+- Letzte Seite „Alle Materialien und Quellen“.
+- In Nicht-Mathe-Fächern genauso: Merke = Kernbegriffe, Tabellen für Vergleiche und Zeitleisten, Aufgaben = Klausurfragen mit Musterantwort (Operatoren beachten).
+- Fotos aus dem Ordner direkt ins Artefakt aufnehmen (als Dateien des Artefakts), damit die Seite vollständig ist.
 
-Felder:
-- `id`: kurz, a–z/0–9/-, **stabil** (bei Updates gleich lassen). `nav`: kurzer Titel fürs Register (optional). `group`: Überschrift im Register (z. B. Teil A / Teil B / „Üben und Material“). `teil`: `A`, `B`, `A+B` oder weglassen. `done`: im Unterricht schon behandelt (false = „kommt noch“).
-- `photos.file` = **exakter Dateiname aus dem Ordner** – darüber ordnet die Seite die hochgeladenen Fotos zu. `doc: true` für Hochformat-Blätter.
-- `links`: nur echte, erreichbare Erklärseiten (studyflix, serlo, mathebibel, Lehrer-Schmidt-Video, Bildungsserver). Vorher prüfen, wenn Websuche verfügbar ist.
-- Ein Kapitel „Klausurtraining“ mit gemischten Aufgaben am Ende ist sinnvoll. Ein Kapitel „Alle Materialien“ baut die Seite selbst.
+Veröffentlichen mit dem Artefakt-Werkzeug und den **Link** (`https://claude.ai/artifact/…` bzw. der vom Werkzeug genannte Link) übernehmen. Der Nutzer muss das Artefakt ggf. selbst teilen/veröffentlichen, damit der Link auch auf anderen Geräten aufgeht – darauf im Abschluss hinweisen.
 
-### Kapitel-HTML (nur diese Bausteine; alles andere wird entfernt)
-
-Erlaubt: `p h3 h4 ul ol li b i sub sup small span div table thead tbody tr th td details summary a figure figcaption code blockquote mark br hr`. Keine Bilder, Skripte, Styles, Formulare – Fotos gehören in `photos`.
-
-| Baustein | HTML |
-|---|---|
-| Zwischenüberschrift | `<h3>Symmetrie</h3>` |
-| Merke (roter Heftrand) | `<div class="rule"><span class="rt">Merke</span><ul><li>…</li></ul></div>` |
-| Achtung / typischer Fehler | `<p class="note"><b>Achtung:</b> …</p>` |
-| Formel im Text | `<span class="m">f(<i>x</i>) = <i>x</i>³ − 3<i>x</i></span>` (Variablen kursiv, echte Zeichen − · ² ³ ≤ ≥ → √ π) |
-| Bruch | `<span class="frac"><span>Zähler</span><span>Nenner</span></span>` |
-| Formel-Kasten | `<div class="formula">x = −p/2 ± √((p/2)² − q)</div>` |
-| Rechenweg | `<ol class="steps"><li><div>Schritt 1</div></li>…</ol>` |
-| Tabelle | `<div class="tbl"><table><thead><tr><th>…</th></tr></thead><tbody><tr><td>…</td></tr></tbody></table></div>` |
-| Aufgabe mit Lösung | `<div class="ex"><div class="ex-h"><b>Aufgabe 1</b><span class="chip hmf">ohne TR</span></div><p>Aufgabe …</p><details class="sol"><summary>Lösung anzeigen</summary><div class="sol-body"><ol><li>…</li></ol><p class="ans">Ergebnis</p></div></details></div>` |
-| mit Taschenrechner | `<span class="chip gtr">mit TR</span>` |
-| Graph | `<figure class="plotbox"><div data-plot='{"x":[-3,3],"y":[-4,4],"xs":1,"ys":1,"fns":[{"f":"x^3-3x","l":"f(x) = x³ − 3x"},{"f":"3x^2-3","c":"f1","dash":1,"l":"f′(x)"}],"pts":[[-1,2,"HP(−1 | 2)"],[1,-2,"TP(1 | −2)"]],"vl":[0]}'></div><figcaption>Bildunterschrift</figcaption></figure>` |
-| Funktionslabor (Schieber für ax³+bx²+cx+d) | `<div data-lab="kubisch"></div>` |
-| Link auf anderes Kapitel | `<a href="#nullstellen">Nullstellen</a>` |
-
-Graph-Angaben: `f` als Rechenausdruck in x (`x^2`, `2x`, `3x(x-2)`, `exp(-x)`, `sqrt(x)`, `sin(x)`, `ln(x)`, `pi`, `e`), Farbe `c`: `f` blau (Standard), `f1` orange, `f2` grün, `aux` lila, `red`; `dash:1` gestrichelt, `w` Linienbreite, `from`/`to` Definitionsbereich; `pts` = `[x, y, "Beschriftung", "farbe"]`; `vl` = senkrechte Hilfslinien; `polys` = `[{"pts":[[x,y],…],"c":"f1"}]` für Flächen; `h` Höhe (Standard 360). Achsen-Schritte `xs`/`ys`. Punkte vorher ausrechnen und prüfen.
-
-Aufbau eines Kapitels (wie die Vorlage „Lernatlas Funktionsuntersuchung“): Merke-Kästen mit den Regeln → Rechenweg an einem Beispiel aus dem Unterricht → ggf. Graph oder Tabelle → typische Fehler (`note`) → „Aufgaben“ (3–5, mit ohne/mit TR, jede mit vollständiger Lösung) → Links → Fotos. In Nicht-Mathe-Fächern genauso: Merke = Kernbegriffe/Definitionen, Tabellen für Vergleiche, Zeitleisten als Tabelle, Aufgaben = Klausurfragen mit Musterantwort (Operatoren beachten: nennen, erläutern, beurteilen).
-
-## 4. Übertragen
+## 4. Link im Nexus eintragen
 
 ```sql
-select public.cc_school_upsert($j${ … das JSON … }$j$::jsonb);
+select public.cc_school_link_upsert($j${"fach":"Mathematik","thema":"Funktionsuntersuchung","halbjahr":"11/1","klasse":"11","url":"https://claude.ai/artifact/…","beschreibung":"14 Kapitel mit Aufgaben und Lösungen, Klausur Teil A/B","klausur":"2026-12-10"}$j$::jsonb);
 ```
-- `$j$…$j$` verhindert Probleme mit Anführungszeichen. Steht `$j$` im Text, ein anderes Kennzeichen nehmen (`$x9$`).
-- Sehr großes Thema (über ~400 KB): erst ohne `html` der späteren Kapitel übertragen, dann noch einmal vollständig – oder das Thema sinnvoll teilen.
-- Ergebnis: `module_id`, `url`, `created` und `fotos_fehlen` (Dateinamen, die auf der Seite noch nicht hochgeladen sind).
+- Pflicht: `fach`, `thema`, `url` (nur claude.ai bzw. claude.site). Optional: `halbjahr`, `klasse`, `beschreibung` (1 Satz, max. 600 Zeichen), `klausur` (Datum `JJJJ-MM-TT`, nur wenn bekannt).
+- Gleiches Fach + Thema → Link und Angaben werden aktualisiert (leere Felder überschreiben nichts).
+- Ergebnis: `created` (neu oder aktualisiert) und `seite`.
 
-## 5. Fotos
+## 5. Abschluss (kurz)
 
-Bilder können aus Claude nicht direkt in den Speicher. Darum im Abschluss sagen:
-„Öffne <url> → oben **Fotos hochladen** → diese Dateien aus deinem Ordner wählen: …“ (Liste aus `fotos_fehlen`, gekürzt, wenn sehr lang). Die Seite verkleinert die Bilder und ordnet sie über den Dateinamen den Kapiteln zu.
-
-## 6. Abschluss (kurz)
-
-- Fach › Thema, Anzahl Kapitel und Aufgaben, neu oder aktualisiert.
-- Link: `url` aus dem Ergebnis; Übersicht: https://jrn1401.github.io/jopml-nexus/#/schule
-- Fehlende Fotos (siehe 5) und was mangels Material fehlt (z. B. „Kapitel e-Funktion: noch kein Unterrichtsmaterial“ → `done: false`).
+- Fach › Thema · Halbjahr, neu oder aktualisiert.
+- Link zur Lernseite und zur Übersicht: https://jrn1401.github.io/jopml-nexus/#/schule
+- Was mangels Material fehlt (z. B. „Kapitel e-Funktion: noch kein Unterrichtsmaterial“).
