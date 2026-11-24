@@ -1,95 +1,121 @@
 // Schule: alle Fächer mit ihren Lernatlanten (vom Skill „schule-sync“ aus dem Schulordner übertragen)
 //   #/schule        Übersicht nach Fach
 //   #/schule/<id>   ein Thema als Lernatlas (Aufbau wie die Vorlage), Kapitel über ?k=<kapitel>
-import { sb, q, rpc } from "../lib/api.js";
-import { h, icon, toast, toastErr, fmtAgo, empty, stat, modal } from "../lib/ui.js";
+import { sb, q, local } from "../lib/api.js";
+import { h, icon, toast, toastErr, fmtAgo, empty, stat, modal, formModal, confirmDialog, copyText } from "../lib/ui.js";
 import { renderAtlas, shrinkImage, STAND } from "../lib/lernatlas.js";
 
 const BUCKET = "cc-files";
-const fachOf = (name) => (String(name || "").split(/\s*[:–—]\s*|\s+-\s+/)[0].trim().split(/\s+/)[0] || "Sonstiges").replace(/[^\p{L}\d-]/gu, "") || "Sonstiges";
 
 export default async function schuleView({ args, query }) {
-  return args?.[0] ? atlasPage(args[0], query) : overview();
+  return args?.[0] ? atlasPage(args[0], query) : linksPage();
 }
 
-async function overview() {
-  const [projects, mods, media] = await Promise.all([
-    q(sb.from("cc_projects").select("id,slug,name,description,status,metadata,updated_at").eq("category", "school").neq("status", "archived").order("name")),
-    q(sb.from("cc_modules").select("id,project_id,name,config,updated_at,position").eq("module_type", "lernatlas").order("position")),
-    q(sb.from("cc_school_media").select("module_id,file_name")).catch(() => [])]);
-  const mediaBy = {};
-  media.forEach((m) => { (mediaBy[m.module_id] ||= new Set()).add(m.file_name.toLowerCase()); });
-  const byFach = new Map();
-  const slot = (f) => { const k = f.toLowerCase(); if (!byFach.has(k)) byFach.set(k, { name: f, atlases: [], other: [], projectId: null }); return byFach.get(k); };
-  for (const p of projects) {
-    if (p.metadata?.school_kind === "fach") { const s = slot(p.metadata.fach || p.name); s.projectId = p.id; s.name = p.metadata.fach || p.name; }
-    else slot(fachOf(p.name)).other.push(p);
-  }
-  for (const m of mods) {
-    const p = projects.find((x) => x.id === m.project_id);
-    if (!p) continue;
-    slot(p.metadata?.fach || m.config?.fach || p.name).atlases.push(m);
-  }
-  const faecher = [...byFach.values()].sort((a, b) => b.atlases.length - a.atlases.length || a.name.localeCompare(b.name, "de"));
-  const totalCh = mods.reduce((a, m) => a + (m.config?.chapters?.length || 0), 0);
+// ---------- Übersicht: Claude-Artefakt-Links je Thema, sortier- und filterbar ----------
+const SORTS = [["neu", "Zuletzt aktualisiert"], ["fach", "Fach"], ["halbjahr", "Halbjahr"], ["thema", "Thema A–Z"], ["klausur", "Nächste Klausur"]];
+// „11/1“, „11.2“, „Q1“, „12/2“ → sortierbare Zahl (Klasse·10 + Halbjahr)
+const hjKey = (x) => { const t = String(x || "").toUpperCase(); const q = t.match(/^Q\s*(\d)/); if (q) return 110 + Number(q[1]); const m = t.match(/(\d{1,2})\D*(\d)?/); return m ? Number(m[1]) * 10 + Number(m[2] || 0) : 9999; };
+const daysTo = (d) => Math.ceil((new Date(d + "T12:00:00") - Date.now()) / 86400_000);
 
-  const atlasRow = (m) => {
-    const c = m.config || {}; const ch = c.chapters || []; const pr = c.progress || {};
-    const files = new Set(ch.flatMap((x) => (x.photos || []).map((p) => String(p.file || "").toLowerCase())).filter(Boolean));
-    const have = [...files].filter((f) => mediaBy[m.id]?.has(f)).length;
-    const counts = Object.keys(STAND).map((k) => [k, ch.filter((x) => (pr[x.id] || x.stand) === k).length]);
-    const ok = counts.find(([k]) => k === "ok")[1];
-    return h("a.list-item.sch-row", { href: `#/schule/${m.id}` },
+async function linksPage() {
+  let rows = await q(sb.from("cc_school_links").select("*").order("updated_at", { ascending: false }));
+  const pref = local.get("sch:view", { sort: "neu", fach: "", hj: "", group: true });
+  let term = "";
+  const list = h("div");
+  const filters = h("div.sch-filters");
+  const searchIn = h("input.input", { type: "search", placeholder: "Thema suchen …", "aria-label": "Thema suchen", value: "", oninput: (e) => { term = e.target.value.trim().toLowerCase(); draw(); } });
+  const save = () => local.set("sch:view", pref);
+
+  function sorted(arr) {
+    const a = [...arr];
+    const by = { neu: (x, y) => new Date(y.updated_at) - new Date(x.updated_at),
+      fach: (x, y) => x.fach.localeCompare(y.fach, "de") || hjKey(x.halbjahr) - hjKey(y.halbjahr) || x.thema.localeCompare(y.thema, "de"),
+      halbjahr: (x, y) => hjKey(x.halbjahr) - hjKey(y.halbjahr) || x.fach.localeCompare(y.fach, "de") || x.thema.localeCompare(y.thema, "de"),
+      thema: (x, y) => x.thema.localeCompare(y.thema, "de"),
+      klausur: (x, y) => (x.klausur ? new Date(x.klausur) : Infinity) - (y.klausur ? new Date(y.klausur) : Infinity) };
+    return a.sort(by[pref.sort] || by.neu);
+  }
+  const row = (r) => {
+    const d = r.klausur ? daysTo(r.klausur) : null;
+    return h("div.list-item.sch-link",
       h("div.li-icon", icon("book")),
-      h("div.li-main", h("div.li-title", c.thema || m.name),
-        h("div.li-sub", [`${ch.length} Kapitel`, files.size ? `Fotos ${have}/${files.size}` : null, c.klasse ? `Klasse ${c.klasse}` : null, `aktualisiert ${fmtAgo(c.synced_at || m.updated_at)}`].filter(Boolean).join(" · ")),
-        ch.length ? h("div.sch-bar", { title: counts.map(([k, n]) => `${STAND[k][1]}: ${n}`).join(" · "), "aria-label": `${ok} von ${ch.length} Kapiteln sitzen` },
-          ...counts.filter(([, n]) => n).map(([k, n]) => h("i", { class: k, style: { flex: n } })), ch.length - counts.reduce((a, [, n]) => a + n, 0) > 0 ? h("i", { style: { flex: ch.length - counts.reduce((a, [, n]) => a + n, 0) } }) : null) : null),
-      files.size && have < files.size ? h("span.badge.b-warn", `${files.size - have} Fotos fehlen`) : null,
-      icon("chevronR"));
+      h("div.li-main",
+        h("a.li-title", { href: r.url, target: "_blank", rel: "noopener noreferrer" }, r.thema),
+        h("div.row.wrap", { style: { gap: "6px", marginTop: "4px" } },
+          pref.group ? null : h("span.badge", r.fach), r.halbjahr ? h("span.badge.b-pri", `Halbjahr ${r.halbjahr}`) : null, r.klasse ? h("span.tag", `Klasse ${r.klasse}`) : null,
+          d !== null ? h("span.badge", { class: d < 0 ? "" : d <= 7 ? "b-bad" : d <= 21 ? "b-warn" : "b-ok" }, d < 0 ? `Klausur war am ${new Date(r.klausur).toLocaleDateString("de-DE")}` : d === 0 ? "Klausur heute" : `Klausur in ${d} Tagen`) : null),
+        r.beschreibung ? h("div.li-sub", { style: { whiteSpace: "normal" } }, r.beschreibung) : null,
+        h("div.li-sub", `aktualisiert ${fmtAgo(r.updated_at)}`)),
+      h("div.row", { style: { gap: "4px" } },
+        h("a.btn.sm.primary", { href: r.url, target: "_blank", rel: "noopener noreferrer" }, icon("external"), "Öffnen"),
+        h("button.icon-btn", { title: "Link kopieren", "aria-label": `Link zu ${r.thema} kopieren`, onclick: () => copyText(r.url) }, icon("copy")),
+        h("button.icon-btn", { title: "Bearbeiten", "aria-label": `${r.thema} bearbeiten`, onclick: () => edit(r) }, icon("edit")),
+        h("button.icon-btn", { title: "Entfernen", "aria-label": `${r.thema} entfernen`, onclick: async () => {
+          if (!(await confirmDialog("Eintrag entfernen?", `„${r.thema}“ verschwindet aus der Liste. Das Claude-Artefakt selbst bleibt erhalten.`, { ok: "Entfernen" }))) return;
+          try { await q(sb.from("cc_school_links").delete().eq("id", r.id)); rows = rows.filter((x) => x.id !== r.id); draw(); toast("Entfernt"); } catch (e) { toastErr(e); } } }, icon("trash"))));
   };
-
+  function draw() {
+    const faecher = [...new Set(rows.map((r) => r.fach))].sort((a, b) => a.localeCompare(b, "de"));
+    const hjs = [...new Set(rows.map((r) => r.halbjahr).filter(Boolean))].sort((a, b) => hjKey(a) - hjKey(b));
+    if (pref.fach && !faecher.includes(pref.fach)) pref.fach = "";
+    if (pref.hj && !hjs.includes(pref.hj)) pref.hj = "";
+    const chip = (on, label, fn) => h("button.chip", { type: "button", class: on ? "on" : "", "aria-pressed": String(on), onclick: fn }, label);
+    filters.replaceChildren(
+      h("div.sch-frow", searchIn,
+        h("label.sch-sel", h("span.faint", "Sortieren"), h("select.input.sm", { "aria-label": "Sortieren nach", onchange: (e) => { pref.sort = e.target.value; save(); draw(); } }, SORTS.map(([v, t]) => h("option", { value: v, selected: pref.sort === v }, t)))),
+        hjs.length ? h("label.sch-sel", h("span.faint", "Halbjahr"), h("select.input.sm", { "aria-label": "Halbjahr filtern", onchange: (e) => { pref.hj = e.target.value; save(); draw(); } }, h("option", { value: "" }, "Alle"), hjs.map((x) => h("option", { value: x, selected: pref.hj === x }, x)))) : null,
+        h("label.check", { style: { margin: 0 } }, h("input", { type: "checkbox", checked: pref.group, onchange: (e) => { pref.group = e.target.checked; save(); draw(); } }), "Nach Fach gruppieren")),
+      faecher.length > 1 ? h("div.row.wrap", { style: { gap: "6px" } }, chip(!pref.fach, `Alle Fächer (${rows.length})`, () => { pref.fach = ""; save(); draw(); }),
+        ...faecher.map((f) => chip(pref.fach === f, `${f} (${rows.filter((r) => r.fach === f).length})`, () => { pref.fach = pref.fach === f ? "" : f; save(); draw(); }))) : null);
+    const vis = sorted(rows.filter((r) => (!pref.fach || r.fach === pref.fach) && (!pref.hj || r.halbjahr === pref.hj) && (!term || `${r.thema} ${r.fach} ${r.beschreibung || ""}`.toLowerCase().includes(term))));
+    if (!rows.length) { list.replaceChildren(h("section.card.card-pad", empty("book", "Noch keine Themen", "Öffne in Claude deinen Schulordner und sag „Schule syncen“ – der Skill veröffentlicht die Lernseite als Artefakt und trägt den Link hier ein."), h("div", { style: { textAlign: "center" } }, h("button.btn.primary", { onclick: howTo }, "Anleitung")))); return; }
+    if (!vis.length) { list.replaceChildren(h("section.card.card-pad", empty("search", "Nichts gefunden", "Filter oder Suche ändern."))); return; }
+    if (pref.group) {
+      const groups = new Map();
+      for (const r of vis) { if (!groups.has(r.fach)) groups.set(r.fach, []); groups.get(r.fach).push(r); }
+      const order = [...groups.keys()].sort((a, b) => a.localeCompare(b, "de"));
+      list.replaceChildren(h("div.sch-grid", order.map((f) => h("section.card", h("div.card-head", h("h3.row", { style: { gap: "8px" } }, icon("book"), f), h("span.faint", `${groups.get(f).length} ${groups.get(f).length === 1 ? "Thema" : "Themen"}`)),
+        h("div.card-body", h("div.list", groups.get(f).map(row)))))));
+    } else list.replaceChildren(h("section.card", h("div.card-body", h("div.list", vis.map(row)))));
+  }
+  function edit(r) {
+    formModal(r ? "Eintrag bearbeiten" : "Link hinzufügen", [
+      { name: "thema", label: "Thema", value: r?.thema, required: true, max: 200, full: true },
+      { name: "fach", label: "Fach", value: r?.fach, required: true, max: 80, half: true, placeholder: "z. B. Mathematik" },
+      { name: "halbjahr", label: "Halbjahr", value: r?.halbjahr, max: 20, half: true, placeholder: "z. B. 11/1 oder Q1" },
+      { name: "klasse", label: "Klasse", value: r?.klasse, max: 20, half: true, placeholder: "z. B. 11" },
+      { name: "klausur", label: "Klausur am (optional)", type: "date", value: r?.klausur || "", half: true },
+      { name: "url", label: "Link zum Claude-Artefakt", value: r?.url, required: true, max: 500, full: true, placeholder: "https://claude.ai/…", hint: "Nur Links zu claude.ai bzw. claude.site." },
+      { name: "beschreibung", label: "Kurzbeschreibung (optional)", type: "textarea", rows: 2, value: r?.beschreibung, max: 600, ai: false }],
+    async (v) => {
+      if (!/^https:\/\/([a-z0-9-]+\.)*(claude\.ai|claude\.site)\//i.test(v.url)) throw new Error("Bitte einen Link zu claude.ai oder claude.site eintragen.");
+      const row = { thema: v.thema, fach: v.fach, halbjahr: v.halbjahr || null, klasse: v.klasse || null, klausur: v.klausur || null, url: v.url, beschreibung: v.beschreibung || null, updated_at: new Date().toISOString() };
+      if (r) { const [u] = await q(sb.from("cc_school_links").update(row).eq("id", r.id).select()); Object.assign(r, u || row); }
+      else { const [n] = await q(sb.from("cc_school_links").insert(row).select()); rows.unshift(n); }
+      toast("Gespeichert"); draw();
+    });
+  }
+  draw();
+  const faecherN = new Set(rows.map((r) => r.fach)).size;
+  const next = rows.filter((r) => r.klausur && daysTo(r.klausur) >= 0).sort((a, b) => new Date(a.klausur) - new Date(b.klausur))[0];
   return h("div",
-    h("div.page-head", h("div", h("h1", "Schule"), h("p.page-sub", "Jedes Fach mit seinen Themen als Lernatlas – Regeln, Beispiele, Aufgaben mit Lösung, Fotos aus dem Unterricht.")),
-      h("div.actions", importBtn(), h("button.btn", { onclick: howTo }, icon("info"), "So kommt ein Thema hierher"))),
-    h("div.grid.g-3", { style: { marginBottom: "18px" } },
-      stat("Fächer", String(faecher.filter((f) => f.atlases.length || f.other.length).length), { ic: "book" }), stat("Lernatlanten", String(mods.length), { ic: "layers" }), stat("Kapitel", String(totalCh), { ic: "check" })),
-    faecher.length ? h("div.sch-grid", faecher.map((f) => h("section.card",
-      h("div.card-head", h("h3.row", { style: { gap: "8px" } }, icon("book"), f.name), f.projectId ? h("a.btn.sm.ghost", { href: `#/projects/${f.projectId}` }, "Projekt") : null),
-      h("div.card-body",
-        f.atlases.length ? h("div.list", f.atlases.map(atlasRow)) : h("p.faint", { style: { margin: "0 0 8px" } }, "Noch kein Lernatlas – mit dem Skill „schule-sync“ übertragen."),
-        f.other.length ? h("div", { style: { marginTop: "10px" } }, h("div.faint", { style: { fontSize: "12px", textTransform: "uppercase", letterSpacing: ".06em", margin: "0 0 6px" } }, "Weitere Lernseiten"),
-          h("div.list", f.other.map((p) => h("a.list-item", { href: `#/projects/${p.id}` }, h("div.li-icon", icon("folder")), h("div.li-main", h("div.li-title", p.name), h("div.li-sub", `Projekt · ${fmtAgo(p.updated_at)}`)), icon("chevronR"))))) : null)))) :
-      h("section.card.card-pad", empty("book", "Noch keine Fächer", "Öffne in Claude deinen Schulordner und sag „Schule syncen“ – der Skill legt das Fach und das Thema hier an."), h("div", { style: { textAlign: "center" } }, h("button.btn.primary", { onclick: howTo }, "Anleitung"))));
-}
-
-// Lernatlas-JSON (vom Skill als Datei ausgegeben) direkt importieren
-function importBtn() {
-  const input = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: async (e) => {
-    const f = e.target.files?.[0]; e.target.value = "";
-    if (!f) return;
-    try {
-      if (f.size > 1_500_000) throw new Error("Datei zu groß (max. 1,5 MB).");
-      let data; try { data = JSON.parse(await f.text()); } catch { throw new Error("Keine gültige JSON-Datei."); }
-      const list = Array.isArray(data) ? data : [data];
-      let last = null;
-      for (const a of list) last = await rpc("cc_school_upsert", { p: a });
-      toast(`${list.length} Lernatlas importiert`, "ok");
-      if (last?.module_id) location.hash = `#/schule/${last.module_id}`; else window.dispatchEvent(new window.HashChangeEvent("hashchange"));
-    } catch (er) { toastErr(er); }
-  } });
-  return h("span", input, h("button.btn", { onclick: () => input.click() }, icon("upload"), "JSON importieren"));
+    h("div.page-head", h("div", h("h1", "Schule"), h("p.page-sub", "Deine Lernseiten aus Claude – nach Fach und Halbjahr sortiert.")),
+      h("div.actions", h("button.btn", { onclick: howTo }, icon("info"), "So kommt ein Thema hierher"), h("button.btn.primary", { onclick: () => edit(null) }, icon("plus"), "Link hinzufügen"))),
+    h("div.grid.g-3", { style: { marginBottom: "16px" } },
+      stat("Fächer", String(faecherN), { ic: "book" }), stat("Themen", String(rows.length), { ic: "layers" }),
+      next ? stat("Nächste Klausur", `${daysTo(next.klausur)} Tage`, { ic: "calendar", sub: `${next.fach}: ${next.thema}` }) : stat("Nächste Klausur", "", { ic: "calendar", na: "keine eingetragen" })),
+    filters, list);
 }
 
 function howTo() {
   modal("So kommt ein Thema in „Schule“", h("div.stack", { style: { gap: "12px" } },
     h("ol", { style: { margin: 0, paddingLeft: "20px", lineHeight: 1.6 } },
       h("li", "Skill „schule-sync“ in Claude hinzufügen (Download unten, dann in Claude unter Einstellungen › Fähigkeiten hochladen)."),
-      h("li", "In Claude dein Schul-Projekt öffnen (mit Arbeitsblättern, Tafelfotos, Notizen) und die Supabase-Verbindung aktivieren."),
-      h("li", "Schreiben: „Schule syncen“ oder „Thema Funktionsuntersuchung ins Nexus“. Claude baut daraus den Lernatlas und legt ihn unter dem richtigen Fach an. Gleiches Thema noch mal = wird aktualisiert, dein Lernstand bleibt."),
-      h("li", "Fotos: Im Lernatlas oben „Fotos hochladen“ antippen und die Bilder aus dem Ordner wählen. Sie werden über den Dateinamen den Kapiteln zugeordnet.")),
-    h("a.btn.primary", { href: "skills/schule-sync.zip", download: "schule-sync.zip", style: { justifySelf: "start" } }, icon("download"), "Skill herunterladen"),
-    h("p.faint", { style: { margin: 0, fontSize: "12.5px" } }, "Ohne Supabase-Verbindung in Claude geht es nicht automatisch – dann zeigt der Skill den Befehl, den du mir hier geben kannst.")));
+      h("li", "In Claude dein Schul-Projekt öffnen und die Supabase-Verbindung aktivieren."),
+      h("li", "Schreiben: „Schule syncen“. Claude baut die Lernseite als Artefakt, veröffentlicht sie und trägt Thema, Fach, Halbjahr und Link hier ein. Gleiches Fach + Thema noch mal = Link wird aktualisiert."),
+      h("li", "Fehlt ein Link, trägst du ihn mit „Link hinzufügen“ selbst ein.")),
+    h("p.faint", { style: { margin: 0, fontSize: "12.5px" } }, "Damit der Link für dich überall aufgeht, muss das Artefakt in Claude veröffentlicht bzw. geteilt sein."),
+    h("a.btn.primary", { href: "skills/schule-sync.zip", download: "schule-sync.zip", style: { justifySelf: "start" } }, icon("download"), "Skill herunterladen")));
 }
 
 // ---------- ein Thema ----------
